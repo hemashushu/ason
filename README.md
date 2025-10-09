@@ -1027,7 +1027,7 @@ Some Rust data types are not supported, includes:
 
 - Octal integer literals
 - Unit (i.e. `()`)
-- Unit struct, such as `sturct Foo;`
+- Unit struct, such as `struct Foo;`
 - New-type struct, such as `struct Width(u32);`
 - Tuple-like struct, such as `struct RGB(u8, u8, u8);`
 
