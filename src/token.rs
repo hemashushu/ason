@@ -8,21 +8,19 @@ use std::fmt::Display;
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::{position::Position, range::Range};
+use crate::range::Range;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
-    NewLine,      // `\n` or `\r\n`
-    Comma,        // `,`
-    Colon,        // `:`
-    LeftBrace,    // `{`
-    RightBrace,   // `}`
-    LeftBracket,  // `[`
-    RightBracket, // `]`
-    LeftParen,    // `(`
-    RightParen,   // `)`
-    Plus,         // `+`
-    Minus,        // `-`
+    Colon,              // `:`
+    OpeningBrace,       // `{`
+    ClosingBrace,       // `}`
+    OpeningBracket,     // `[`
+    ClosingBracket,     // `]`
+    LeftParenthesis,    // `(`
+    ClosingParenthesis, // `)`
+    Plus,               // `+`
+    Minus,              // `-`
 
     Number(NumberToken),
     Char(char),
@@ -52,15 +50,23 @@ pub enum Token {
     Variant(String, String),
 
     HexadecimalByteData(Vec<u8>),
-    Comment(Comment),
+    // In previous ASON versions, the following tokens were provided
+    // for testing and write full ASON files purposes.
+    // They are now deprecated and removed for simplicity.
+    // Since commas and newlines are identical to whitespace in ASON, they are
+    // removed either.
+    //
+    // Comment(Comment), // line comment or block comment
+    // NewLine,          // `\n` or `\r\n`
+    // Comma,            // `,`
 }
 
+// Sign token (minus `-` and plus `+`) is not part of the `NumberToken`,
+// e.g., in `-128`, the `-` is a `Token::Minus` token,
+// and the `128` is a `NumberToken::I8(128)` token.
+// Since `128` overflows `i8`, so using `u8` to represent the value part.
 #[derive(Debug, PartialEq)]
 pub enum NumberToken {
-    // Sign token (minus `-` and plus `+`) is not part of the `NumberToken`,
-    // e.g., in `-128`, the `-` is a `Token::Minus` token,
-    // and the `128` is a `NumberToken::I8(128)` token.
-    // Since `128` overflows `i8`, so using `u8` to represent the value part.
     I8(u8),
     U8(u8),
     I16(u16),
@@ -71,21 +77,6 @@ pub enum NumberToken {
     U64(u64),
     F32(f32),
     F64(f64),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Comment {
-    // `//...`
-    //
-    // note that the trailing '\n' or '\r\n' does not belong to line comment token,
-    // a line comment (e.g., `... // comment\n`) will be lexed into a
-    // `Comment::Line` token and a `Token::NewLine` token.
-    Line(String),
-
-    // `/*...*/`
-    //
-    // A block comment can span multiple lines.
-    Block(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -100,28 +91,6 @@ pub enum NumberType {
     U64,
     F32,
     F64,
-}
-
-impl NumberType {
-    pub fn from_str(s: &str) -> Result<Self, String> {
-        let t = match s {
-            "i8" => NumberType::I8,
-            "i16" => NumberType::I16,
-            "i32" => NumberType::I32,
-            "i64" => NumberType::I64,
-            "u8" => NumberType::U8,
-            "u16" => NumberType::U16,
-            "u32" => NumberType::U32,
-            "u64" => NumberType::U64,
-            "f32" => NumberType::F32,
-            "f64" => NumberType::F64,
-            _ => {
-                return Err(format!("Invalid number type \"{}\".", s));
-            }
-        };
-
-        Ok(t)
-    }
 }
 
 impl Display for NumberType {
@@ -151,11 +120,4 @@ impl TokenWithRange {
     pub fn new(token: Token, range: Range) -> Self {
         Self { token, range }
     }
-
-    // pub fn from_position_and_length(token: Token, position: &Position, length: usize) -> Self {
-    //     Self {
-    //         token,
-    //         range: Range::from_position_and_length(position, length),
-    //     }
-    // }
 }

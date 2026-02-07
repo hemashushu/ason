@@ -11,7 +11,7 @@ use crate::{
     char_with_position::CharsWithPositionIter,
     error::AsonError,
     lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
-    normalizer::{CheckSignedNumberIter, MergeNewlinesIter, RemoveCommentsIter, TrimDocumentIter},
+    normalizer::CheckSignedNumberIter,
     peekable_iter::PeekableIter,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
@@ -38,26 +38,31 @@ pub fn parse_from_char_stream(
         PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
     let mut lexer = Lexer::new(&mut peekable_char_position_iter);
 
-    // Remove comments
-    let mut removed_comments_iter = RemoveCommentsIter::new(&mut lexer);
+    // // Remove comments
+    // let mut removed_comments_iter = RemoveCommentsIter::new(&mut lexer);
 
-    // Merge newlines
-    let mut peekable_removed_comments_iter = PeekableIter::new(&mut removed_comments_iter, 1);
-    let mut merged_newlines_iter = MergeNewlinesIter::new(&mut peekable_removed_comments_iter);
+    // // Merge newlines
+    // let mut peekable_removed_comments_iter = PeekableIter::new(&mut removed_comments_iter, 1);
+    // let mut merged_newlines_iter = MergeNewlinesIter::new(&mut peekable_removed_comments_iter);
 
-    // Check signed numbers
-    let mut peekable_merged_newlines_iter = PeekableIter::new(&mut merged_newlines_iter, 1);
-    let mut checked_signed_number_iter =
-        CheckSignedNumberIter::new(&mut peekable_merged_newlines_iter);
+    // // Check signed numbers
+    // let mut peekable_merged_newlines_iter = PeekableIter::new(&mut merged_newlines_iter, 1);
+    // let mut checked_signed_number_iter =
+    //     CheckSignedNumberIter::new(&mut peekable_merged_newlines_iter);
 
-    // Trim document
-    let mut peekable_checked_signed_number_iter =
-        PeekableIter::new(&mut checked_signed_number_iter, 1);
-    let mut trimmed_document_iter = TrimDocumentIter::new(&mut peekable_checked_signed_number_iter);
+    // // Trim document
+    // let mut peekable_checked_signed_number_iter =
+    //     PeekableIter::new(&mut checked_signed_number_iter, 1);
+    // let mut trimmed_document_iter = TrimDocumentIter::new(&mut peekable_checked_signed_number_iter);
+
+    // Normalize signed numbers
+    let mut peekable_lexer_iter = PeekableIter::new(&mut lexer, 1);
+    // let mut peekable_merged_newlines_iter = PeekableIter::new(&mut merged_newlines_iter, 1);
+    let mut normalizer_iter = CheckSignedNumberIter::new(&mut peekable_lexer_iter);
 
     // Parse
     let mut peekable_trimmed_document_iter =
-        PeekableIter::new(&mut trimmed_document_iter, PEEK_BUFFER_LENGTH_PARSE);
+        PeekableIter::new(&mut normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
     let mut parser = Parser::new(&mut peekable_trimmed_document_iter);
     let root = parser.parse_node()?;
 
@@ -123,47 +128,47 @@ impl<'a> Parser<'a> {
             Some(token) if token == expected_token))
     }
 
-    /// Returns:
-    /// - `None` if the specified token is not found.
-    /// - `Some(false)` found the token without new-line.
-    /// - `Some(true)` found the token and new-line
-    fn peek_token_and_equals_with_ignoring_newline(
-        &self,
-        offset: usize,
-        expected_token: &Token,
-    ) -> Result<Option<bool>, AsonError> {
-        if self.peek_token_and_equals(offset, expected_token)? {
-            Ok(Some(false))
-        } else if self.peek_token_and_equals(offset, &Token::NewLine)?
-            && self.peek_token_and_equals(offset + 1, expected_token)?
-        {
-            Ok(Some(true))
-        } else {
-            Ok(None)
-        }
-    }
+    // /// Returns:
+    // /// - `None` if the specified token is not found.
+    // /// - `Some(false)` found the token without new-line.
+    // /// - `Some(true)` found the token and new-line
+    // fn peek_token_and_equals_with_ignoring_newline(
+    //     &self,
+    //     offset: usize,
+    //     expected_token: &Token,
+    // ) -> Result<Option<bool>, AsonError> {
+    //     if self.peek_token_and_equals(offset, expected_token)? {
+    //         Ok(Some(false))
+    //     } else if self.peek_token_and_equals(offset, &Token::NewLine)?
+    //         && self.peek_token_and_equals(offset + 1, expected_token)?
+    //     {
+    //         Ok(Some(true))
+    //     } else {
+    //         Ok(None)
+    //     }
+    // }
 
-    // consume '\n' if it exists.
-    fn consume_new_line_if_exist(&mut self) -> Result<bool, AsonError> {
-        match self.peek_token(0)? {
-            Some(Token::NewLine) => {
-                self.next_token()?;
-                Ok(true)
-            }
-            _ => Ok(false),
-        }
-    }
+    // // consume '\n' if it exists.
+    // fn consume_new_line_if_exist(&mut self) -> Result<bool, AsonError> {
+    //     match self.peek_token(0)? {
+    //         Some(Token::NewLine) => {
+    //             self.next_token()?;
+    //             Ok(true)
+    //         }
+    //         _ => Ok(false),
+    //     }
+    // }
 
-    // consume '\n' or ',' if they exist.
-    fn consume_new_line_or_comma_if_exist(&mut self) -> Result<bool, AsonError> {
-        match self.peek_token(0)? {
-            Some(Token::NewLine | Token::Comma) => {
-                self.next_token()?;
-                Ok(true)
-            }
-            _ => Ok(false),
-        }
-    }
+    // // consume '\n' or ',' if they exist.
+    // fn consume_new_line_or_comma_if_exist(&mut self) -> Result<bool, AsonError> {
+    //     match self.peek_token(0)? {
+    //         Some(Token::NewLine | Token::Comma) => {
+    //             self.next_token()?;
+    //             Ok(true)
+    //         }
+    //         _ => Ok(false),
+    //     }
+    // }
 
     fn consume_token_and_expect(
         &mut self,
@@ -189,23 +194,23 @@ impl<'a> Parser<'a> {
     }
 
     // ')'
-    fn consume_right_paren(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_expect(&Token::RightParen, "right parenthese")
+    fn consume_closing_parenthesis(&mut self) -> Result<(), AsonError> {
+        self.consume_token_and_expect(&Token::ClosingParenthesis, "closing parenthesis")
     }
 
     // ']'
-    fn consume_right_bracket(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_expect(&Token::RightBracket, "right bracket")
+    fn consume_closing_bracket(&mut self) -> Result<(), AsonError> {
+        self.consume_token_and_expect(&Token::ClosingBracket, "closing bracket")
     }
 
     // '}'
-    fn consume_right_brace(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_expect(&Token::RightBrace, "right brace")
+    fn consume_closing_brace(&mut self) -> Result<(), AsonError> {
+        self.consume_token_and_expect(&Token::ClosingBrace, "closing brace")
     }
 
     // consume ':'
     fn consume_colon(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_expect(&Token::Colon, "colon sign")
+        self.consume_token_and_expect(&Token::Colon, "colon")
     }
 }
 
@@ -241,11 +246,11 @@ impl Parser<'_> {
                     }
                     Token::Variant(type_name, member_name) => {
                         match self.peek_token(1)? {
-                            Some(Token::LeftParen) => {
+                            Some(Token::LeftParenthesis) => {
                                 // tuple-like variant or the single value variant
                                 self.parse_tuple_like_variant()?
                             }
-                            Some(Token::LeftBrace) => {
+                            Some(Token::OpeningBrace) => {
                                 // object-like variant
                                 self.parse_object_like_variant()?
                             }
@@ -262,16 +267,16 @@ impl Parser<'_> {
                         self.next_token()?;
                         v
                     }
-                    Token::LeftBrace => {
+                    Token::OpeningBrace => {
                         // object: {key:value, ...}
                         self.parse_object()?
                     }
-                    Token::LeftBracket => {
+                    Token::OpeningBracket => {
                         // list: [...]
                         // named-list (map): ["name":value, ...]
                         self.parse_list()?
                     }
-                    Token::LeftParen => {
+                    Token::LeftParenthesis => {
                         // tuple: (...)
                         self.parse_tuple()?
                     }
@@ -298,7 +303,7 @@ impl Parser<'_> {
         // ```diagram
         // type::member(...)?  //
         // ^           ^    ^__// to here
-        // |           |-------// left paren, validated
+        // |           |-------// opening parenthesis, validated
         // |-------------------// current token, validated
         // ```
 
@@ -311,31 +316,32 @@ impl Parser<'_> {
             };
 
         self.next_token()?; // consume '('
-        self.consume_new_line_if_exist()?; // consume new-line if exists
+        // self.consume_new_line_if_exist()?; // consume new-line if exists
 
         let mut items = vec![];
 
         // Collect items
         while let Some(token) = self.peek_token(0)? {
-            if token == &Token::RightParen {
+            if token == &Token::ClosingParenthesis {
                 break;
             }
 
             let value = self.parse_node()?;
             items.push(value);
 
-            let found_sep = self.consume_new_line_or_comma_if_exist()?;
-            if !found_sep {
-                break;
-            }
+            // let found_sep = self.consume_new_line_or_comma_if_exist()?;
+            // if !found_sep {
+            //     break;
+            // }
         }
 
-        self.consume_right_paren()?; // consume ')'
+        self.consume_closing_parenthesis()?; // consume ')'
 
         let variant_item = match items.len() {
             0 => {
                 return Err(AsonError::MessageWithRange(
-                    "Variant must have at least one value.".to_owned(),
+                    "Empty value variant is not allowed, add one value or remove the parentheses."
+                        .to_owned(),
                     self.last_range,
                 ));
             }
@@ -350,17 +356,14 @@ impl Parser<'_> {
         // ```diagram
         // type::member{...}?  //
         // ^           ^    ^__// to here
-        // |           |_______// left brace, validated
+        // |           |_______// opening brace, validated
         // |-------------------// current token, validated
         // ```
 
         // consume variant token
-        let (type_name, member_name) =
-            if let Some(Token::Variant(type_name, member_name)) = self.next_token()? {
-                (type_name, member_name)
-            } else {
-                unreachable!()
-            };
+        let Some(Token::Variant(type_name, member_name)) = self.next_token()? else {
+            unreachable!()
+        };
 
         let kvps = self.parse_key_value_pairs()?;
 
@@ -371,6 +374,11 @@ impl Parser<'_> {
         )))
     }
 
+    fn parse_object(&mut self) -> Result<AsonNode, AsonError> {
+        let kvps = self.parse_key_value_pairs()?;
+        Ok(AsonNode::Object(kvps))
+    }
+
     fn parse_key_value_pairs(&mut self) -> Result<Vec<KeyValuePair>, AsonError> {
         // ```diagram
         // {key: value, ...}?  //
@@ -379,13 +387,13 @@ impl Parser<'_> {
         // ```
 
         self.next_token()?; // consume '{'
-        self.consume_new_line_if_exist()?; // consume new-line if exists
+        // self.consume_new_line_if_exist()?; // consume new-line if exists
 
         let mut kvps: Vec<KeyValuePair> = vec![];
 
         // Collect key-value pairs
         while let Some(token) = self.peek_token(0)? {
-            if token == &Token::RightBrace {
+            if token == &Token::ClosingBrace {
                 break;
             }
 
@@ -404,9 +412,9 @@ impl Parser<'_> {
                 }
             };
 
-            self.consume_new_line_if_exist()?;
+            // self.consume_new_line_if_exist()?;
             self.consume_colon()?;
-            self.consume_new_line_if_exist()?;
+            // self.consume_new_line_if_exist()?;
 
             let value = self.parse_node()?;
             let name_value_pair = KeyValuePair {
@@ -415,102 +423,100 @@ impl Parser<'_> {
             };
             kvps.push(name_value_pair);
 
-            let found_sep = self.consume_new_line_or_comma_if_exist()?;
-            if !found_sep {
-                break;
-            }
+            // let found_sep = self.consume_new_line_or_comma_if_exist()?;
+            // if !found_sep {
+            //     break;
+            // }
         }
 
-        self.consume_right_brace()?; // consume '}'
+        self.consume_closing_brace()?; // consume '}'
 
         Ok(kvps)
-    }
-
-    fn parse_object(&mut self) -> Result<AsonNode, AsonError> {
-        let kvps = self.parse_key_value_pairs()?;
-        Ok(AsonNode::Object(kvps))
     }
 
     /// Parse:
     /// - list: `[value, value, ...]`
     /// - named-list (map): `[name: value, name: value, ...]`
     fn parse_list(&mut self) -> Result<AsonNode, AsonError> {
+        // ```diagram
         // [...]?  //
         // ^    ^__// to here
         // |-------// current token, validated
+        // ```
 
         self.next_token()?; // consume '['
-        self.consume_new_line_if_exist()?; // consume new-line if exists
+        // self.consume_new_line_if_exist()?; // consume new-line if exists
 
         let mut list_items: Vec<AsonNode> = vec![];
-        let mut namedlist_entries: Vec<NamedListEntry> = vec![];
+        let mut named_list_entries: Vec<NamedListEntry> = vec![];
 
         #[derive(PartialEq)]
         enum ListType {
-            Unknown,
+            Unspecified,
             List,
-            Map,
+            NamedList,
         }
 
-        let mut list_type = ListType::Unknown;
+        let mut list_type = ListType::Unspecified;
 
         while let Some(token) = self.peek_token(0)? {
-            if token == &Token::RightBracket {
+            if token == &Token::ClosingBracket {
                 break;
             }
 
             let item = self.parse_node()?;
 
-            if list_type == ListType::Unknown {
-                if self
-                    .peek_token_and_equals_with_ignoring_newline(0, &Token::Colon)?
-                    .is_some()
-                {
-                    list_type = ListType::Map
+            if list_type == ListType::Unspecified {
+                if self.peek_token_and_equals(0, &Token::Colon)? {
+                    list_type = ListType::NamedList
                 } else {
                     list_type = ListType::List
                 }
             }
 
             if list_type == ListType::List {
+                // Regular list
                 list_items.push(item);
             } else {
-                self.consume_new_line_if_exist()?;
+                // Named list
 
+                // self.consume_new_line_if_exist()?;
                 self.consume_colon()?;
-                self.consume_new_line_if_exist()?;
+                // self.consume_new_line_if_exist()?;
 
                 let value = self.parse_node()?;
-                let nvp = NamedListEntry {
+                let entry = NamedListEntry {
                     name: Box::new(item),
                     value: Box::new(value),
                 };
-                namelist_entries.push(nvp);
+                named_list_entries.push(entry);
             }
 
-            let found_sep = self.consume_new_line_or_comma_if_exist()?;
-            if !found_sep {
-                break;
-            }
+            // let found_sep = self.consume_new_line_or_comma_if_exist()?;
+            // if !found_sep {
+            //     break;
+            // }
         }
 
         // self.next_token()?; // consume ']'
-        self.consume_right_bracket()?; // consume ']'
+        self.consume_closing_bracket()?; // consume ']'
 
         if list_type == ListType::List {
             Ok(AsonNode::List(list_items))
         } else {
-            Ok(AsonNode::NamedList(namelist_entries))
+            Ok(AsonNode::NamedList(named_list_entries))
         }
     }
 
     fn parse_tuple(&mut self) -> Result<AsonNode, AsonError> {
+        // ```diagram
         // (...)?  //
         // ^    ^__// to here
         // |-------// current token, validated
+        // ```
 
         self.next_token()?; // consume '('
-        self.consume_new_line_if_exist()?;
+        // self.consume_new_line_if_exist()?;
 
         let mut items: Vec<AsonNode> = vec![];
 
@@ -525,10 +531,10 @@ impl Parser<'_> {
             //                 self.consume_new_line_or_comma_if_exist()?
             //             };
             //
-            //             if matches!(self.peek_token(0)?, Some(Token::RightParen)) {
+            //             if matches!(self.peek_token(0)?, Some(Token::ClosingParenthesis)) {
             //                 break;
             //             }
-            if token == &Token::RightParen {
+            if token == &Token::ClosingParenthesis {
                 break;
             }
 
@@ -550,19 +556,19 @@ impl Parser<'_> {
             let value = self.parse_node()?;
             items.push(value);
 
-            let found_sep = self.consume_new_line_or_comma_if_exist()?;
-            if !found_sep {
-                break;
-            }
+            // let found_sep = self.consume_new_line_or_comma_if_exist()?;
+            // if !found_sep {
+            //     break;
+            // }
         }
 
         // self.next_token()?; // consume ')'
-        self.consume_right_paren()?; // consume ')'
+        self.consume_closing_parenthesis()?; // consume ')'
 
         if items.is_empty() {
             Err(AsonError::MessageWithRange(
-                "Tuple can not be empty.".to_owned(),
-                self.last_range.get_position_by_range_start(),
+                "Empty tuple is not allowed.".to_owned(),
+                self.last_range,
             ))
         } else {
             Ok(AsonNode::Tuple(items))
@@ -593,9 +599,10 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        AsonError,
         ast::{KeyValuePair, NamedListEntry, Number, Variant},
+        error::AsonError,
         parser::parse_from_str,
+        position::Position,
         range::Range,
     };
 
@@ -606,7 +613,7 @@ mod tests {
     // }
 
     #[test]
-    fn test_parse_simple_value() {
+    fn test_parse_primitive_value() {
         assert_eq!(
             parse_from_str(
                 r#"
@@ -646,7 +653,10 @@ mod tests {
             .unwrap(),
             AsonNode::String("hello".to_owned())
         );
+    }
 
+    #[test]
+    fn test_parse_datetime() {
         assert_eq!(
             parse_from_str(
                 r#"
@@ -659,7 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_byte_data() {
+    fn test_parse_hexadecimal_byte_data() {
         assert_eq!(
             parse_from_str(
                 r#"
@@ -694,6 +704,18 @@ mod tests {
             expect_object1
         );
 
+        // without comma (separate by space)
+        assert_eq!(
+            parse_from_str(
+                r#"
+            {id:123 name:"foo"}
+            "#
+            )
+            .unwrap(),
+            expect_object1
+        );
+
+        // with new-line
         assert_eq!(
             parse_from_str(
                 r#"
@@ -707,6 +729,7 @@ mod tests {
             expect_object1
         );
 
+        // with comma
         assert_eq!(
             parse_from_str(
                 r#"
@@ -720,6 +743,7 @@ mod tests {
             expect_object1
         );
 
+        // with tailing comma
         assert_eq!(
             parse_from_str(
                 r#"
@@ -733,15 +757,16 @@ mod tests {
             expect_object1
         );
 
+        // nested object
         assert_eq!(
             parse_from_str(
                 r#"
             {
                 id: 123
-                addr: Option::Some({
+                addr: {
                     city: "ShenZhen"
                     street: Option::None
-                })
+                }
             }
             "#
             )
@@ -753,53 +778,59 @@ mod tests {
                 },
                 KeyValuePair {
                     key: "addr".to_owned(),
-                    value: Box::new(AsonNode::Variant(Variant::with_value(
-                        "Option",
-                        "Some",
-                        AsonNode::Object(vec![
-                            KeyValuePair {
-                                key: "city".to_owned(),
-                                value: Box::new(AsonNode::String("ShenZhen".to_owned())),
-                            },
-                            KeyValuePair {
-                                key: "street".to_owned(),
-                                value: Box::new(AsonNode::Variant(Variant::new("Option", "None"))),
-                            },
-                        ])
-                    ))),
+                    value: Box::new(AsonNode::Object(vec![
+                        KeyValuePair {
+                            key: "city".to_owned(),
+                            value: Box::new(AsonNode::String("ShenZhen".to_owned())),
+                        },
+                        KeyValuePair {
+                            key: "street".to_owned(),
+                            value: Box::new(AsonNode::Variant(Variant::new("Option", "None"))),
+                        },
+                    ])),
                 },
             ])
         );
 
-        // // err: invalid key name (should be enclosed with quotes)
-        // assert!(matches!(
-        //     parse_from_str(r#"{"id": 123}"#),
-        //     Err(Error::MessageWithRange(
-        //         _,
-        //         Range {
-        //             // unit: 0,
-        //             index: 1,
-        //             line: 0,
-        //             column: 1,
-        //             length: 0
-        //         }
-        //     ))
-        // ));
+        // err: invalid key (should not be enclosed with quotes)
+        assert!(matches!(
+            parse_from_str(r#"{"id": 123}"#),
+            Err(AsonError::MessageWithRange(
+                _,
+                Range {
+                    start: Position {
+                        index: 1,
+                        line: 0,
+                        column: 1
+                    },
+                    end_included: Position {
+                        index: 4,
+                        line: 0,
+                        column: 4
+                    }
+                }
+            ))
+        ));
 
-        // // err: invalid key name
-        // assert!(matches!(
-        //     parse_from_str(r#"{123}"#),
-        //     Err(Error::MessageWithRange(
-        //         _,
-        //         Range {
-        //             // unit: 0,
-        //             index: 1,
-        //             line: 0,
-        //             column: 1,
-        //             length: 0
-        //         }
-        //     ))
-        // ));
+        // err: invalid key (should be identifier)
+        assert!(matches!(
+            parse_from_str(r#"{123}"#),
+            Err(AsonError::MessageWithRange(
+                _,
+                Range {
+                    start: Position {
+                        index: 1,
+                        line: 0,
+                        column: 1
+                    },
+                    end_included: Position {
+                        index: 3,
+                        line: 0,
+                        column: 3
+                    }
+                }
+            ))
+        ));
 
         // err: missing ':'
         assert!(matches!(
@@ -807,86 +838,57 @@ mod tests {
             Err(AsonError::MessageWithRange(
                 _,
                 Range {
-                    // unit: 0,
-                    index: 3,
-                    line: 0,
-                    column: 3,
-                    length: 0
+                    start: Position {
+                        index: 3,
+                        line: 0,
+                        column: 3
+                    },
+                    end_included: Position {
+                        index: 3,
+                        line: 0,
+                        column: 3
+                    }
                 }
             ))
         ));
 
-        // err: missing value, the '}' is not the expected token
+        // err: missing value
         assert!(matches!(
             parse_from_str(r#"{id:}"#),
             Err(AsonError::MessageWithRange(
                 _,
                 Range {
-                    // unit: 0,
-                    index: 4,
-                    line: 0,
-                    column: 4,
-                    length: 0
+                    start: Position {
+                        index: 4,
+                        line: 0,
+                        column: 4
+                    },
+                    end_included: Position {
+                        index: 4,
+                        line: 0,
+                        column: 4
+                    }
                 }
             ))
         ));
 
-        // err: missing a separator (comma or new-line)
-        assert!(matches!(
-            parse_from_str(r#"{id: 123 name: "foo"}"#),
-            Err(AsonError::MessageWithRange(
-                _,
-                Range {
-                    // unit: 0,
-                    index: 9,
-                    line: 0,
-                    column: 9,
-                    length: 0
-                }
-            ))
-        ));
-
-        // err: missing :, EOF
+        // err: missing `:`, but EOF
         assert!(matches!(
             parse_from_str(r#"{id"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
 
-        // err: missing value, EOF
+        // err: missing a value, but EOF
         assert!(matches!(
             parse_from_str(r#"{id:"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
 
-        // err: missing '}', EOF
+        // err: missing '}', but EOF
         assert!(matches!(
             parse_from_str(r#"{id:123"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
-    }
-
-    #[test]
-    fn test_parse_map() {
-        let expect_object1 = AsonNode::NamedList(vec![
-            NamedListEntry {
-                name: Box::new(AsonNode::Number(Number::I32(123))),
-                value: Box::new(AsonNode::String("foo".to_owned())),
-            },
-            NamedListEntry {
-                name: Box::new(AsonNode::Number(Number::I32(456))),
-                value: Box::new(AsonNode::String("hello".to_owned())),
-            },
-        ]);
-
-        assert_eq!(
-            parse_from_str(
-                r#"
-            [123: "foo", 456: "hello"]
-            "#
-            )
-            .unwrap(),
-            expect_object1
-        );
     }
 
     #[test]
@@ -901,6 +903,16 @@ mod tests {
             parse_from_str(
                 r#"
             [123,456,789]
+            "#
+            )
+            .unwrap(),
+            expect_list1
+        );
+
+        assert_eq!(
+            parse_from_str(
+                r#"
+            [123 456 789]
             "#
             )
             .unwrap(),
@@ -949,38 +961,96 @@ mod tests {
             expect_list1
         );
 
-        // err: missing a separator (comma or new-line)
-        assert!(matches!(
-            parse_from_str(r#"[123 456]"#),
-            Err(AsonError::MessageWithRange(
-                _,
-                Range {
-                    // unit: 0,
-                    index: 5,
-                    line: 0,
-                    column: 5,
-                    length: 0
-                }
-            ))
-        ));
-
-        // err: missing ']', EOF
+        // err: missing ']', but EOF
         assert!(matches!(
             parse_from_str(r#"[123"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
 
-        // err: missing ']', EOF
+        // err: missing ']', but EOF
         assert!(matches!(
             parse_from_str(r#"[123,"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
 
-        // err: missing ']', EOF
+        // err: missing ']', but EOF
         assert!(matches!(
             parse_from_str(r#"[123,456"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
+    }
+
+    #[test]
+    fn test_parse_named_list() {
+        let expect_object1 = AsonNode::NamedList(vec![
+            NamedListEntry {
+                name: Box::new(AsonNode::String("foo".to_owned())),
+                value: Box::new(AsonNode::Number(Number::I32(123))),
+            },
+            NamedListEntry {
+                name: Box::new(AsonNode::String("bar".to_owned())),
+                value: Box::new(AsonNode::Number(Number::I32(456))),
+            },
+        ]);
+
+        assert_eq!(
+            parse_from_str(
+                r#"
+            ["foo": 123, "bar": 456]
+            "#
+            )
+            .unwrap(),
+            expect_object1
+        );
+
+        assert_eq!(
+            parse_from_str(
+                r#"
+            ["foo": 123 "bar": 456]
+            "#
+            )
+            .unwrap(),
+            expect_object1
+        );
+
+        assert_eq!(
+            parse_from_str(
+                r#"
+            [
+                "foo": 123
+                "bar": 456
+            ]
+            "#
+            )
+            .unwrap(),
+            expect_object1
+        );
+
+        assert_eq!(
+            parse_from_str(
+                r#"
+            [
+                "foo": 123,
+                "bar": 456
+            ]
+            "#
+            )
+            .unwrap(),
+            expect_object1
+        );
+
+        assert_eq!(
+            parse_from_str(
+                r#"
+            [
+                "foo": 123,
+                "bar": 456,
+            ]
+            "#
+            )
+            .unwrap(),
+            expect_object1
+        );
     }
 
     #[test]
@@ -995,6 +1065,16 @@ mod tests {
             parse_from_str(
                 r#"
             (123,"foo",true)
+            "#
+            )
+            .unwrap(),
+            expect_tuple1
+        );
+
+        assert_eq!(
+            parse_from_str(
+                r#"
+            (123 "foo" true)
             "#
             )
             .unwrap(),
@@ -1049,43 +1129,33 @@ mod tests {
             Err(AsonError::MessageWithRange(
                 _,
                 Range {
-                    // unit: 0,
-                    index: 1,
-                    line: 0,
-                    column: 1,
-                    length: 0
+                    start: Position {
+                        index: 1,
+                        line: 0,
+                        column: 1
+                    },
+                    end_included: Position {
+                        index: 1,
+                        line: 0,
+                        column: 1
+                    }
                 }
             ))
         ));
 
-        // err: missing a separator (comma or new-line)
-        assert!(matches!(
-            parse_from_str(r#"(123 456)"#),
-            Err(AsonError::MessageWithRange(
-                _,
-                Range {
-                    // unit: 0,
-                    index: 5,
-                    line: 0,
-                    column: 5,
-                    length: 0
-                }
-            ))
-        ));
-
-        // err: missing ')', EOF
+        // err: missing ')', but EOF
         assert!(matches!(
             parse_from_str(r#"(123"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
 
-        // err: missing ')', EOF
+        // err: missing ')', but EOF
         assert!(matches!(
             parse_from_str(r#"(123,"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
 
-        // err: missing ')', EOF
+        // err: missing ')', but EOF
         assert!(matches!(
             parse_from_str(r#"(123,456"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
@@ -1120,7 +1190,7 @@ mod tests {
             ))
         );
 
-        // tuple value
+        // tuple-like value
         assert_eq!(
             parse_from_str(
                 r#"
@@ -1139,7 +1209,26 @@ mod tests {
             ))
         );
 
-        // object value
+        // tuple-like value without comma
+        assert_eq!(
+            parse_from_str(
+                r#"
+            Color::RGB(100 75 0)
+            "#
+            )
+            .unwrap(),
+            AsonNode::Variant(Variant::with_tuple_like(
+                "Color",
+                "RGB",
+                vec![
+                    AsonNode::Number(Number::I32(100)),
+                    AsonNode::Number(Number::I32(75)),
+                    AsonNode::Number(Number::I32(0)),
+                ]
+            ))
+        );
+
+        // object-like value
         assert_eq!(
             parse_from_str(
                 r#"
@@ -1157,88 +1246,109 @@ mod tests {
             ))
         );
 
-        // err: missing value(s)
+        // object-like value without comma
+        assert_eq!(
+            parse_from_str(
+                r#"
+            Shape::Rect{width:123 height:456}
+            "#
+            )
+            .unwrap(),
+            AsonNode::Variant(Variant::with_object_like(
+                "Shape",
+                "Rect",
+                vec![
+                    KeyValuePair::new("width", AsonNode::Number(Number::I32(123))),
+                    KeyValuePair::new("height", AsonNode::Number(Number::I32(456))),
+                ]
+            ))
+        );
+
+        // err: missing value
         assert!(matches!(
             parse_from_str(r#"Option::Some()"#),
             Err(AsonError::MessageWithRange(
                 _,
                 Range {
-                    // unit: 0,
-                    index: 13,
-                    line: 0,
-                    column: 13,
-                    length: 0
+                    start: Position {
+                        index: 13,
+                        line: 0,
+                        column: 13
+                    },
+                    end_included: Position {
+                        index: 13,
+                        line: 0,
+                        column: 13
+                    }
                 }
             ))
         ));
 
-        // err: missing a separator (comma or new-line)
-        assert!(matches!(
-            parse_from_str(r#"Color::RGB(11 13 17)"#),
-            Err(AsonError::MessageWithRange(
-                _,
-                Range {
-                    // unit: 0,
-                    index: 14,
-                    line: 0,
-                    column: 14,
-                    length: 0
-                }
-            ))
-        ));
-
-        // err: missing ')', EOF
-        assert!(matches!(
-            parse_from_str(r#"Color::RGB(11,13"#),
-            Err(AsonError::UnexpectedEndOfDocument(_))
-        ));
-
-        // err: missing ':'
+        // err: object-like variant missing ':', but '}'
         assert!(matches!(
             parse_from_str(r#"Color::Rect{width}"#),
             Err(AsonError::MessageWithRange(
                 _,
                 Range {
-                    // unit: 0,
-                    index: 17,
-                    line: 0,
-                    column: 17,
-                    length: 0
+                    start: Position {
+                        index: 17,
+                        line: 0,
+                        column: 17
+                    },
+                    end_included: Position {
+                        index: 17,
+                        line: 0,
+                        column: 17
+                    }
                 }
             ))
         ));
 
-        // err: missing value
+        // err: object-like variant missing value, but '}'
         assert!(matches!(
             parse_from_str(r#"Color::Rect{width:}"#),
             Err(AsonError::MessageWithRange(
                 _,
                 Range {
-                    // unit: 0,
-                    index: 18,
-                    line: 0,
-                    column: 18,
-                    length: 0
+                    start: Position {
+                        index: 18,
+                        line: 0,
+                        column: 18
+                    },
+                    end_included: Position {
+                        index: 18,
+                        line: 0,
+                        column: 18
+                    }
                 }
             ))
         ));
 
-        // err: missing a separator (comma or new-line)
+        // err: missing ')', but EOF
         assert!(matches!(
-            parse_from_str(r#"Color::Rect{width:11 height:13}"#),
-            Err(AsonError::MessageWithRange(
-                _,
-                Range {
-                    // unit: 0,
-                    index: 21,
-                    line: 0,
-                    column: 21,
-                    length: 0
-                }
-            ))
+            parse_from_str(r#"Option::Some(11"#),
+            Err(AsonError::UnexpectedEndOfDocument(_))
         ));
 
-        // err: missing '}', EOF
+        // err: tuple-like variant missing ')', but EOF
+        assert!(matches!(
+            parse_from_str(r#"Color::RGB(11,13"#),
+            Err(AsonError::UnexpectedEndOfDocument(_))
+        ));
+
+        // err: object-like variant missing ':', but EOF
+        assert!(matches!(
+            parse_from_str(r#"Color::Rect{width"#),
+            Err(AsonError::UnexpectedEndOfDocument(_))
+        ));
+
+        // err: object-like variant missing value, but EOF
+        assert!(matches!(
+            parse_from_str(r#"Color::Rect{width:"#),
+            Err(AsonError::UnexpectedEndOfDocument(_))
+        ));
+
+        // err: object-like variant missing '}', but EOF
         assert!(matches!(
             parse_from_str(r#"Color::Rect{width:11"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
@@ -1246,7 +1356,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_mixed() {
+    fn test_parse_document() {
         assert_eq!(
             parse_from_str(
                 r#"
@@ -1329,45 +1439,24 @@ mod tests {
             ])
         );
 
-        // err: document does not end properly
+        // err: document contains multiple root nodes
         assert!(matches!(
             parse_from_str(r#"true false"#),
             Err(AsonError::MessageWithRange(
                 _,
                 Range {
-                    // unit: 0,
-                    index: 5,
-                    line: 0,
-                    column: 5,
-                    length: 0
+                    start: Position {
+                        index: 5,
+                        line: 0,
+                        column: 5
+                    },
+                    end_included: Position {
+                        index: 9,
+                        line: 0,
+                        column: 9
+                    }
                 }
             ))
         ));
     }
-
-    //     #[test]
-    //     fn test_parse() {
-    //         let text = r#"{
-    //             id: 123
-    //             name: "foo"
-    //             orders: [11, 13]
-    //         }"#;
-    //
-    //         let node = parse_from_str(text).unwrap();
-    //
-    //         assert_eq!(
-    //             node,
-    //             AsonNode::Object(vec![
-    //                 KeyValuePair::new("id", AsonNode::Number(Number::I32(123))),
-    //                 KeyValuePair::new("name", new_string_node("foo")),
-    //                 KeyValuePair::new(
-    //                     "orders",
-    //                     AsonNode::List(vec![
-    //                         AsonNode::Number(Number::I32(11)),
-    //                         AsonNode::Number(Number::I32(13))
-    //                     ])
-    //                 )
-    //             ])
-    //         );
-    //     }
 }

@@ -1,6 +1,7 @@
 {
     tuple: (1,"foo",true)
     tuple_with_trailing_comma: (1,"foo",true,)
+    tuple_with_space_separator: (1 "foo" true)
     mulitline_tuple: (
         1
         "foo"

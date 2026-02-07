@@ -12,7 +12,7 @@ use crate::{
     peekable_iter::PeekableIter,
     position::Position,
     range::Range,
-    token::{Comment, NumberToken, NumberType, Token, TokenWithRange},
+    token::{NumberToken, NumberType, Token, TokenWithRange},
 };
 
 pub const PEEK_BUFFER_LENGTH_LEX: usize = 3;
@@ -101,205 +101,185 @@ impl Iterator for Lexer<'_> {
     type Item = Result<TokenWithRange, AsonError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Skip all whitespaces
-        loop {
-            match self.peek_char(0) {
-                Some(' ' | '\t') => {
-                    self.next_char();
-                }
-                Some(_) => {
-                    break;
-                }
-                None => {
-                    return None;
-                }
-            }
-        }
-
-        // Lex next token
-        #[allow(clippy::manual_map)]
-        match self.peek_char(0) {
-            Some(_) => Some(self.lex()),
-            None => None,
-        }
+        self.lex()
     }
 }
 
 impl Lexer<'_> {
-    fn lex(&mut self) -> Result<TokenWithRange, AsonError> {
+    fn lex(&mut self) -> Option<Result<TokenWithRange, AsonError>> {
         // ```diagram
         // c....
         // ^____ current char, not EOF, validated
         // ```
 
-        match self.peek_char(0).unwrap() {
-            '\r' if self.peek_char_and_equals(1, '\n') => {
-                // Convert Windows-style line ending "\r\n" to a single '\n'.
-                self.push_peek_position_into_stack();
-                self.next_char(); // consume '\r'
-                self.next_char(); // consume '\n'
+        let result = loop {
+            let current_char = match self.peek_char(0) {
+                Some(c) => *c,
+                None => return None, // EOF
+            };
 
-                Ok(TokenWithRange::new(
-                    Token::NewLine,
-                    Range::from_position_and_length(&self.pop_position_from_stack(), 2),
-                ))
-            }
-            '\n' => {
-                self.next_char(); // Consume '\n'
+            match current_char {
+                '/' if self.peek_char_and_equals(1, '/') => {
+                    // line comment
+                    self.lex_line_comment()
+                }
+                '/' if self.peek_char_and_equals(1, '*') => {
+                    // block comment
+                    if let Err(e) = self.lex_block_comment() {
+                        break Err(e);
+                    }
+                }
+                ',' => {
+                    self.next_char(); // Consume ','
+                }
+                ' ' | '\t' => {
+                    self.next_char(); // Consume space or tab
+                }
+                '\r' if self.peek_char_and_equals(1, '\n') => {
+                    // Windows style new line `\r\n`
+                    self.next_char(); // Consume '\r'
+                    self.next_char(); // Consume '\n'
+                }
+                '\n' => {
+                    self.next_char(); // Consume '\n'
+                }
+                ':' => {
+                    self.next_char(); // Consume ':'
 
-                Ok(TokenWithRange::new(
-                    Token::NewLine,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            ',' => {
-                self.next_char(); // consume ','
+                    // Don't confuse with variant separator "::"
+                    break Ok(TokenWithRange::new(
+                        Token::Colon,
+                        Range::from_position_and_length(&self.last_position, 1),
+                    ));
+                }
+                '{' => {
+                    self.next_char(); // Consume '{'
 
-                Ok(TokenWithRange::new(
-                    Token::Comma,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            ':' => {
-                self.next_char(); // Consume ':'
+                    break Ok(TokenWithRange::new(
+                        Token::OpeningBrace,
+                        Range::from_position_and_length(&self.last_position, 1),
+                    ));
+                }
+                '}' => {
+                    self.next_char(); // Consume '}'
 
-                // Don't confuse with variant separator "::"
-                Ok(TokenWithRange::new(
-                    Token::Colon,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            '{' => {
-                self.next_char(); // Consume '{'
+                    break Ok(TokenWithRange::new(
+                        Token::ClosingBrace,
+                        Range::from_position_and_length(&self.last_position, 1),
+                    ));
+                }
+                '[' => {
+                    self.next_char(); // Consume '['
 
-                Ok(TokenWithRange::new(
-                    Token::LeftBrace,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            '}' => {
-                self.next_char(); // Consume '}'
+                    break Ok(TokenWithRange::new(
+                        Token::OpeningBracket,
+                        Range::from_position_and_length(&self.last_position, 1),
+                    ));
+                }
+                ']' => {
+                    self.next_char(); // Consume ']'
 
-                Ok(TokenWithRange::new(
-                    Token::RightBrace,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            '[' => {
-                self.next_char(); // Consume '['
+                    break Ok(TokenWithRange::new(
+                        Token::ClosingBracket,
+                        Range::from_position_and_length(&self.last_position, 1),
+                    ));
+                }
+                '(' => {
+                    self.next_char(); // Consume '('
 
-                Ok(TokenWithRange::new(
-                    Token::LeftBracket,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            ']' => {
-                self.next_char(); // Consume ']'
+                    break Ok(TokenWithRange::new(
+                        Token::LeftParenthesis,
+                        Range::from_position_and_length(&self.last_position, 1),
+                    ));
+                }
+                ')' => {
+                    self.next_char(); // Consume ')'
 
-                Ok(TokenWithRange::new(
-                    Token::RightBracket,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            '(' => {
-                self.next_char(); // Consume '('
+                    break Ok(TokenWithRange::new(
+                        Token::ClosingParenthesis,
+                        Range::from_position_and_length(&self.last_position, 1),
+                    ));
+                }
+                '+' => {
+                    self.next_char(); // Consume '+'
 
-                Ok(TokenWithRange::new(
-                    Token::LeftParen,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            ')' => {
-                self.next_char(); // Consume ')'
+                    break Ok(TokenWithRange::new(
+                        Token::Plus,
+                        Range::from_position_and_length(&self.last_position, 1),
+                    ));
+                }
+                '-' => {
+                    self.next_char(); // Consume '-'
 
-                Ok(TokenWithRange::new(
-                    Token::RightParen,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            '+' => {
-                self.next_char(); // Consume '+'
-
-                Ok(TokenWithRange::new(
-                    Token::Plus,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            '-' => {
-                self.next_char(); // Consume '-'
-
-                Ok(TokenWithRange::new(
-                    Token::Minus,
-                    Range::from_position_and_length(&self.last_position, 1),
-                ))
-            }
-            '0' if matches!(self.peek_char(1), Some('x' | 'X')) => {
-                // hexadecimal number
-                self.lex_hexadecimal_number()
-            }
-            '0' if matches!(self.peek_char(1), Some('b' | 'B')) => {
-                // binary number
-                self.lex_binary_number()
-            }
-            '0' if matches!(self.peek_char(1), Some('o' | 'O')) => {
-                // octal number
-                self.lex_octal_number()
-            }
-            '0' if matches!(self.peek_char(1), Some('.')) => {
-                // decimal number
-                self.lex_decimal_number()
-            }
-            '0'..='9' => {
-                // decimal number
-                self.lex_decimal_number()
-            }
-            'h' if self.peek_char_and_equals(1, '"') => {
-                // hex byte data element
-                self.lex_hexadecimal_byte_data()
-            }
-            'd' if self.peek_char_and_equals(1, '"') => {
-                // date
-                self.lex_datetime()
-            }
-            'r' if self.peek_char_and_equals(1, '"') => {
-                // raw string
-                self.lex_raw_string()
-            }
-            'r' if self.peek_char_and_equals(1, '#') && self.peek_char_and_equals(2, '"') => {
-                // raw string with hash symbol
-                self.lex_raw_string_with_hash_symbol()
-            }
-            '"' => {
-                // string
-                if self.peek_char_and_equals(1, '"') && self.peek_char_and_equals(2, '"') {
-                    // auto-trimmed string
-                    self.lex_auto_trimmed_string()
-                } else {
-                    // normal string
-                    self.lex_string()
+                    break Ok(TokenWithRange::new(
+                        Token::Minus,
+                        Range::from_position_and_length(&self.last_position, 1),
+                    ));
+                }
+                '0' if matches!(self.peek_char(1), Some('x' | 'X')) => {
+                    // hexadecimal number
+                    break self.lex_hexadecimal_number();
+                }
+                '0' if matches!(self.peek_char(1), Some('b' | 'B')) => {
+                    // binary number
+                    break self.lex_binary_number();
+                }
+                '0' if matches!(self.peek_char(1), Some('o' | 'O')) => {
+                    // octal number
+                    break self.lex_octal_number();
+                }
+                '0' if matches!(self.peek_char(1), Some('.')) => {
+                    // decimal number
+                    break self.lex_decimal_number();
+                }
+                '0'..='9' => {
+                    // decimal number
+                    break self.lex_decimal_number();
+                }
+                'h' if self.peek_char_and_equals(1, '"') => {
+                    // hex byte data element
+                    break self.lex_hexadecimal_byte_data();
+                }
+                'd' if self.peek_char_and_equals(1, '"') => {
+                    // date
+                    break self.lex_datetime();
+                }
+                'r' if self.peek_char_and_equals(1, '"') => {
+                    // raw string
+                    break self.lex_raw_string();
+                }
+                'r' if self.peek_char_and_equals(1, '#') && self.peek_char_and_equals(2, '"') => {
+                    // raw string with hash symbol
+                    break self.lex_raw_string_with_hash_symbol();
+                }
+                '"' => {
+                    // string
+                    if self.peek_char_and_equals(1, '"') && self.peek_char_and_equals(2, '"') {
+                        // auto-trimmed string
+                        break self.lex_auto_trimmed_string();
+                    } else {
+                        // normal string
+                        break self.lex_string();
+                    }
+                }
+                '\'' => {
+                    // char
+                    break self.lex_char();
+                }
+                'a'..='z' | 'A'..='Z' | '_' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{10ffff}' => {
+                    // identifier
+                    break self.lex_identifier();
+                }
+                current_char => {
+                    break Err(AsonError::MessageWithPosition(
+                        format!("Unexpected char '{}'.", current_char),
+                        *self.peek_position(0).unwrap(),
+                    ));
                 }
             }
-            '\'' => {
-                // char
-                self.lex_char()
-            }
-            '/' if self.peek_char_and_equals(1, '/') => {
-                // line comment
-                self.lex_line_comment()
-            }
-            '/' if self.peek_char_and_equals(1, '*') => {
-                // block comment
-                self.lex_block_comment()
-            }
-            'a'..='z' | 'A'..='Z' | '_' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{10ffff}' => {
-                // identifier
-                self.lex_identifier()
-            }
-            current_char => Err(AsonError::MessageWithPosition(
-                format!("Unexpected char '{}'.", current_char),
-                *self.peek_position(0).unwrap(),
-            )),
-        }
+        };
+
+        Some(result)
     }
 
     fn lex_identifier(&mut self) -> Result<TokenWithRange, AsonError> {
@@ -367,8 +347,8 @@ impl Lexer<'_> {
                     identifier_buffer.push(*current_char);
                     self.next_char(); // consume char
                 }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/'
-                | '\'' | '"' => {
+                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
+                    // | '\'' | '"' => {
                     // terminator chars
                     break;
                 }
@@ -479,8 +459,8 @@ impl Lexer<'_> {
                     number_type_opt.replace(number_type);
                     break;
                 }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/'
-                | '\'' | '"' => {
+                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
+                    // | '\'' | '"' => {
                     // terminator chars
                     break;
                 }
@@ -572,7 +552,7 @@ impl Lexer<'_> {
 
                     NumberToken::F64(v)
                 }
-                _ => self.convert_integer_number_string_with_data_type(
+                _ => convert_integer_number_string_with_data_type(
                     &number_buffer,
                     10,
                     number_type,
@@ -717,8 +697,8 @@ impl Lexer<'_> {
 
                     break;
                 }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/'
-                | '\'' | '"' => {
+                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
+                    // | '\'' | '"' => {
                     // terminator chars
                     break;
                 }
@@ -831,7 +811,7 @@ impl Lexer<'_> {
                 NumberToken::F32(v)
             }
         } else if let Some(number_type) = number_type_opt {
-            self.convert_integer_number_string_with_data_type(
+            convert_integer_number_string_with_data_type(
                 &number_buffer,
                 16,
                 number_type,
@@ -896,8 +876,8 @@ impl Lexer<'_> {
                     number_type_opt.replace(number_type);
                     break;
                 }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/'
-                | '\'' | '"' => {
+                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
+                    // | '\'' | '"' => {
                     // terminator chars
                     break;
                 }
@@ -923,7 +903,7 @@ impl Lexer<'_> {
         let number_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
         let number_token = if let Some(number_type) = number_type_opt {
-            self.convert_integer_number_string_with_data_type(
+            convert_integer_number_string_with_data_type(
                 &number_buffer,
                 2,
                 number_type,
@@ -989,8 +969,8 @@ impl Lexer<'_> {
                     number_type_opt.replace(number_type);
                     break;
                 }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/'
-                | '\'' | '"' => {
+                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
+                    // | '\'' | '"' => {
                     // terminator chars
                     break;
                 }
@@ -1016,7 +996,7 @@ impl Lexer<'_> {
         let number_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
         let number_token = if let Some(number_type) = number_type_opt {
-            self.convert_integer_number_string_with_data_type(
+            convert_integer_number_string_with_data_type(
                 &number_buffer,
                 8,
                 number_type,
@@ -1081,137 +1061,10 @@ impl Lexer<'_> {
 
         let type_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
-        let number_type = NumberType::from_str(&type_buffer)
+        let number_type = convert_str_to_number_type(&type_buffer)
             .map_err(|msg| AsonError::MessageWithRange(msg, type_range))?;
 
         Ok(number_type)
-    }
-
-    fn convert_integer_number_string_with_data_type(
-        &self,
-        number_string: &str,
-        radix: u32,
-        number_type: NumberType,
-        number_range: Range,
-    ) -> Result<NumberToken, AsonError> {
-        let prefix_name = match radix {
-            2 => "0b",
-            8 => "0o",
-            16 => "0x",
-            _ => "",
-        };
-
-        let token = match number_type {
-            NumberType::I8 => {
-                let v = u8::from_str_radix(number_string, radix).map_err(|_| {
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}{}\" to i8 integer number.",
-                            prefix_name, number_string,
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::I8(v)
-            }
-            NumberType::U8 => {
-                let v = u8::from_str_radix(number_string, radix).map_err(|_| {
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}{}\" to u8 integer number.",
-                            prefix_name, number_string,
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::U8(v)
-            }
-            NumberType::I16 => {
-                let v = u16::from_str_radix(number_string, radix).map_err(|_| {
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}{}\" to i16 integer number.",
-                            prefix_name, number_string,
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::I16(v)
-            }
-            NumberType::U16 => {
-                let v = u16::from_str_radix(number_string, radix).map_err(|_| {
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}{}\" to u16 integer number.",
-                            prefix_name, number_string,
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::U16(v)
-            }
-            NumberType::I32 => {
-                let v = u32::from_str_radix(number_string, radix).map_err(|_| {
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}{}\" to i32 integer number.",
-                            prefix_name, number_string
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::I32(v)
-            }
-            NumberType::U32 => {
-                let v = u32::from_str_radix(number_string, radix).map_err(|_| {
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}{}\" to u32 integer number.",
-                            prefix_name, number_string
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::U32(v)
-            }
-            NumberType::I64 => {
-                let v = u64::from_str_radix(number_string, radix).map_err(|_| {
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}{}\" to i64 integer number.",
-                            prefix_name, number_string
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::I64(v)
-            }
-            NumberType::U64 => {
-                let v = u64::from_str_radix(number_string, radix).map_err(|_| {
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}{}\" to u64 integer number.",
-                            prefix_name, number_string
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::U64(v)
-            }
-            NumberType::F32 | NumberType::F64 => {
-                unreachable!()
-            }
-        };
-
-        Ok(token)
     }
 
     fn lex_char(&mut self) -> Result<TokenWithRange, AsonError> {
@@ -1994,10 +1847,13 @@ impl Lexer<'_> {
 
         let bytes_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
-        Ok(TokenWithRange::new(Token::HexadecimalByteData(bytes), bytes_range))
+        Ok(TokenWithRange::new(
+            Token::HexadecimalByteData(bytes),
+            bytes_range,
+        ))
     }
 
-    fn lex_line_comment(&mut self) -> Result<TokenWithRange, AsonError> {
+    fn lex_line_comment(&mut self) {
         // ```diagram
         // //.....?[\r]\n
         // ^^     ^__// to here ('?' = any char or EOF)
@@ -2010,12 +1866,12 @@ impl Lexer<'_> {
         // a line comment (e.g., `... // comment\n`) will be lexed into a
         // `Comment::Line` token and a `Token::NewLine` token.
 
-        self.push_peek_position_into_stack();
+        // self.push_peek_position_into_stack();
 
         self.next_char(); // consume the 1st '/'
         self.next_char(); // consume the 2nd '/'
 
-        let mut comment_buffer = String::new();
+        // let mut comment_buffer = String::new();
 
         while let Some(current_char) = self.peek_char(0) {
             // ignore all chars until encountering '\n' or '\r\n'.
@@ -2028,22 +1884,24 @@ impl Lexer<'_> {
                     break;
                 }
                 _ => {
-                    comment_buffer.push(*current_char);
+                    // comment_buffer.push(*current_char);
 
                     self.next_char(); // consume char
                 }
             }
         }
 
-        let comment_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
+        // let comment_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
-        Ok(TokenWithRange::new(
-            Token::Comment(Comment::Line(comment_buffer)),
-            comment_range,
-        ))
+        // Ok(TokenWithRange::new(
+        //     Token::Comment(Comment::Line(comment_buffer)),
+        //     comment_range,
+        // ))
+
+        // Ok(())
     }
 
-    fn lex_block_comment(&mut self) -> Result<TokenWithRange, AsonError> {
+    fn lex_block_comment(&mut self) -> Result<(), AsonError> {
         // ```diagram
         // /*...*/?  //
         // ^^     ^__// to here
@@ -2051,12 +1909,12 @@ impl Lexer<'_> {
         // |_________// current char, validated
         // ```
 
-        self.push_peek_position_into_stack();
+        // self.push_peek_position_into_stack();
 
         self.next_char(); // consume '/'
         self.next_char(); // consume '*'
 
-        let mut comment_buffer = String::new();
+        // let mut comment_buffer = String::new();
         let mut block_comment_depth = 1;
 
         loop {
@@ -2065,7 +1923,7 @@ impl Lexer<'_> {
                     match current_char {
                         '/' if self.peek_char_and_equals(0, '*') => {
                             // nested block comment
-                            comment_buffer.push_str("/*");
+                            // comment_buffer.push_str("/*");
 
                             self.next_char(); // consume '*'
 
@@ -2082,13 +1940,13 @@ impl Lexer<'_> {
                             if block_comment_depth == 0 {
                                 break;
                             } else {
-                                comment_buffer.push_str("*/");
+                                // comment_buffer.push_str("*/");
                             }
                         }
                         _ => {
                             // ignore all chars except "/*" and "*/"
                             // note that line comments within block comments are ignored also.
-                            comment_buffer.push(current_char);
+                            // comment_buffer.push(current_char);
                         }
                     }
                 }
@@ -2104,13 +1962,161 @@ impl Lexer<'_> {
             }
         }
 
-        let comment_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
+        // let comment_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
-        Ok(TokenWithRange::new(
-            Token::Comment(Comment::Block(comment_buffer)),
-            comment_range,
-        ))
+        // Ok(TokenWithRange::new(
+        //     Token::Comment(Comment::Block(comment_buffer)),
+        //     comment_range,
+        // ))
+
+        Ok(())
     }
+}
+
+fn convert_integer_number_string_with_data_type(
+    number_string: &str,
+    radix: u32,
+    number_type: NumberType,
+    number_range: Range,
+) -> Result<NumberToken, AsonError> {
+    let prefix_name = match radix {
+        2 => "0b",
+        8 => "0o",
+        16 => "0x",
+        _ => "",
+    };
+
+    let token = match number_type {
+        NumberType::I8 => {
+            let v = u8::from_str_radix(number_string, radix).map_err(|_| {
+                AsonError::MessageWithRange(
+                    format!(
+                        "Can not convert \"{}{}\" to i8 integer number.",
+                        prefix_name, number_string,
+                    ),
+                    number_range,
+                )
+            })?;
+
+            NumberToken::I8(v)
+        }
+        NumberType::U8 => {
+            let v = u8::from_str_radix(number_string, radix).map_err(|_| {
+                AsonError::MessageWithRange(
+                    format!(
+                        "Can not convert \"{}{}\" to u8 integer number.",
+                        prefix_name, number_string,
+                    ),
+                    number_range,
+                )
+            })?;
+
+            NumberToken::U8(v)
+        }
+        NumberType::I16 => {
+            let v = u16::from_str_radix(number_string, radix).map_err(|_| {
+                AsonError::MessageWithRange(
+                    format!(
+                        "Can not convert \"{}{}\" to i16 integer number.",
+                        prefix_name, number_string,
+                    ),
+                    number_range,
+                )
+            })?;
+
+            NumberToken::I16(v)
+        }
+        NumberType::U16 => {
+            let v = u16::from_str_radix(number_string, radix).map_err(|_| {
+                AsonError::MessageWithRange(
+                    format!(
+                        "Can not convert \"{}{}\" to u16 integer number.",
+                        prefix_name, number_string,
+                    ),
+                    number_range,
+                )
+            })?;
+
+            NumberToken::U16(v)
+        }
+        NumberType::I32 => {
+            let v = u32::from_str_radix(number_string, radix).map_err(|_| {
+                AsonError::MessageWithRange(
+                    format!(
+                        "Can not convert \"{}{}\" to i32 integer number.",
+                        prefix_name, number_string
+                    ),
+                    number_range,
+                )
+            })?;
+
+            NumberToken::I32(v)
+        }
+        NumberType::U32 => {
+            let v = u32::from_str_radix(number_string, radix).map_err(|_| {
+                AsonError::MessageWithRange(
+                    format!(
+                        "Can not convert \"{}{}\" to u32 integer number.",
+                        prefix_name, number_string
+                    ),
+                    number_range,
+                )
+            })?;
+
+            NumberToken::U32(v)
+        }
+        NumberType::I64 => {
+            let v = u64::from_str_radix(number_string, radix).map_err(|_| {
+                AsonError::MessageWithRange(
+                    format!(
+                        "Can not convert \"{}{}\" to i64 integer number.",
+                        prefix_name, number_string
+                    ),
+                    number_range,
+                )
+            })?;
+
+            NumberToken::I64(v)
+        }
+        NumberType::U64 => {
+            let v = u64::from_str_radix(number_string, radix).map_err(|_| {
+                AsonError::MessageWithRange(
+                    format!(
+                        "Can not convert \"{}{}\" to u64 integer number.",
+                        prefix_name, number_string
+                    ),
+                    number_range,
+                )
+            })?;
+
+            NumberToken::U64(v)
+        }
+        NumberType::F32 | NumberType::F64 => {
+            unreachable!()
+        }
+    };
+
+    Ok(token)
+}
+
+fn convert_str_to_number_type(s: &str) -> Result<NumberType, String> {
+    let t = match s {
+        "i8" => NumberType::I8,
+        "i16" => NumberType::I16,
+        "i32" => NumberType::I32,
+        "i64" => NumberType::I64,
+        "u8" => NumberType::U8,
+        "u16" => NumberType::U16,
+        "u32" => NumberType::U32,
+        "u64" => NumberType::U64,
+        "f32" => NumberType::F32,
+        "f64" => NumberType::F64,
+        _ => {
+            return Err(format!("Invalid number type \"{}\".", s));
+        }
+    };
+
+    Ok(t)
 }
 
 #[cfg(test)]
@@ -2121,7 +2127,7 @@ mod tests {
     use crate::{
         char_with_position::CharsWithPositionIter,
         error::AsonError,
-        lexer::{Comment, NumberToken, TokenWithRange},
+        lexer::{NumberToken, TokenWithRange},
         peekable_iter::PeekableIter,
         position::Position,
         range::Range,
@@ -2184,22 +2190,27 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("()").unwrap(),
-            vec![Token::LeftParen, Token::RightParen]
+            vec![Token::LeftParenthesis, Token::ClosingParenthesis]
         );
 
         assert_eq!(
             lex_from_str_without_location("(  )").unwrap(),
-            vec![Token::LeftParen, Token::RightParen]
+            vec![Token::LeftParenthesis, Token::ClosingParenthesis]
+        );
+
+        assert_eq!(
+            lex_from_str_without_location("( , )").unwrap(),
+            vec![Token::LeftParenthesis, Token::ClosingParenthesis]
         );
 
         assert_eq!(
             lex_from_str_without_location("(\t\r\n\n\n)").unwrap(),
             vec![
-                Token::LeftParen,
-                Token::NewLine,
-                Token::NewLine,
-                Token::NewLine,
-                Token::RightParen,
+                Token::LeftParenthesis,
+                // Token::NewLine,
+                // Token::NewLine,
+                // Token::NewLine,
+                Token::ClosingParenthesis,
             ]
         );
 
@@ -2210,16 +2221,16 @@ mod tests {
         assert_eq!(
             lex_from_str("()").unwrap(),
             vec![
-                TokenWithRange::new(Token::LeftParen, Range::from_detail(0, 0, 0, 1)),
-                TokenWithRange::new(Token::RightParen, Range::from_detail(1, 0, 1, 1)),
+                TokenWithRange::new(Token::LeftParenthesis, Range::from_detail(0, 0, 0, 1)),
+                TokenWithRange::new(Token::ClosingParenthesis, Range::from_detail(1, 0, 1, 1)),
             ]
         );
 
         assert_eq!(
             lex_from_str("(  )").unwrap(),
             vec![
-                TokenWithRange::new(Token::LeftParen, Range::from_detail(0, 0, 0, 1)),
-                TokenWithRange::new(Token::RightParen, Range::from_detail(3, 0, 3, 1)),
+                TokenWithRange::new(Token::LeftParenthesis, Range::from_detail(0, 0, 0, 1)),
+                TokenWithRange::new(Token::ClosingParenthesis, Range::from_detail(3, 0, 3, 1)),
             ]
         );
 
@@ -2233,11 +2244,11 @@ mod tests {
         assert_eq!(
             lex_from_str("(\t\r\n\n\n)").unwrap(),
             vec![
-                TokenWithRange::new(Token::LeftParen, Range::from_detail(0, 0, 0, 1)),
-                TokenWithRange::new(Token::NewLine, Range::from_detail(2, 0, 2, 2,)),
-                TokenWithRange::new(Token::NewLine, Range::from_detail(4, 1, 0, 1,)),
-                TokenWithRange::new(Token::NewLine, Range::from_detail(5, 2, 0, 1,)),
-                TokenWithRange::new(Token::RightParen, Range::from_detail(6, 3, 0, 1)),
+                TokenWithRange::new(Token::LeftParenthesis, Range::from_detail(0, 0, 0, 1)),
+                // TokenWithRange::new(Token::NewLine, Range::from_detail(2, 0, 2, 2,)),
+                // TokenWithRange::new(Token::NewLine, Range::from_detail(4, 1, 0, 1,)),
+                // TokenWithRange::new(Token::NewLine, Range::from_detail(5, 2, 0, 1,)),
+                TokenWithRange::new(Token::ClosingParenthesis, Range::from_detail(6, 3, 0, 1)),
             ]
         );
     }
@@ -2247,14 +2258,14 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location(",:{}[]()+-").unwrap(),
             vec![
-                Token::Comma,
+                // Token::Comma,
                 Token::Colon,
-                Token::LeftBrace,
-                Token::RightBrace,
-                Token::LeftBracket,
-                Token::RightBracket,
-                Token::LeftParen,
-                Token::RightParen,
+                Token::OpeningBrace,
+                Token::ClosingBrace,
+                Token::OpeningBracket,
+                Token::ClosingBracket,
+                Token::LeftParenthesis,
+                Token::ClosingParenthesis,
                 Token::Plus,
                 Token::Minus
             ]
@@ -2271,18 +2282,18 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location("(name)").unwrap(),
             vec![
-                Token::LeftParen,
+                Token::LeftParenthesis,
                 Token::new_identifier("name"),
-                Token::RightParen,
+                Token::ClosingParenthesis,
             ]
         );
 
         assert_eq!(
             lex_from_str_without_location("( a )").unwrap(),
             vec![
-                Token::LeftParen,
+                Token::LeftParenthesis,
                 Token::new_identifier("a"),
-                Token::RightParen,
+                Token::ClosingParenthesis,
             ]
         );
 
@@ -2388,31 +2399,31 @@ mod tests {
             lex_from_str("[\n    true\n    false\n]").unwrap(),
             vec![
                 TokenWithRange::new(
-                    Token::LeftBracket,
+                    Token::OpeningBracket,
                     Range::from_position_and_length(&Position::new(0, 0, 0), 1)
                 ),
-                TokenWithRange::new(
-                    Token::NewLine,
-                    Range::from_position_and_length(&Position::new(1, 0, 1), 1)
-                ),
+                // TokenWithRange::new(
+                //     Token::NewLine,
+                //     Range::from_position_and_length(&Position::new(1, 0, 1), 1)
+                // ),
                 TokenWithRange::new(
                     Token::Boolean(true),
                     Range::from_position_and_length(&Position::new(6, 1, 4), 4)
                 ),
-                TokenWithRange::new(
-                    Token::NewLine,
-                    Range::from_position_and_length(&Position::new(10, 1, 8), 1)
-                ),
+                // TokenWithRange::new(
+                //     Token::NewLine,
+                //     Range::from_position_and_length(&Position::new(10, 1, 8), 1)
+                // ),
                 TokenWithRange::new(
                     Token::Boolean(false),
                     Range::from_position_and_length(&Position::new(15, 2, 4), 5)
                 ),
+                // TokenWithRange::new(
+                //     Token::NewLine,
+                //     Range::from_position_and_length(&Position::new(20, 2, 9), 1)
+                // ),
                 TokenWithRange::new(
-                    Token::NewLine,
-                    Range::from_position_and_length(&Position::new(20, 2, 9), 1)
-                ),
-                TokenWithRange::new(
-                    Token::RightBracket,
+                    Token::ClosingBracket,
                     Range::from_position_and_length(&Position::new(21, 3, 0), 1)
                 ),
             ]
@@ -2424,9 +2435,9 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location("(211)").unwrap(),
             vec![
-                Token::LeftParen,
+                Token::LeftParenthesis,
                 Token::Number(NumberToken::I32(211)),
-                Token::RightParen,
+                Token::ClosingParenthesis,
             ]
         );
 
@@ -3803,12 +3814,12 @@ mod tests {
         {
             assert_eq!(
                 lex_from_str_without_location("0o1234_567i32").unwrap(),
-                vec![Token::Number(NumberToken::I32(0o1234_567i32 as u32))]
+                vec![Token::Number(NumberToken::I32(0o1_234_567_i32 as u32))]
             );
 
             assert_eq!(
                 lex_from_str_without_location("0o7777_777_u32").unwrap(),
-                vec![Token::Number(NumberToken::U32(0o7777_777_u32))]
+                vec![Token::Number(NumberToken::U32(0o7_777_777_u32))]
             );
 
             // err: number width overflow
@@ -3891,7 +3902,7 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("('a')").unwrap(),
-            vec![Token::LeftParen, Token::Char('a'), Token::RightParen]
+            vec![Token::LeftParenthesis, Token::Char('a'), Token::ClosingParenthesis]
         );
 
         assert_eq!(
@@ -4203,9 +4214,9 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location(r#"("abc")"#).unwrap(),
             vec![
-                Token::LeftParen,
+                Token::LeftParenthesis,
                 Token::new_string("abc"),
-                Token::RightParen,
+                Token::ClosingParenthesis,
             ]
         );
 
@@ -4218,8 +4229,8 @@ mod tests {
             lex_from_str_without_location("\"abc\"\n\n\"xyz\"").unwrap(),
             vec![
                 Token::new_string("abc"),
-                Token::NewLine,
-                Token::NewLine,
+                // Token::NewLine,
+                // Token::NewLine,
                 Token::new_string("xyz"),
             ]
         );
@@ -4233,9 +4244,9 @@ mod tests {
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::new_string("abc文字😊"),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -4254,9 +4265,9 @@ mod tests {
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::new_string("\\\'\"\t\r\n\0-文"),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -4626,9 +4637,9 @@ mod tests {
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::new_string("one\n  two\n    three\nend"),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -4645,9 +4656,9 @@ mod tests {
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::new_string("    one\n  two\nthree\n    end"),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -4664,9 +4675,9 @@ mod tests {
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::new_string("one\\\\\\\"\\t\\r\\n\\u{1234}\n\nend"),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -4682,9 +4693,9 @@ mod tests {
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::new_string("one\"\"\"\ntwo"),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -4699,11 +4710,11 @@ mod tests {
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(11)),
                 Token::new_string("abc"),
                 Token::Number(NumberToken::I32(13)),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -4722,23 +4733,23 @@ mod tests {
             .unwrap(),
             vec![
                 TokenWithRange::new(
-                    Token::LeftBracket,
+                    Token::OpeningBracket,
                     Range::new(&Position::new(0, 0, 0), &Position::new(0, 0, 0))
                 ),
                 TokenWithRange::new(
                     Token::new_string("foo\nbar"),
                     Range::new(&Position::new(1, 0, 1), &Position::new(23, 3, 2))
                 ),
-                TokenWithRange::new(
-                    Token::Comma,
-                    Range::new(&Position::new(24, 3, 3), &Position::new(24, 3, 3))
-                ),
+                // TokenWithRange::new(
+                //     Token::Comma,
+                //     Range::new(&Position::new(24, 3, 3), &Position::new(24, 3, 3))
+                // ),
                 TokenWithRange::new(
                     Token::new_string("hello\nworld"),
                     Range::new(&Position::new(26, 3, 5), &Position::new(52, 6, 2))
                 ),
                 TokenWithRange::new(
-                    Token::RightBracket,
+                    Token::ClosingBracket,
                     Range::new(&Position::new(53, 6, 3), &Position::new(53, 6, 3))
                 ),
             ]
@@ -4805,7 +4816,11 @@ hello
                 "#
             )
             .unwrap(),
-            vec![Token::NewLine, Token::HexadecimalByteData(vec![]), Token::NewLine]
+            vec![
+                // Token::NewLine,
+                Token::HexadecimalByteData(vec![]),
+                // Token::NewLine
+            ]
         );
 
         assert_eq!(
@@ -4816,9 +4831,9 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::HexadecimalByteData(vec![0x11]),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -4830,9 +4845,9 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::HexadecimalByteData(vec![0x11, 0x13, 0x17, 0x19]),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -4844,9 +4859,9 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::HexadecimalByteData(vec![0x11, 0x13, 0x17, 0x19]),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -5073,9 +5088,9 @@ hello
             lex_from_str_without_location("Option::Some(123)").unwrap(),
             vec![
                 Token::new_variant("Option", "Some"),
-                Token::LeftParen,
+                Token::LeftParenthesis,
                 Token::Number(NumberToken::I32(123)),
-                Token::RightParen,
+                Token::ClosingParenthesis,
             ]
         );
 
@@ -5085,9 +5100,9 @@ hello
                 Token::new_identifier("value"),
                 Token::Colon,
                 Token::new_variant("Result", "Ok"),
-                Token::LeftParen,
+                Token::LeftParenthesis,
                 Token::Number(NumberToken::I32(456)),
-                Token::RightParen,
+                Token::ClosingParenthesis,
             ]
         );
     }
@@ -5105,19 +5120,19 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(7)),
-                Token::Comment(Comment::Line("11".to_owned())),
-                Token::NewLine,
+                // Token::Comment(Comment::Line("11".to_owned())),
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(13)),
                 Token::Number(NumberToken::I32(17)),
-                Token::Comment(Comment::Line(" 19 23".to_owned())),
-                Token::NewLine,
-                Token::Comment(Comment::Line("  29".to_owned())),
-                Token::NewLine,
+                // Token::Comment(Comment::Line(" 19 23".to_owned())),
+                // Token::NewLine,
+                // Token::Comment(Comment::Line("  29".to_owned())),
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(31)),
-                Token::Comment(Comment::Line("    37".to_owned())),
-                Token::NewLine,
+                // Token::Comment(Comment::Line("    37".to_owned())),
+                // Token::NewLine,
             ]
         );
 
@@ -5130,10 +5145,10 @@ hello
                     Token::Identifier("foo".to_owned()),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 3)
                 ),
-                TokenWithRange::new(
-                    Token::Comment(Comment::Line(" bar".to_owned())),
-                    Range::from_position_and_length(&Position::new(4, 0, 4), 6)
-                ),
+                // TokenWithRange::new(
+                //     Token::Comment(Comment::Line(" bar".to_owned())),
+                //     Range::from_position_and_length(&Position::new(4, 0, 4), 6)
+                // ),
             ]
         );
 
@@ -5144,22 +5159,22 @@ hello
                     Token::Identifier("abc".to_owned()),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 3)
                 ),
-                TokenWithRange::new(
-                    Token::Comment(Comment::Line(" def".to_owned())),
-                    Range::from_position_and_length(&Position::new(4, 0, 4), 6)
-                ),
-                TokenWithRange::new(
-                    Token::NewLine,
-                    Range::from_position_and_length(&Position::new(10, 0, 10), 1)
-                ),
-                TokenWithRange::new(
-                    Token::Comment(Comment::Line(" xyz".to_owned())),
-                    Range::from_position_and_length(&Position::new(11, 1, 0), 6)
-                ),
-                TokenWithRange::new(
-                    Token::NewLine,
-                    Range::from_position_and_length(&Position::new(17, 1, 6), 1)
-                ),
+                // TokenWithRange::new(
+                //     Token::Comment(Comment::Line(" def".to_owned())),
+                //     Range::from_position_and_length(&Position::new(4, 0, 4), 6)
+                // ),
+                // TokenWithRange::new(
+                //     Token::NewLine,
+                //     Range::from_position_and_length(&Position::new(10, 0, 10), 1)
+                // ),
+                // TokenWithRange::new(
+                //     Token::Comment(Comment::Line(" xyz".to_owned())),
+                //     Range::from_position_and_length(&Position::new(11, 1, 0), 6)
+                // ),
+                // TokenWithRange::new(
+                //     Token::NewLine,
+                //     Range::from_position_and_length(&Position::new(17, 1, 6), 1)
+                // ),
             ]
         );
     }
@@ -5174,11 +5189,11 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(7)),
-                Token::Comment(Comment::Block(" 11 13 ".to_owned())),
+                // Token::Comment(Comment::Block(" 11 13 ".to_owned())),
                 Token::Number(NumberToken::I32(17)),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -5191,11 +5206,11 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(7)),
-                Token::Comment(Comment::Block(" 11 /* 13 */ 17 ".to_owned())),
+                // Token::Comment(Comment::Block(" 11 /* 13 */ 17 ".to_owned())),
                 Token::Number(NumberToken::I32(19)),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -5208,11 +5223,11 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(7)),
-                Token::Comment(Comment::Block(" 11 // 13 17 ".to_owned())),
+                // Token::Comment(Comment::Block(" 11 // 13 17 ".to_owned())),
                 Token::Number(NumberToken::I32(19)),
-                Token::NewLine,
+                // Token::NewLine,
             ]
         );
 
@@ -5225,10 +5240,10 @@ hello
                     Token::Identifier("foo".to_owned()),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 3)
                 ),
-                TokenWithRange::new(
-                    Token::Comment(Comment::Block(" hello ".to_owned())),
-                    Range::from_position_and_length(&Position::new(4, 0, 4), 11)
-                ),
+                // TokenWithRange::new(
+                //     Token::Comment(Comment::Block(" hello ".to_owned())),
+                //     Range::from_position_and_length(&Position::new(4, 0, 4), 11)
+                // ),
                 TokenWithRange::new(
                     Token::Identifier("bar".to_owned()),
                     Range::from_position_and_length(&Position::new(16, 0, 16), 3)
@@ -5239,14 +5254,14 @@ hello
         assert_eq!(
             lex_from_str("/* abc\nxyz */ /* hello */").unwrap(),
             vec![
-                TokenWithRange::new(
-                    Token::Comment(Comment::Block(" abc\nxyz ".to_owned())),
-                    Range::new(&Position::new(0, 0, 0), &Position::new(12, 1, 5))
-                ),
-                TokenWithRange::new(
-                    Token::Comment(Comment::Block(" hello ".to_owned())),
-                    Range::new(&Position::new(14, 1, 7), &Position::new(24, 1, 17))
-                ),
+                // TokenWithRange::new(
+                //     Token::Comment(Comment::Block(" abc\nxyz ".to_owned())),
+                //     Range::new(&Position::new(0, 0, 0), &Position::new(12, 1, 5))
+                // ),
+                // TokenWithRange::new(
+                //     Token::Comment(Comment::Block(" hello ".to_owned())),
+                //     Range::new(&Position::new(14, 1, 7), &Position::new(24, 1, 17))
+                // ),
             ]
         );
 
@@ -5285,17 +5300,17 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
-                Token::LeftBrace,
+                // Token::NewLine,
+                Token::OpeningBrace,
                 Token::new_identifier("id"),
                 Token::Colon,
                 Token::Number(NumberToken::I32(123)),
-                Token::Comma,
+                // Token::Comma,
                 Token::new_identifier("name"),
                 Token::Colon,
                 Token::new_string("foo"),
-                Token::RightBrace,
-                Token::NewLine,
+                Token::ClosingBrace,
+                // Token::NewLine,
             ]
         );
 
@@ -5307,16 +5322,16 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
-                Token::LeftBracket,
+                // Token::NewLine,
+                Token::OpeningBracket,
                 Token::Number(NumberToken::I32(123)),
-                Token::Comma,
+                // Token::Comma,
                 Token::Number(NumberToken::I32(456)),
-                Token::Comma,
+                // Token::Comma,
                 Token::Number(NumberToken::I32(789)),
-                Token::Comma,
-                Token::RightBracket,
-                Token::NewLine,
+                // Token::Comma,
+                Token::ClosingBracket,
+                // Token::NewLine,
             ]
         );
 
@@ -5328,14 +5343,14 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
-                Token::LeftParen,
+                // Token::NewLine,
+                Token::LeftParenthesis,
                 Token::Number(NumberToken::I32(123)),
                 Token::new_string("foo"),
                 Token::Boolean(true),
-                Token::RightParen,
-                Token::Comment(Comment::Line(" line comment".to_owned())),
-                Token::NewLine,
+                Token::ClosingParenthesis,
+                // Token::Comment(Comment::Line(" line comment".to_owned())),
+                // Token::NewLine,
             ]
         );
 
@@ -5351,37 +5366,37 @@ hello
             )
             .unwrap(),
             vec![
-                Token::NewLine,
-                Token::LeftBrace, // {
-                Token::NewLine,
+                // Token::NewLine,
+                Token::OpeningBrace, // {
+                // Token::NewLine,
                 Token::new_identifier("a"),
                 Token::Colon,
-                Token::LeftBracket, // [
+                Token::OpeningBracket, // [
                 Token::Number(NumberToken::I32(1)),
-                Token::Comma,
+                // Token::Comma,
                 Token::Number(NumberToken::I32(2)),
-                Token::Comma,
+                // Token::Comma,
                 Token::Number(NumberToken::I32(3)),
-                Token::RightBracket, // ]
-                Token::NewLine,
+                Token::ClosingBracket, // ]
+                // Token::NewLine,
                 Token::new_identifier("b"),
                 Token::Colon,
-                Token::LeftParen, // (
+                Token::LeftParenthesis, // (
                 Token::Boolean(false),
-                Token::Comma,
+                // Token::Comma,
                 Token::Date(DateTime::parse_from_rfc3339("2000-01-01 10:10:10Z").unwrap()),
-                Token::RightParen, // )
-                Token::NewLine,
+                Token::ClosingParenthesis, // )
+                // Token::NewLine,
                 Token::new_identifier("c"),
                 Token::Colon,
-                Token::LeftBrace, // {
+                Token::OpeningBrace, // {
                 Token::new_identifier("id"),
                 Token::Colon,
                 Token::Number(NumberToken::I32(11)),
-                Token::RightBrace, // }
-                Token::NewLine,
-                Token::RightBrace, // }
-                Token::NewLine,
+                Token::ClosingBrace, // }
+                // Token::NewLine,
+                Token::ClosingBrace, // }
+                                   // Token::NewLine,
             ]
         );
     }

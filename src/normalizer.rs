@@ -4,17 +4,6 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-//! ASON parser consisting of multiple iterators concatenated by pipes:
-//!
-//! - Lexer: converts a character stream into a token stream.
-//! - RemoveCommentsIter: removes all comments from the token stream.
-//! - MergeNewlinesIter: merges multiple continuous newlines into one newline.
-//! - CheckSignedNumberIter: checks and normalizes signed numbers in the token stream.
-//! - TrimDocumentIter: trims the leading and trailing newlines of the document.
-//!
-//! The overall processing pipeline is as follows:
-//! `String -> Lexer -> Remove Comments -> Merge Newlines -> Check Signed Numbers -> Trim Document -> Token Stream`
-
 use std::ops::Neg;
 
 use crate::{
@@ -24,150 +13,150 @@ use crate::{
     token::{NumberToken, Token, TokenWithRange},
 };
 
-/// Remove all comments from the token stream.
-pub struct RemoveCommentsIter<'a> {
-    upstream: &'a mut dyn Iterator<Item = Result<TokenWithRange, AsonError>>,
-}
+// /// Remove all comments from the token stream.
+// pub struct RemoveCommentsIter<'a> {
+//     upstream: &'a mut dyn Iterator<Item = Result<TokenWithRange, AsonError>>,
+// }
 
-impl<'a> RemoveCommentsIter<'a> {
-    pub fn new(upstream: &'a mut dyn Iterator<Item = Result<TokenWithRange, AsonError>>) -> Self {
-        Self { upstream }
-    }
-}
+// impl<'a> RemoveCommentsIter<'a> {
+//     pub fn new(upstream: &'a mut dyn Iterator<Item = Result<TokenWithRange, AsonError>>) -> Self {
+//         Self { upstream }
+//     }
+// }
 
-impl Iterator for RemoveCommentsIter<'_> {
-    type Item = Result<TokenWithRange, AsonError>;
+// impl Iterator for RemoveCommentsIter<'_> {
+//     type Item = Result<TokenWithRange, AsonError>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        // Remove all comments from the token stream.
-        loop {
-            match self.upstream.next() {
-                Some(result) => {
-                    match &result {
-                        Ok(TokenWithRange {
-                            token: Token::Comment(_),
-                            ..
-                        }) => {
-                            // consume comments
-                        }
-                        _ => {
-                            return Some(result);
-                        }
-                    }
-                }
-                None => {
-                    return None;
-                }
-            }
-        }
-    }
-}
+//     fn next(&mut self) -> Option<Self::Item> {
+//         // Remove all comments from the token stream.
+//         loop {
+//             match self.upstream.next() {
+//                 Some(result) => {
+//                     match &result {
+//                         Ok(TokenWithRange {
+//                             token: Token::Comment(_),
+//                             ..
+//                         }) => {
+//                             // consume comments
+//                         }
+//                         _ => {
+//                             return Some(result);
+//                         }
+//                     }
+//                 }
+//                 None => {
+//                     return None;
+//                 }
+//             }
+//         }
+//     }
+// }
 
-/// Merge multiple continuous newlines into one newline.
-pub struct MergeNewlinesIter<'a> {
-    upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
-}
+// /// Merge multiple continuous newlines into one newline.
+// pub struct MergeNewlinesIter<'a> {
+//     upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
+// }
 
-impl<'a> MergeNewlinesIter<'a> {
-    pub fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
-        Self { upstream }
-    }
-}
+// impl<'a> MergeNewlinesIter<'a> {
+//     pub fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
+//         Self { upstream }
+//     }
+// }
 
-impl Iterator for MergeNewlinesIter<'_> {
-    type Item = Result<TokenWithRange, AsonError>;
+// impl Iterator for MergeNewlinesIter<'_> {
+//     type Item = Result<TokenWithRange, AsonError>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        // - combine multiple continuous newlines into one newline.
-        //   rules:
-        //     + multiple newlines => single newline
-        //     + comma + newline(s) => comma
-        //     + newline(s) + comma => comma
-        //     + newline(s) + comma + newline(s) => comma
-        //
-        //   because the comments have been removed, the following conclusions
-        //   can be inferred:
-        //     + comma + comment(s) + comma => comma + comma
-        //     + newline(s) + comment(s) + newline(s) => newline
-        //
-        match self.upstream.next() {
-            Some(result) => match &result {
-                Ok(token_with_range) => {
-                    let TokenWithRange {
-                        token: current_token,
-                        range: current_range,
-                    } = token_with_range;
+//     fn next(&mut self) -> Option<Self::Item> {
+//         // - combine multiple continuous newlines into one newline.
+//         //   rules:
+//         //     + multiple newlines => single newline
+//         //     + comma + newline(s) => comma
+//         //     + newline(s) + comma => comma
+//         //     + newline(s) + comma + newline(s) => comma
+//         //
+//         //   because the comments have been removed, the following conclusions
+//         //   can be inferred:
+//         //     + comma + comment(s) + comma => comma + comma
+//         //     + newline(s) + comment(s) + newline(s) => newline
+//         //
+//         match self.upstream.next() {
+//             Some(result) => match &result {
+//                 Ok(token_with_range) => {
+//                     let TokenWithRange {
+//                         token: current_token,
+//                         range: current_range,
+//                     } = token_with_range;
 
-                    let mut start_range = *current_range;
-                    let mut end_range = *current_range;
+//                     let mut start_range = *current_range;
+//                     let mut end_range = *current_range;
 
-                    match current_token {
-                        Token::NewLine => {
-                            // consume continuous newlines
-                            while let Some(Ok(TokenWithRange {
-                                token: Token::NewLine,
-                                range: next_range,
-                            })) = self.upstream.peek(0)
-                            {
-                                end_range = *next_range;
-                                self.upstream.next();
-                            }
+//                     match current_token {
+//                         Token::NewLine => {
+//                             // consume continuous newlines
+//                             while let Some(Ok(TokenWithRange {
+//                                 token: Token::NewLine,
+//                                 range: next_range,
+//                             })) = self.upstream.peek(0)
+//                             {
+//                                 end_range = *next_range;
+//                                 self.upstream.next();
+//                             }
 
-                            // found ','
-                            if let Some(Ok(TokenWithRange {
-                                token: Token::Comma,
-                                range: next_range,
-                            })) = self.upstream.peek(0)
-                            {
-                                // consume comma
-                                start_range = *next_range;
-                                end_range = *next_range;
-                                self.upstream.next();
+//                             // found ','
+//                             if let Some(Ok(TokenWithRange {
+//                                 token: Token::Comma,
+//                                 range: next_range,
+//                             })) = self.upstream.peek(0)
+//                             {
+//                                 // consume comma
+//                                 start_range = *next_range;
+//                                 end_range = *next_range;
+//                                 self.upstream.next();
 
-                                // consume trailing continuous newlines
-                                while let Some(Ok(TokenWithRange {
-                                    token: Token::NewLine,
-                                    range: _,
-                                })) = self.upstream.peek(0)
-                                {
-                                    self.upstream.next();
-                                }
+//                                 // consume trailing continuous newlines
+//                                 while let Some(Ok(TokenWithRange {
+//                                     token: Token::NewLine,
+//                                     range: _,
+//                                 })) = self.upstream.peek(0)
+//                                 {
+//                                     self.upstream.next();
+//                                 }
 
-                                Some(Ok(TokenWithRange::new(
-                                    Token::Comma,
-                                    Range::merge(&start_range, &end_range),
-                                )))
-                            } else {
-                                Some(Ok(TokenWithRange::new(
-                                    Token::NewLine,
-                                    Range::merge(&start_range, &end_range),
-                                )))
-                            }
-                        }
-                        Token::Comma => {
-                            // consume trailing continuous newlines
-                            while let Some(Ok(TokenWithRange {
-                                token: Token::NewLine,
-                                range: _,
-                            })) = self.upstream.peek(0)
-                            {
-                                self.upstream.next();
-                            }
+//                                 Some(Ok(TokenWithRange::new(
+//                                     Token::Comma,
+//                                     Range::merge(&start_range, &end_range),
+//                                 )))
+//                             } else {
+//                                 Some(Ok(TokenWithRange::new(
+//                                     Token::NewLine,
+//                                     Range::merge(&start_range, &end_range),
+//                                 )))
+//                             }
+//                         }
+//                         Token::Comma => {
+//                             // consume trailing continuous newlines
+//                             while let Some(Ok(TokenWithRange {
+//                                 token: Token::NewLine,
+//                                 range: _,
+//                             })) = self.upstream.peek(0)
+//                             {
+//                                 self.upstream.next();
+//                             }
 
-                            Some(Ok(TokenWithRange::new(
-                                Token::Comma,
-                                Range::merge(&start_range, &end_range),
-                            )))
-                        }
-                        _ => Some(result),
-                    }
-                }
-                Err(_) => Some(result),
-            },
-            None => None,
-        }
-    }
-}
+//                             Some(Ok(TokenWithRange::new(
+//                                 Token::Comma,
+//                                 Range::merge(&start_range, &end_range),
+//                             )))
+//                         }
+//                         _ => Some(result),
+//                     }
+//                 }
+//                 Err(_) => Some(result),
+//             },
+//             None => None,
+//         }
+//     }
+// }
 
 /// Check and normalize signed numbers in the token stream.
 pub struct CheckSignedNumberIter<'a> {
@@ -185,7 +174,7 @@ impl Iterator for CheckSignedNumberIter<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // - remove the '+' tokens in front of numbers (includes `+Inf`).
-        // - apple the '-' tokens to numbers (includes `-Inf`).
+        // - apply the '-' tokens to numbers (includes `-Inf`).
         // - checks if the signed number is overflowed.
         //
         //   note that the lexer only checked the number width, it does not check the valid range of a signed integer
@@ -232,7 +221,7 @@ impl Iterator for CheckSignedNumberIter<'_> {
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
                                                 format!(
-                                                    "This signed i8 number {} is overflowed.",
+                                                    "The signed i8 number {} is overflowed.",
                                                     v
                                                 ),
                                                 Range::merge(&start_range, next_range),
@@ -242,7 +231,7 @@ impl Iterator for CheckSignedNumberIter<'_> {
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
                                                 format!(
-                                                    "This signed i16 number {} is overflowed.",
+                                                    "The signed i16 number {} is overflowed.",
                                                     v
                                                 ),
                                                 Range::merge(&start_range, next_range),
@@ -252,7 +241,7 @@ impl Iterator for CheckSignedNumberIter<'_> {
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
                                                 format!(
-                                                    "This signed i32 number {} is overflowed.",
+                                                    "The signed i32 number {} is overflowed.",
                                                     v
                                                 ),
                                                 Range::merge(&start_range, next_range),
@@ -262,7 +251,7 @@ impl Iterator for CheckSignedNumberIter<'_> {
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
                                                 format!(
-                                                    "This signed i64 number {} is overflowed.",
+                                                    "The signed i64 number {} is overflowed.",
                                                     v
                                                 ),
                                                 Range::merge(&start_range, next_range),
@@ -514,28 +503,28 @@ impl Iterator for CheckSignedNumberIter<'_> {
                         Token::Number(NumberToken::I8(v)) if *v > i8::MAX as u8 => {
                             // check signed number overflow
                             Some(Err(AsonError::MessageWithRange(
-                                format!("This signed i8 number {} is overflowed.", v),
+                                format!("The signed i8 number {} is overflowed.", v),
                                 start_range,
                             )))
                         }
                         Token::Number(NumberToken::I16(v)) if *v > i16::MAX as u16 => {
                             // check signed number overflow
                             Some(Err(AsonError::MessageWithRange(
-                                format!("This signed i16 number {} is overflowed.", v),
+                                format!("The signed i16 number {} is overflowed.", v),
                                 start_range,
                             )))
                         }
                         Token::Number(NumberToken::I32(v)) if *v > i32::MAX as u32 => {
                             // check signed number overflow
                             Some(Err(AsonError::MessageWithRange(
-                                format!("This signed i32 number {} is overflowed.", v),
+                                format!("The signed i32 number {} is overflowed.", v),
                                 start_range,
                             )))
                         }
                         Token::Number(NumberToken::I64(v)) if *v > i64::MAX as u64 => {
                             // check signed number overflow
                             Some(Err(AsonError::MessageWithRange(
-                                format!("This signed i64 number {} is overflowed.", v),
+                                format!("The signed i64 number {} is overflowed.", v),
                                 start_range,
                             )))
                         }
@@ -549,50 +538,50 @@ impl Iterator for CheckSignedNumberIter<'_> {
     }
 }
 
-/// Trim the leading and trailing newlines of the document.
-pub struct TrimDocumentIter<'a> {
-    upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
-}
+// /// Trim the leading and trailing newlines of the document.
+// pub struct TrimDocumentIter<'a> {
+//     upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
+// }
 
-impl<'a> TrimDocumentIter<'a> {
-    pub fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
-        // consume the leading '\n of document
-        if let Some(Ok(TokenWithRange {
-            token: Token::NewLine,
-            ..
-        })) = upstream.peek(0)
-        {
-            upstream.next();
-        }
+// impl<'a> TrimDocumentIter<'a> {
+//     pub fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
+//         // consume the leading '\n of document
+//         if let Some(Ok(TokenWithRange {
+//             token: Token::NewLine,
+//             ..
+//         })) = upstream.peek(0)
+//         {
+//             upstream.next();
+//         }
 
-        Self { upstream }
-    }
-}
+//         Self { upstream }
+//     }
+// }
 
-impl Iterator for TrimDocumentIter<'_> {
-    type Item = Result<TokenWithRange, AsonError>;
+// impl Iterator for TrimDocumentIter<'_> {
+//     type Item = Result<TokenWithRange, AsonError>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.upstream.next() {
-            Some(r) => {
-                match &r {
-                    Ok(tl) => {
-                        let TokenWithRange { token, .. } = tl;
-                        match token {
-                            Token::NewLine if self.upstream.peek(0).is_none() => {
-                                // it is the last '\n' of document
-                                None
-                            }
-                            _ => Some(r),
-                        }
-                    }
-                    Err(_) => Some(r),
-                }
-            }
-            None => None,
-        }
-    }
-}
+//     fn next(&mut self) -> Option<Self::Item> {
+//         match self.upstream.next() {
+//             Some(r) => {
+//                 match &r {
+//                     Ok(tl) => {
+//                         let TokenWithRange { token, .. } = tl;
+//                         match token {
+//                             Token::NewLine if self.upstream.peek(0).is_none() => {
+//                                 // it is the last '\n' of document
+//                                 None
+//                             }
+//                             _ => Some(r),
+//                         }
+//                     }
+//                     Err(_) => Some(r),
+//                 }
+//             }
+//             None => None,
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -609,8 +598,6 @@ mod tests {
         token::{NumberToken, Token, TokenWithRange},
     };
 
-    use super::{MergeNewlinesIter, RemoveCommentsIter, TrimDocumentIter};
-
     /// Helper function to lex tokens from a string.
     fn lex_from_str(s: &str) -> Result<Vec<TokenWithRange>, AsonError> {
         // Lex
@@ -620,23 +607,24 @@ mod tests {
             PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
         let mut lexer = Lexer::new(&mut peekable_char_position_iter);
 
-        // Remove comments
-        let mut removed_comments_iter = RemoveCommentsIter::new(&mut lexer);
+        // // Remove comments
+        // let mut removed_comments_iter = RemoveCommentsIter::new(&mut lexer);
 
-        // Merge newlines
-        let mut peekable_removed_comments_iter = PeekableIter::new(&mut removed_comments_iter, 1);
-        let mut merged_newlines_iter = MergeNewlinesIter::new(&mut peekable_removed_comments_iter);
+        // // Merge newlines
+        // let mut peekable_removed_comments_iter = PeekableIter::new(&mut removed_comments_iter, 1);
+        // let mut merged_newlines_iter = MergeNewlinesIter::new(&mut peekable_removed_comments_iter);
 
-        // Check signed numbers
-        let mut peekable_merged_newlines_iter = PeekableIter::new(&mut merged_newlines_iter, 1);
-        let mut checked_signed_number_iter =
-            CheckSignedNumberIter::new(&mut peekable_merged_newlines_iter);
+        // Normalize signed numbers
+        let mut peekable_lexer_iter = PeekableIter::new(&mut lexer, 1);
+        // let mut peekable_merged_newlines_iter = PeekableIter::new(&mut merged_newlines_iter, 1);
+        let normalizer_iter =
+            CheckSignedNumberIter::new(&mut peekable_lexer_iter);
 
-        // Trim document
-        let mut peekable_checked_signed_number_iter =
-            PeekableIter::new(&mut checked_signed_number_iter, 1);
-        let mut trimmed_document_iter =
-            TrimDocumentIter::new(&mut peekable_checked_signed_number_iter);
+        // // Trim document
+        // let mut peekable_checked_signed_number_iter =
+        //     PeekableIter::new(&mut checked_signed_number_iter, 1);
+        // let mut trimmed_document_iter =
+        //     TrimDocumentIter::new(&mut peekable_checked_signed_number_iter);
 
         // Collect tokens
         //
@@ -646,7 +634,7 @@ mod tests {
         // if we use `collect()`, once an error occurs,
         // the iterator wouldn't stop immediately, instead, it would continue to iterate until the end,
         let mut token_with_ranges = vec![];
-        for result in trimmed_document_iter {
+        for result in normalizer_iter {
             match result {
                 Ok(twr) => token_with_ranges.push(twr),
                 Err(e) => return Err(e),
@@ -681,9 +669,9 @@ mod tests {
             .unwrap(),
             vec![
                 Token::Number(NumberToken::I32(11)),
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(13)),
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(17)),
             ]
         );
@@ -749,25 +737,25 @@ mod tests {
             )
             .unwrap(),
             vec![
-                Token::LeftBracket,
+                Token::OpeningBracket,
                 Token::Number(NumberToken::I32(1)),
-                Token::Comma,
+                // Token::Comma,
                 Token::Number(NumberToken::I32(2)),
-                Token::Comma,
+                // Token::Comma,
                 Token::Number(NumberToken::I32(3)),
-                Token::Comma,
+                // Token::Comma,
                 Token::Number(NumberToken::I32(4)),
-                Token::Comma,
+                // Token::Comma,
                 Token::Number(NumberToken::I32(5)),
-                Token::Comma,
-                Token::Comma,
+                // Token::Comma,
+                // Token::Comma,
                 Token::Number(NumberToken::I32(6)),
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(7)),
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(8)),
-                Token::NewLine,
-                Token::RightBracket,
+                // Token::NewLine,
+                Token::ClosingBracket,
             ]
         );
 
@@ -781,10 +769,10 @@ mod tests {
                     Token::Number(NumberToken::I32(11)),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 2)
                 ),
-                TokenWithRange::new(
-                    Token::NewLine,
-                    Range::new(&Position::new(2, 0, 2), &Position::new(7, 2, 2))
-                ),
+                // TokenWithRange::new(
+                //     Token::NewLine,
+                //     Range::new(&Position::new(2, 0, 2), &Position::new(7, 2, 2))
+                // ),
                 TokenWithRange::new(
                     Token::Number(NumberToken::I32(13)),
                     Range::from_position_and_length(&Position::new(8, 3, 0), 2)
@@ -796,10 +784,10 @@ mod tests {
         assert_eq!(
             lex_from_str(",\n\n\n11").unwrap(),
             vec![
-                TokenWithRange::new(
-                    Token::Comma,
-                    Range::from_position_and_length(&Position::new(0, 0, 0), 1)
-                ),
+                // TokenWithRange::new(
+                //     Token::Comma,
+                //     Range::from_position_and_length(&Position::new(0, 0, 0), 1)
+                // ),
                 TokenWithRange::new(
                     Token::Number(NumberToken::I32(11)),
                     Range::from_position_and_length(&Position::new(4, 3, 0), 2)
@@ -815,10 +803,10 @@ mod tests {
                     Token::Number(NumberToken::I32(11)),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 2)
                 ),
-                TokenWithRange::new(
-                    Token::Comma,
-                    Range::from_position_and_length(&Position::new(5, 3, 0), 1)
-                ),
+                // TokenWithRange::new(
+                //     Token::Comma,
+                //     Range::from_position_and_length(&Position::new(5, 3, 0), 1)
+                // ),
             ]
         );
 
@@ -830,10 +818,10 @@ mod tests {
                     Token::Number(NumberToken::I32(11)),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 2)
                 ),
-                TokenWithRange::new(
-                    Token::Comma,
-                    Range::from_position_and_length(&Position::new(4, 2, 0), 1)
-                ),
+                // TokenWithRange::new(
+                //     Token::Comma,
+                //     Range::from_position_and_length(&Position::new(4, 2, 0), 1)
+                // ),
                 TokenWithRange::new(
                     Token::Number(NumberToken::I32(13)),
                     Range::from_position_and_length(&Position::new(7, 4, 0), 2)
@@ -845,14 +833,14 @@ mod tests {
         assert_eq!(
             lex_from_str(",//abc\n,").unwrap(),
             vec![
-                TokenWithRange::new(
-                    Token::Comma,
-                    Range::from_position_and_length(&Position::new(0, 0, 0), 1)
-                ),
-                TokenWithRange::new(
-                    Token::Comma,
-                    Range::from_position_and_length(&Position::new(7, 1, 0), 1)
-                ),
+                // TokenWithRange::new(
+                //     Token::Comma,
+                //     Range::from_position_and_length(&Position::new(0, 0, 0), 1)
+                // ),
+                // TokenWithRange::new(
+                //     Token::Comma,
+                //     Range::from_position_and_length(&Position::new(7, 1, 0), 1)
+                // ),
             ]
         );
 
@@ -864,10 +852,10 @@ mod tests {
                     Token::Number(NumberToken::I32(11)),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 2)
                 ),
-                TokenWithRange::new(
-                    Token::NewLine,
-                    Range::new(&Position::new(2, 0, 2), &Position::new(10, 3, 0))
-                ),
+                // TokenWithRange::new(
+                //     Token::NewLine,
+                //     Range::new(&Position::new(2, 0, 2), &Position::new(10, 3, 0))
+                // ),
                 TokenWithRange::new(
                     Token::Number(NumberToken::I32(13)),
                     Range::from_position_and_length(&Position::new(11, 4, 0), 2)
@@ -1263,10 +1251,10 @@ mod tests {
                         Token::Number(NumberToken::I32(11)),
                         Range::from_position_and_length(&Position::new(0, 0, 0), 3)
                     ),
-                    TokenWithRange::new(
-                        Token::Comma,
-                        Range::from_position_and_length(&Position::new(3, 0, 3), 1)
-                    ),
+                    // TokenWithRange::new(
+                    //     Token::Comma,
+                    //     Range::from_position_and_length(&Position::new(3, 0, 3), 1)
+                    // ),
                     TokenWithRange::new(
                         Token::Number(NumberToken::I32(-13_i32 as u32)),
                         Range::from_position_and_length(&Position::new(4, 0, 4), 3)
@@ -2040,10 +2028,10 @@ mod tests {
                         Token::Number(NumberToken::I32(0x11)),
                         Range::from_position_and_length(&Position::new(0, 0, 0), 5)
                     ),
-                    TokenWithRange::new(
-                        Token::Comma,
-                        Range::from_position_and_length(&Position::new(5, 0, 5), 1)
-                    ),
+                    // TokenWithRange::new(
+                    //     Token::Comma,
+                    //     Range::from_position_and_length(&Position::new(5, 0, 5), 1)
+                    // ),
                     TokenWithRange::new(
                         Token::Number(NumberToken::I32(-0x13_i32 as u32)),
                         Range::from_position_and_length(&Position::new(6, 0, 6), 5)
@@ -2076,10 +2064,10 @@ mod tests {
                     Token::Number(NumberToken::F32(std::f32::consts::PI)),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 16)
                 ),
-                TokenWithRange::new(
-                    Token::Comma,
-                    Range::from_position_and_length(&Position::new(16, 0, 16), 1)
-                ),
+                // TokenWithRange::new(
+                //     Token::Comma,
+                //     Range::from_position_and_length(&Position::new(16, 0, 16), 1)
+                // ),
                 TokenWithRange::new(
                     Token::Number(NumberToken::F64(-std::f64::consts::E)),
                     Range::from_position_and_length(&Position::new(17, 0, 17), 25)
@@ -2474,10 +2462,10 @@ mod tests {
                             Token::Number(NumberToken::I32(0b101_i32 as u32)),
                             Range::from_position_and_length(&Position::new(0, 0, 0), 6)
                         ),
-                        TokenWithRange::new(
-                            Token::Comma,
-                            Range::from_position_and_length(&Position::new(6, 0, 6), 1)
-                        ),
+                        // TokenWithRange::new(
+                        //     Token::Comma,
+                        //     Range::from_position_and_length(&Position::new(6, 0, 6), 1)
+                        // ),
                         TokenWithRange::new(
                             Token::Number(NumberToken::I32(-0b010_i32 as u32)),
                             Range::from_position_and_length(&Position::new(7, 0, 7), 6)
@@ -2823,7 +2811,7 @@ mod tests {
             .unwrap(),
             vec![
                 Token::Number(NumberToken::I32(11)),
-                Token::NewLine,
+                // Token::NewLine,
                 Token::Number(NumberToken::I32(13)),
             ]
         );
