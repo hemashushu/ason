@@ -1,286 +1,330 @@
 # ASON
 
-_ASON_ is a data format evolved from JSON, featuring **strong data types** and support for **variant types**. It offers excellent readability and maintainability. ASON is well-suited for configuration files, data transfer, and data storage.
+_ASON_ is a data serialization format that evolved from JSON, featuring strong numeric typing and native support for variant types. With excellent readability and maintainability, ASON is well-suited for configuration files, data transfer, and data storage.
 
-<!-- (_ASON_ stands for _XiaoXuan Script Object Notation_) -->
-
-Table of Content
+**Table of Content**
 
 <!-- @import "[TOC]" {cmd="toc" depthFrom=2 depthTo=6 orderedList=false} -->
 
 <!-- code_chunk_output -->
 
-- [1 Features](#1-features)
-- [2 Example](#2-example)
-- [3 Comparison](#3-comparison)
-  - [3.1 Compared to JSON](#31-compared-to-json)
-  - [3.2 Compared to YAML and TOML](#32-compared-to-yaml-and-toml)
-- [4 Filename Extension](#4-filename-extension)
-- [5 Library and APIs](#5-library-and-apis)
-  - [5.1 Serialization and Deserialization](#51-serialization-and-deserialization)
-  - [5.2 AST Parser and Printer](#52-ast-parser-and-printer)
-- [6 Quick Reference](#6-quick-reference)
-  - [6.1 Primitive Values](#61-primitive-values)
-    - [6.1.1 Long Strings](#611-long-strings)
-    - [6.1.2 Multi-Line Strings](#612-multi-line-strings)
-    - [6.1.3 Auto-Trimmed Strings](#613-auto-trimmed-strings)
-  - [6.2 Objects](#62-objects)
-  - [6.3 Lists](#63-lists)
-  - [6.4 Named Lists](#64-named-lists)
-  - [6.5 Tuples](#65-tuples)
-  - [6.6 Variants](#66-variants)
+- [1. ASON Example](#1-ason-example)
+- [2. Comparison of Common Data Serialization Formats](#2-comparison-of-common-data-serialization-formats)
+- [3. What improvements does ASON bring over JSON?](#3-what-improvements-does-ason-bring-over-json)
+- [4 Library and APIs](#4-library-and-apis)
+  - [4.1 Serialization and Deserialization](#41-serialization-and-deserialization)
+  - [4.2 Parser and Printer](#42-parser-and-printer)
+- [5 ASON Quick Reference](#5-ason-quick-reference)
+  - [5.1 Primitive Values](#51-primitive-values)
+    - [5.1.1 Digit Separators](#511-digit-separators)
+    - [5.1.2 Explicit Numeric Types](#512-explicit-numeric-types)
+    - [5.1.3 Hexadecimal, Octal and Binary Integers](#513-hexadecimal-octal-and-binary-integers)
+    - [5.1.4 Hexadecimal Floating-Point Numbers](#514-hexadecimal-floating-point-numbers)
+    - [5.1.5 Special Floating-Point Numbers](#515-special-floating-point-numbers)
+    - [5.1.6 String Presentation](#516-string-presentation)
+      - [5.1.6.1 Multi-Line Strings](#5161-multi-line-strings)
+        - [5.1.6.2 Concatenated Strings](#5162-concatenated-strings)
+        - [5.1.6.3 Auto-Trimmed Strings](#5163-auto-trimmed-strings)
+  - [5.2 Compound Values](#52-compound-values)
+    - [5.2.1 Objects](#521-objects)
+    - [5.2.2 Lists](#522-lists)
+    - [5.2.3 Named Lists](#523-named-lists)
+    - [5.2.4 Tuples](#524-tuples)
+    - [5.2.5 Variants](#525-variants)
+  - [5.3 Comments](#53-comments)
+  - [5.4 Documents](#54-documents)
+- [6 Mapping between ASON and Rust Data Types](#6-mapping-between-ason-and-rust-data-types)
+  - [6.1 Structs](#61-structs)
+  - [6.2 Vecs](#62-vecs)
+  - [6.3 HashMaps](#63-hashmaps)
+  - [6.4 Tuples](#64-tuples)
+  - [6.5 Enums](#65-enums)
+  - [6.6 Other Data Types](#66-other-data-types)
   - [6.7 Default Values](#67-default-values)
-  - [6.8 Comments](#68-comments)
-  - [6.9 Documents](#69-documents)
-- [7 Rust Data Types and ASON](#7-rust-data-types-and-ason)
-  - [7.1 Structs](#71-structs)
-  - [7.2 HashMaps](#72-hashmaps)
-  - [7.3 Vecs](#73-vecs)
-  - [7.4 Tuples](#74-tuples)
-  - [7.5 Enums](#75-enums)
-  - [7.6 Other Data Types](#76-other-data-types)
-- [8 Source code](#8-source-code)
+- [7 ASON Specification](#7-ason-specification)
+- [8 Linking](#8-linking)
 - [9 License](#9-license)
 
 <!-- /code_chunk_output -->
 
-## 1 Features
+## 1. ASON Example
 
-- **Familiar to JSON Users:** ASON is designed to be similar to JSON, making it easy for JSON users to learn and use ASON quickly.
-
-- **Simple and Consistent:** ASON support for comments, omitting double quotes for object field names, and allowing trailing commas in the last array element. These features enhance writing fluency.
-
-- **Strong Data Typing:** ASON numbers can be explicitly typed (e.g., `u8`, `i32`, `f32`, `f64`), and integers can be represented in hexdecimal and binary formats. Additionally, new data types such as `Char`, `DateTime`, `ByteData`, and `Tuple` are introduced, enabling more precise and rigorous data representation.
-
-- **Native Variant Data Type Support:** ASON natively supports variant data types (also known as _algebraic types_, and _enum_ in Rust). This enables seamless serialization of complex data structures from high-level programming languages.
-
-- **Eliminating the Null Value:** ASON uses the `Option` variant to represent optional values, it eliminates the error-prone `null` value.
-
-## 2 Example
-
-An example of ASON text:
+An example of ASON document:
 
 ```json5
 {
     string: "Hello World 🍀"
-    raw_string: r"[a-z]+\d+"
+    raw_string: r"[a-z]\d+"
     integer_number: 123
     floating_point_number: 3.14
     number_with_explicit_type: 255_u8
+    hexadecimal_integer: 0x2B
+    hexadecimal_floating_point_number: 0x1.921FB6p+1
+    octal_integer: 0o755
+    binary_integer: 0b0101_1000
     boolean: true
     datetime: d"2023-03-24 12:30:00+08:00"
-    bytedata: h"68 65 6c 6c 6f"
-    list: [1, 2, 3]
-    named_list: {
-        "foo": 123
-        "bar": 456
-    }
-    tuple: (1, "foo", true)
+    bytedata: h"68 65 6c 6c 6f 0a 00"
+    list: [11, 13, 17, 19]
+    named_list: [
+        "foo": "The quick brown fox jumps over the lazy dog"
+        "bar": "My very educated mother just served us nine pizzas"
+    ]
+    tuple: (1, "Hippo", true)
     object: {
         id: 123
-        name: "Alice"
+        name: "HttpClient"
+        version: "1.0.1"
     }
     variant: Option::None
     variant_with_value: Option::Some(123)
-    tuple_style_variant: Color::RGB(255, 127, 63)
-    object_style_variant: Shape::Rect{
+    variant_with_tuple_like_value: Color::RGB(255, 127, 63)
+    variant_with_object_like_value: Shape::Rect{
         width: 200
         height: 100
     }
 }
 ```
 
-## 3 Comparison
+## 2. Comparison of Common Data Serialization Formats
 
-### 3.1 Compared to JSON
+There are many solid data serialization formats available today, such as JSON, YAML, TOML and XML. They are all designed to be readble and writable by both humans and machines.
 
-ASON is a "strong datatype" of JSON, but ASON is simpler, consistent, and more expressive, with the following improvements:
+The differences between these formats are minor for small datasets, but become more pronounced as datasets grow or structures become more complex. For example, YAML's indentation-based syntax can cause errors in large documents, and TOML's limited support for complex structures can make representing hierarchical data cumbersome. JSON, by contrast, is designed to stay simple, consistent, and expressive at any scale.
 
-- Trailing commas can be omitted.
-- Double quotes for Object keys are omitted.
-- Numeric data types are added.
-- Hexadecimal and binary representations of integers are added.
-- Hexadecimal representation of floating-point numbers are added.
-- More string representation ("long strings", "raw strings", and "auto-trimmed string") is added.
-- Comments ("line comments" and "block comments") are added.
-- New data types `Variant`, `Char`, `DateTime`, `Tuple` and `ByteData` are added.
-- The `null` value is removed.
-- Strings are consistently represented by using only double quotes.
-- `List` requires all elements to be of the same data type.
-- A trailing comma is allowed at the end of the last element of `List`, `Tuple`, `Object` and `Map`.
+For developers, JSON offers additional advantages:
 
-### 3.2 Compared to YAML and TOML
+- You don't have to learn an entirely new syntax: JSON closely resembles JavaScript object literals.
+- Implementing a parser is straightforward, which helps ensure longevity and adaptability across evolving software ecosystems.
 
-All three formats are simple enough to express data well when the dataset is small. However, when dealing with larger datasets, the results can vary.
+## 3. What improvements does ASON bring over JSON?
 
-YAML uses indentation to represent hierarchy, so the number of space characters in the prefix needs to be carefully controlled, and it is easy to make mistakes when editing multiple layers even with editor assistance. In addition, its [specification](https://yaml.org/spec/) is quite complex.
+JSON has a simple syntax and has been around for decades, but it struggles to meet diverse modern needs. Many JSON variants have emerged to address its limitations—such as JSONC (which adds comments) and JSON5 (which allows trailing commas and unquoted object keys). However, these variants still cannot represent data accurately due to limitations like the lack of strong typing. ASON takes a significant step forward based on JSON with the following improvements:
 
-TOML is not good at expressing hierarchy, there are redundant key names in the text, and the [object list](https://toml.io/en/v1.0.0#array-of-tables) are not as clear as other formats.
+- **Explicit Numeric Types:** ASON numbers can be explicitly typed (e.g., `u8`, `i32`, `f32`, `f64`) ensuring more precise and rigirous data representation. Additionally, integers can be represented in hexadecimal, octal, and binary formats.
+- **New Data Types:** New data types such as `Char`, `DateTime`, and `ByteData` to better represent common data types.
+- **More string formats:** "Multi-line strings", "Concatenate strings", "Raw strings", and "Auto-trimmed strings" are added to enhance string representation.
+- **Separate List and Tuple Types:** ASON distinguishes between `List` (homogeneous elements) and `Tuple` (heterogeneous elements), enhancing data structure clarity.
+- **Separate Named-List and Object Types:** ASON introduces `Named-List` (also called `Map`) alongside `Object` (also called `Struct`), enhancing data structure clarity in further.
+- **Native Variant Type Support:** ASON natively supports variant types (also known as _algebraic types_ or _enumerations_). This enables seamless serialization of complex data structures from high-level programming languages.
+- **Eliminating the Null Value:** ASON uses the `Option` variant to represent optional values, eliminating the error-prone `null` value and `undefined`.
+- **Familiar to JSON Users:** ASON is designed to resemble JSON, making it easy for JSON users to learn and adopt.
+- **Simple and Consistent:** ASON supports comments, unquoted object field names, trailing commas, and whitespace-separated elements (in addition to commas). These features enhance writing fluency.
 
-ASON, on the other hand, has good consistency regardless of the size of the data. Of course, you still need to be careful that the braces are paired, but this is not a problem with the help of modern text editors.
+In addition to the text format, ASON provides a binary format called _ASONB_ (ASON Binary) for efficient data storage and transmission, supporting incremental storage, memory-mapped file access, and fast random access.
 
-## 4 Filename Extension
+It is worth noting that ASON is not compatible with JSON, but conversion between ASON and JSON is straightforward, and implementing an ASON parser is also simple.
 
-The extension name for ASON file is `*.ason`, for example:
+## 4 Library and APIs
 
-`sample.ason`, `package.ason`
-
-## 5 Library and APIs
-
-The Rust [ason](https://github.com/hemashushu/ason) library provides AST (Abstract Syntax Tree) low-level access, and [serde_ason](https://github.com/hemashushu/serde_ason) provides [serde](https://github.com/serde-rs/serde) based for serialization and deserialization.
+The Rust [ason](https://github.com/hemashushu/ason) library provides AST (Abstract Syntax Tree) level ASON access, and [serde_ason](https://github.com/hemashushu/serde_ason) provides [serde](https://github.com/serde-rs/serde) based for serialization and deserialization.
 
 In general, it is recommended to use the serde API since it is simple enough to meet most needs.
 
-### 5.1 Serialization and Deserialization
+### 4.1 Serialization and Deserialization
 
-Consider the following ASON text:
+Consider the following ASON document:
 
 ```json5
 {
     name: "foo"
-    type: Type::Application
     version: "0.1.0"
     dependencies: [
-        "random": Option::None
-        "regex": Option::Some("1.0.1")
+        "registry.domain/user/random@1.0.1"
+        "registry.domain/user/regex@2.0.0"
     ]
 }
 ```
 
-This text consists of an object and a map: the object with `name`, `type`, `version` and `dependencies` fields, and the map with string as key and `Option` string as value. We can create a Rust struct corresponding to these data:
+This document consists of an object and a list: the object with `name`, `version` and `dependencies` fields, and the list with string as elements. We can create a Rust struct corresponding to these data:
 
 ```rust
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Package {
     name: String,
-
-    #[serde(rename = "type")]
-    package_type: Type,
-
     version: String,
-
-    dependencies: Vec<(String, Option<String>)>,
+    dependencies: Vec<String>,
 }
 ```
 
-Note that this struct has a `derive` attribute, in which `Serialize` and `Deserialize` are traits provided by the _serde_ serialization framework. Applying them to a struct to be serialized and deserialized.
+The struct needs to be annotated with a `derive` attribute, in which `Serialize` and `Deserialize` are traits provided by the _serde_ serialization framework.
 
-Since "type" is a keyword in Rust language, we uses "package_type" as the field name, and then uses the `#[serde(rename = "type")]` attribute to tell _serde_ to serialize the field as "type". Then we create an enum named "Type":
-
-```rust
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-enum Type {
-    Application,
-    Library,
-}
-```
-
-Now that the preparation is done, by using the function `ason::from_str` to deserialize the ASON text into a Rust struct instance:
+The following code shows how to use the serde API `ason::from_str` for deserializing the ASON document into a Rust struct instance:
 
 ```rust
-let text = "..."; // The above ASON text
+let text = "..."; // The above ASON document
 let package = from_str::<Package>(text).unwrap();
 ```
 
-And the function `ason::to_string` is used for serializing a Rust struct instance to a string:
+And serialize a Rust struct instance to string with `ason::to_string` function:
 
 ```rust
-let package = Package{...}; // Feel free to build the `Package` instance
-let s = to_string(&package);
+let package = Package{
+    name: String::new("foo"),
+    version: String::new("0.1.0"),
+    dependencies: vec![
+        String::new("registry.domain/user/random@1.0.1"),
+        String::new("registry.domain/user/regex@2.0.0"),
+    ],
+};
+let text = to_string(&package);
 ```
 
-### 5.2 AST Parser and Printer
+### 4.2 Parser and Printer
 
-The library also provides a set of low-level APIs for building, manipulating ASON data.
-
-Consider the following ASON text:
-
-```json5
-{
-    id: 123
-    name: "John"
-    orders: [11, 13]
-}
-```
-
-Use the `parse_from_str` function to parse the above ASON text into an AST:
+The `ason::parse_from_str` function is used to parse the ASON document into AST:
 
 ```rust
-let text = "..."; // The above ASON text
+let text = "..."; // The above ASON document
 let node = parse_from_str(text).unwrap();
 
 assert_eq!(
     node,
     AsonNode::Object(vec![
         KeyValuePair {
-            key: String::from("id"),
-            value: Box::new(AsonNode::Number(Number::I32(123)))
-        },
-        KeyValuePair {
             key: String::from("name"),
-            value: Box::new(AsonNode::String(String::from("John")))
+            value: Box::new(AsonNode::String(String::from("foo")))
         },
         KeyValuePair {
-            key: String::from("orders"),
+            key: String::from("version"),
+            value: Box::new(AsonNode::String(String::from("0.1.0")))
+        },
+        KeyValuePair {
+            key: String::from("dependencies"),
             value: Box::new(AsonNode::List(vec![
-                AsonNode::Number(Number::I32(11)),
-                AsonNode::Number(Number::I32(13))
+                AsonNode::String(String::from("registry.domain/user/random@1.0.1")),
+                AsonNode::String(String::from("registry.domain/user/regex@2.0.0"))
             ]))
         }
     ])
 );
 ```
 
-In contrast, the function `ason::print_to_string` formats the AST into text:
+And, the function `ason::print_to_string` is used to format the AST into text:
 
 ```rust
-let s = print_to_string(&node);
+let text = print_to_string(&node);
+// The `text` should be resemble the above ASON document
 ```
 
-## 6 Quick Reference
+## 5 ASON Quick Reference
 
-ASON is composed of values and comments.
+ASON is composed of values, there are two types of values: primitive and compound. Primitive values are basic data types like integers, strings, booleans. Compound values are structures made up of multiple values (includes primitive and other compound values), such as lists and objects.
 
-There are two types of values: primitive and compound. Primitive values are basic data types like integers, strings, booleans and datetimes. Compound values are structures made up of multiple values (includes primitive and compound values), such as lists and objects.
+### 5.1 Primitive Values
 
-### 6.1 Primitive Values
+ASON supports the following primitive value types:
 
-Here are examples of primitive values:
+**Numeric Values:**
 
 - Integers: `123`, `+456`, `-789`
 - Floating-point numbers: `3.142`, `+1.414`, `-1.732`
-- Floating-point with exponent: `2.998e10`, `6.674e-11`
-- Special Floating-point numbers: `NaN`, `Inf`, `+Inf`, `-Inf`
+- Floating-point with exponent notation: `2.998e10`, `6.674e-11`
+- Special floating-point values: `NaN`, `Inf`, `+Inf`, `-Inf`
+- Hexadecimal integers: `0x41`, `+0x51`, `-0x61`, `0x71`
+- Hexadecimal floating-point: `0x1.4p3`, `0x1.921f_b6p1`
+- Octal integers: `0o755`, `+0o600`, `-0o500`
+- Binary integers: `0b1100`, `+0b1010`, `-0b1010_0100`
 
-  Underscores can be inserted between any digits of a number, e.g. `123_456_789`, `6.626_070_e-34`
+**Text Values:**
 
-  The data type of a number can be explicitly specified by appending the type name after the number, e.g. `65u8`, `3.14f32`
-
-  Underscores can also be inserted between the number and the type name, e.g. `933_199_u32`, `6.626e-34_f32`
-
-  Leading zeros are not allowed for decimal integers, e.g. `0123` is invalid, but `0` is valid.
-
-> Each number in ASON has a specific data type. The default data type for integers is `i32` and for floating-point numbers is `f64` if not explicitly specified. ASON supports the these numeric data types: `i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f32`, `f64`
-
-- Hexadecimal integers: `0x41`, `+0x51`, `-0x61`, `0x71_u8`
-- Octal integers: `0o10`, `+0o20`, `-0o30`, `0o40_u8`
-- Binary integers: `0b1100`, `+0b1010`, `-0b0101`, `0b0110_1001_u8`
-- Floating-point numbers in [C/C++ language hexadecimal floating-point literal format](https://en.wikipedia.org/wiki/Hexadecimal#Hexadecimal_exponential_notation): `0x1.4p3`, `0x1.921f_b6p1_f32`
-
-  Note that you cannot represent a floating-point number by simply appending the "f32" or "f64" suffix to a normal hexadecimal integer, for example `0x21_f32`. This is because the character "f" is one of the hexadecimal digit characters (i.e., `[0-9a-f]`), so `0x21_f32` will only be parsed as a normal hexadecimal integer `0x21f32`.
-
-- Booleans: `true`, `false`
 - Characters: `'a'`, `'文'`, `'😊'`
-- Escape characters: `'\r'`, `'\n'`, `'\t'`, `'\\'`
-- Unicode escape characters: `'\u{2d}'`, `'\u{6587}'`
+- Escape sequences: `'\r'`, `'\n'`, `'\t'`, `'\\'`
+- Unicode escapes: `'\u{2d}'`, `'\u{6587}'`
 - Strings: `"abc文字😊"`, `"foo\nbar"`
 - Raw strings: `r"[a-z]+\d+"`, `r#"<\w+\s(\w+="[^"]+")*>"#`
+
+**Boolean, Date and Binary Values:**
+
+- Booleans: `true`, `false`
 - Date and time: `d"2024-03-16"`, `d"2024-03-16 16:30:50"`, `d"2024-03-16T16:30:50Z"`, `d"2024-03-16T16:30:50+08:00"`
-- Byte data:  `h"11 13 17 19"`
+- Hexadecimal byte data: `h"11 13 17 19"`
 
-#### 6.1.1 Concatenate Strings
+#### 5.1.1 Digit Separators
 
-To improve readability, ASON supports writing strings across multiple lines. Simply add a `\` symbol at the end of the line and start the new line. The subsequent text will be appended to the current string with leading whitespaces removed. For example:
+To improve readability, underscores can be inserted between digits in any numeric literal. For example: `123_456_789`, `6.626_070_e-34`
+
+#### 5.1.2 Explicit Numeric Types
+
+Numbers can be explicitly typed by appending a type suffix. For example: `65u8`, `3.14f32`
+
+ASON supports the following numeric types: `i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f32`, `f64`.
+
+> If no explicit type is specified, integers default to `i32` and floating-point numbers default to `f64`.
+
+Underscores may also appear between the number and its type suffix for readability: `933_199_u32`, `6.626e-34_f32`
+
+#### 5.1.3 Hexadecimal, Octal and Binary Integers
+
+Beyond decimal notation, ASON supports three additional integer formats:
+
+- **Hexadecimal**: prefix with `0x` (e.g., `0xFF`)
+- **Octal**: prefix with `0o` (e.g., `0o755`)
+- **Binary**: prefix with `0b` (e.g., `0b1010`)
+
+Type prefixes are case-insensitive. Note that leading zeros are not permitted for decimal integers (`0123` is invalid), but the single digit `0` is valid.
+
+#### 5.1.4 Hexadecimal Floating-Point Numbers
+
+Appending a type suffix directly to a hexadecimal integer creates ambiguity because `f` is a valid hexadecimal digit. For example, `0x21_f32` would be parsed as the hexadecimal integer `0x21f32` rather than a typed floating-point number.
+
+To represent hexadecimal floating-point literals, use the P notation format: `0x1.921f_b6p1`, `0x1.4p3`. For details, see [P notation](https://en.wikipedia.org/wiki/Hexadecimal#Exponential_notation) or [Hexadecimal floating point literals](https://www.ibm.com/docs/en/xl-c-and-cpp-aix/16.1.0?topic=literals-floating-point).
+
+#### 5.1.5 Special Floating-Point Numbers
+
+ASON supports special floating-point values: `NaN`, `Inf`, `+Inf`, `-Inf`. These represent results of certain mathematical operations (such as division by zero or square root of a negative number) and are not valid in JSON.
+
+Important notes:
+
+- Do not confuse these with strings: `"NaN"` is a string, while `NaN` (unquoted) is a special floating-point value.
+- Leading signs are not allowed for `NaN` (`-NaN` and `+NaN` are invalid).
+- Type suffixes are optional but allowed: `NaN_f32`, `+Inf_f32` (underscore is mandatory when a suffix is used). The default type is `f64`.
+
+#### 5.1.6 String Presentation
+
+Strings in ASON can be represented in multiple ways: normal strings, raw strings, multi-line strings, concatenated strings, and auto-trimmed strings.
+
+##### 5.1.6.1 Multi-Line Strings
+
+Strings in ASON are enclosed in double quotation marks (`"`). A string ends when the closing quotation mark is reached, allowing strings to span multiple lines.
+
+For example:
+
+```json5
+{
+    multiline_string: "Planets in the Solar System:
+        1. Mercury
+        2. Venus
+        3. Earth
+        4. Mars
+        5. Jupiter
+        6. Saturn
+        7. Uranus
+        8. Neptune"
+}
+```
+
+To include a double quotation mark (`"`) in a string, escape it with a backslash (`\"`). Similarly, to include a backslash (`\`), escape it with another backslash (`\\`).
+
+In this form, all whitespace (including line breaks, tabs, and spaces) becomes part of the string content. For example, the string above is equivalent to:
+
+```text
+"Planets in the Solar System:
+        1. Mercury
+        2. Venus
+        3. Earth
+        4. Mars
+        5. Jupiter
+        6. Saturn
+        7. Uranus
+        8. Neptune"
+```
+
+Note that all leading spaces are preserved.
+
+###### 5.1.6.2 Concatenated Strings
+
+To improve readability, ASON allows splitting a long string across multiple lines by adding a backslash (`\`) at the end of each line. The subsequent text will be concatenated with leading whitespace removed. For example:
 
 ```json5
 {
@@ -290,35 +334,11 @@ To improve readability, ASON supports writing strings across multiple lines. Sim
 }
 ```
 
-This string is equivalent to `"My very educated mother just served us nine pizzas"`.
+This is equivalent to `"My very educated mother just served us nine pizzas"`. This form is especially useful for representing paragraphs or long sentences without introducing unwanted line breaks.
 
-#### 6.1.2 Multi-Line Strings
+###### 5.1.6.3 Auto-Trimmed Strings
 
-ASON supports multiple lines strings, for example:
-
-```json5
-{
-    multiline_string: "Planets
-        1. Mercury Venus Earth
-        2. Mars Jupiter Saturn
-        3. Uranus Neptune"
-}
-```
-
-This represents a string with 4 lines, it is equivalent to:
-
-```text
-Planets
-        1. Mercury Venus Earth
-        2. Mars Jupiter Saturn
-        3. Uranus Neptune
-```
-
-Note that all leading whitespace is preserved.
-
-#### 6.1.3 Auto-Trimmed Strings
-
-ASON supports "auto-trimmed strings" by automatically trimming the same number of leading whitespaces from echo line, for example:
+Auto-trimmed strings provide another way to represent multi-line strings. They automatically trim the same amount of leading whitespace from each line. For example:
 
 ```json5
 {
@@ -338,7 +358,9 @@ ASON supports "auto-trimmed strings" by automatically trimming the same number o
 }
 ```
 
-In the example above, not every line has the same number of leading whitespaces, some lines have 8, others 11 or 13. In the end, each line will only be trimmed by the same number (i.e. 8) of leading whitespaces. It is equivalent to:
+The leading whitespace serves only for indentation and readability; it is not part of the string content.
+
+In this example, lines have 8, 11, or 13 leading spaces. Since the minimum is 8 spaces, exactly 8 leading spaces are removed from each line. The resulting string is:
 
 ```text
    Planets and Satellites
@@ -354,30 +376,37 @@ In the example above, not every line has the same number of leading whitespaces,
    - Europa
 ```
 
-It is worth nothing that when writing auto-trimmed strings:
+When writing auto-trimmed strings, follow these rules:
 
-- The opening symbol `"""` must be followed by a new line, but the symbol itself can be preceded by any characters (including spaces).
-- The closing symbol `"""` must start on a new line, and its leading spaces are ignored.
-- The leading spaces of blank line are ignored.
-- The last line break (`\n`) is not part of the text.
+- The opening `"""` must be immediately followed by a newline.
+- The closing `"""` must start on a new line; leading spaces are allowed, but they are not counted.
+- In blank lines, all spaces are not counted.
 
-For example:
+In short, the syntax of auto-trimmed strings is:
+
+`"""\n...\n"""`
+
+Where `...` represents the content lines (the two newlines are mandatory, and they are not part of the string content).
+
+Another example:
 
 ```json5
 [
   """
-    hello
+    Hello
   """, """
-    foo
-
-    bar
+    Earth
+      &
+    Mars
   """
 ]
 ```
 
-This list is equivalent to `["hello","foo\n\nbar"]`.
+The two strings are equivalent to `"Hello"` and `"Earth\n  &\nMars"`.
 
-### 6.2 Objects
+### 5.2 Compound Values
+
+#### 5.2.1 Objects
 
 An _Object_ can contain multiple values, each with a name called a _key_. The keys are _identifiers_ which are similar to strings but without quotation marks. A combination of a key and a value is called a _key-value pair_. An Object is a collection of key-value pairs. For example:
 
@@ -424,7 +453,7 @@ The values within an Object can be any type, including primitive values (such as
 }
 ```
 
-### 6.3 Lists
+#### 5.2.2 Lists
 
 A List is a collection of values of the same data type, for example:
 
@@ -507,7 +536,7 @@ If the elements in a List are Lists, then the data type of the elements in each 
 
 In the example above, although the length of each sub-list is different, since the type of a List is determined ONLY by the type of its elements, the types of these sub-lists are asserted to be the same, and therefore it is a valid List.
 
-### 6.4 Named Lists
+#### 5.2.3 Named Lists
 
 TODO
 
@@ -521,7 +550,7 @@ TODO
 ]
 ```
 
-### 6.5 Tuples
+#### 5.2.4 Tuples
 
 A Tuple can be considered as an Object that omits the keys, for example:
 
@@ -551,7 +580,7 @@ and
 )
 ```
 
-### 6.6 Variants
+#### 5.2.5 Variants
 
 Variants also called enumeration. A Variant is a data type that can have multiple named members, and each member can optionally carry a value. Variants are useful for representing data that can take on different forms.
 
@@ -628,11 +657,7 @@ and
 Color::RGB(255, 127, 63)
 ```
 
-### 6.7 Default Values
-
-TODO
-
-### 6.8 Comments
+### 5.3 Comments
 
 Like JavaScript and C/C++, ASON also supports two types of comments: line comments and block comments. Comments are for human readability and are completely ignored by the parser.
 
@@ -673,7 +698,7 @@ Unlike JavaScript and C/C++, ASON block comments support nesting. For example:
 
 The nesting feature of block comments makes it more convenient for us to comment on a piece of code that **already has a block comment**. If block comments do not support nesting like JavaScript and C/C++, we need to remove the inner block comment first before adding a comment to the outer layer, because the inner block comment symbol `*/` will end the outer block comments, no doubt this is an annoying issue.
 
-### 6.9 Documents
+### 5.4 Documents
 
 An ASON document can only contain one value (one primitive value or one compound value), like JSON, a typical ASON document is usually an Object or a List. In fact, all types of values are allowed, not limited to Objects or Lists. For example, a Tuple, a Variant, even a number or a string is allowed. Just make sure that a document has exactly one value. For example, the following are both valid ASON documents:
 
@@ -704,7 +729,7 @@ and
 11, "Alice", true
 ```
 
-## 7 Rust Data Types and ASON
+## 6 Mapping between ASON and Rust Data Types
 
 ASON natively supports most Rust data types, including Tuples, Enums and Vectors. Because ASON is also strongly data typed, both serialization and deserialization can ensure data accuracy. In fact, ASON is more compatible with Rust's data types than other data formats (such as JSON, YAML and TOML).
 
@@ -724,7 +749,7 @@ The following is a list of supported Rust data types:
 - Tuple
 - Enum
 
-### 7.1 Structs
+### 6.1 Structs
 
 In general, we use structs in Rust to store a group of related data. Rust structs correspond to ASON `Object`. The following is an example of a struct named "User" and its instance `s1`:
 
@@ -789,7 +814,7 @@ The corresponding ASON text for instance `s2`:
 }
 ```
 
-### 7.2 Vecs
+### 6.2 Vecs
 
 `Vec` (vector) is another common data structure in Rust, which is used for storing a series of similar data. `Vec` corresponds to ASON `List`. The following code demonstrates adding a field named `orders` to the struct `User` to store order numbers:
 
@@ -869,7 +894,7 @@ The corresponding ASON text for instance `v2` is:
 }
 ```
 
-### 7.3 HashMaps
+### 6.3 HashMaps
 
 Rust's HashMap corresponds to ASON's Map, e.g. the following creates a HashMap instance `m1` of type `<String, Option<String>>`:
 
@@ -890,7 +915,7 @@ The corresponding ASON text for instance `m1` is:
 }
 ```
 
-### 7.4 Tuples
+### 6.4 Tuples
 
 There is another common data type _tuple_ in Rust, which can be considered as structs with omitted field names. Tuple just corresponds to ASON `Tuple`.
 
@@ -933,7 +958,7 @@ The corresponding ASON text for instance `v1` is:
 
 It should be noted that in some programming languages, tuples and vectors are not clearly distinguished, but in Rust they are completely different data types. Vectors require that all elements have the same data type (Rust arrays are similar to vectors, but vectors have a variable number of elements, while arrays have a fixed size that cannot be changed after creation), while tuples do not require that their member data types be the same, but do require a fixed number of members. ASON's definition of `Tuple` is consistent with Rust's.
 
-### 7.5 Enums
+### 6.5 Enums
 
 In the above example, the order status is represented by a string. From historical lessons, we know that a better solution is to use an enum. Rust enum corresponds to ASON `Variant`. The following code uses the enum `Status` to replace the `String` in `Vec<(i32, String)>`.
 
@@ -1035,7 +1060,7 @@ The corresponding ASON text for instance `e2` is:
 
 The ASON text closely resembles the Rust data literals, which is intentional. The design aims to reduce the learning curve for users by making ASON similar to existing data formats (JSON) and programming languages (Rust).
 
-### 7.6 Other Data Types
+### 6.6 Other Data Types
 
 Some Rust data types are not supported, includes:
 
@@ -1049,12 +1074,21 @@ It is worth nothing that the [serde framework's data model](https://serde.rs/dat
 
 In addition, serde treats fixed-length arrays such as `[i32; 4]` as tuples rather than vectors, so the Rust array `[11, 13, 17, 19]` will be serialized as ASON Tuple `(11, 13, 17, 19)`.
 
-## 8 Source code
+### 6.7 Default Values
 
-- [GitHub](https://github.com/hemashushu/ason)
-- [GitLab](https://gitlab.com/hemashushu/ason)
-- [Gitee](https://gitee.com/hemashushuzsd/ason)
+TODO
+
+## 7 ASON Specification
+
+This section describes the ASON specification in detail, it is mainly for developers who want to implement ASON parsers and formatters in other programming languages. For general users, please refer to the previous sections.
+
+TODO
+
+## 8 Linking
+
+- [Source code on GitHub](https://github.com/hemashushu/ason)
+- [Crates.io](https://crates.io/crates/ason)
 
 ## 9 License
 
-Check out [LICENSE](./LICENSE) and [LICENSE.additional](./LICENSE.additional).
+This project is licensed under the MPL 2.0 License with additional terms. See the files [LICENSE](./LICENSE) and [LICENSE.additional](./LICENSE.additional)
