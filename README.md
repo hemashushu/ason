@@ -209,7 +209,7 @@ let text = print_to_string(&node);
 
 ## 5 ASON Quick Reference
 
-ASON is composed of values, there are two types of values: primitive and compound. Primitive values are basic data types like integers, strings, booleans. Compound values are structures made up of multiple values (includes primitive and other compound values), such as lists and objects.
+ASON is composed of values, there are two kinds of values: primitive and compound. Primitive values are basic data types like integers, strings, booleans. Compound values are structures made up of multiple values (includes primitive and other compound values), such as lists and objects.
 
 ### 5.1 Primitive Values
 
@@ -378,7 +378,7 @@ In this example, lines have 8, 11, or 13 leading spaces. Since the minimum is 8 
 
 When writing auto-trimmed strings, follow these rules:
 
-- The opening `"""` must be immediately followed by a newline.
+- The opening `"""` must be immediately followed by a line break.
 - The closing `"""` must start on a new line; leading spaces are allowed, but they are not counted.
 - In blank lines, all spaces are not counted.
 
@@ -386,7 +386,7 @@ In short, the syntax of auto-trimmed strings is:
 
 `"""\n...\n"""`
 
-Where `...` represents the content lines (the two newlines are mandatory, and they are not part of the string content).
+Where `...` represents the content lines (the two line breaks are mandatory, and they are not part of the string content).
 
 Another example:
 
@@ -406,35 +406,49 @@ The two strings are equivalent to `"Hello"` and `"Earth\n  &\nMars"`.
 
 ### 5.2 Compound Values
 
+ASON supports the following compound value types: Objects, Lists, Named Lists, Tuples and Variants.
+
 #### 5.2.1 Objects
 
-An _Object_ can contain multiple values, each with a name called a _key_. The keys are _identifiers_ which are similar to strings but without quotation marks. A combination of a key and a value is called a _key-value pair_. An Object is a collection of key-value pairs. For example:
+An _Object_ can contain multiple values, each with a name called a _key_. The keys are _identifiers_ which are similar to strings but without quotation marks (`"`). A combination of a key and a value is called a _key-value pair_.
+
+In other words, an Object is a collection of key-value pairs. For example:
 
 ```json5
 {
     name: "ason",
     version: "1.0.1",
-    edition: "2021", // Note that ths comma is allowed.
-}
-```
-
-Note that ASON Objects allow a comma at the end of the last key-value pair, which is not allowed in JSON. This feature is primarily intended to make it easy to reorder key-value pairs when editing ASON text.
-
-The comma at the end of each key-value pair is optional, so the text above could be written as:
-
-```json5
-{
-    name: "ason"  // Note that commas can be omitted.
-    version: "1.0.1"
     edition: "2021"
 }
 ```
 
-Of course, multiple key-value pairs can also be written on a single line. In this case, commas are required between key-value pairs. For example:
+Key-value pairs are separated by commas (the last key-value pair can also be followed by a comma) or whitespace (such as spaces, tabs, and line breaks). Thus the followings Objects are all identical:
 
 ```json5
-{name: "ason", version: "1.0.1", edition: "2021",}
+// separated by commas
+{ name: "ason", version: "1.0.1", edition: "2021" }
+
+// separated by whitespace
+{ name: "ason" version: "1.0.1" edition: "2021" }
+
+// separated by line breaks
+{
+    name: "ason"
+    version: "1.0.1"
+    edition: "2021"
+}
+
+// separated by commas and line breaks
+{
+    name: "ason",
+    version: "1.0.1",
+    edition: "2021",
+}
 ```
+
+A comma at the end of the last key-value pair (which is called a trailing comma) is allowed in ASON, this feature is primarily intended to make it easy to reorder key-value pairs when editing multi-line objects.
+
+> In ASON, commas are optional and whitespace can be used as separators.
 
 The values within an Object can be any type, including primitive values (such as numbers, strings, dates) and compound values (such as Lists, Objects, Tuples). In the real world, an Object usually contains other Objects, for example:
 
