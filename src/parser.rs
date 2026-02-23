@@ -11,54 +11,36 @@ use crate::{
     char_with_position::CharsWithPositionIter,
     error::AsonError,
     lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
-    normalizer::CheckSignedNumberIter,
+    normalizer::NormalizeSignedNumberIter,
     peekable_iter::PeekableIter,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
-    utf8_char_stream::UTF8CharStream,
+    utf8_char_iterator::UTF8CharIterator,
 };
 
 pub const PEEK_BUFFER_LENGTH_PARSE: usize = 3;
 
 pub fn parse_from_str(s: &str) -> Result<AsonNode, AsonError> {
     let mut chars = s.chars();
-    parse_from_char_stream(&mut chars)
+    parse_from_char_iterator(&mut chars)
 }
 
 pub fn parse_from_reader<R: Read>(mut r: R) -> Result<AsonNode, AsonError> {
-    let mut char_stream = UTF8CharStream::new(&mut r);
-    parse_from_char_stream(&mut char_stream)
+    let mut char_stream = UTF8CharIterator::new(&mut r);
+    parse_from_char_iterator(&mut char_stream)
 }
 
-pub fn parse_from_char_stream(
-    char_stream: &mut dyn Iterator<Item = char>,
+pub fn parse_from_char_iterator(
+    char_iterator: &mut dyn Iterator<Item = char>,
 ) -> Result<AsonNode, AsonError> {
-    let mut char_position_iter = CharsWithPositionIter::new(char_stream);
+    let mut char_position_iter = CharsWithPositionIter::new(char_iterator);
     let mut peekable_char_position_iter =
         PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
     let mut lexer = Lexer::new(&mut peekable_char_position_iter);
 
-    // // Remove comments
-    // let mut removed_comments_iter = RemoveCommentsIter::new(&mut lexer);
-
-    // // Merge newlines
-    // let mut peekable_removed_comments_iter = PeekableIter::new(&mut removed_comments_iter, 1);
-    // let mut merged_newlines_iter = MergeNewlinesIter::new(&mut peekable_removed_comments_iter);
-
-    // // Check signed numbers
-    // let mut peekable_merged_newlines_iter = PeekableIter::new(&mut merged_newlines_iter, 1);
-    // let mut checked_signed_number_iter =
-    //     CheckSignedNumberIter::new(&mut peekable_merged_newlines_iter);
-
-    // // Trim document
-    // let mut peekable_checked_signed_number_iter =
-    //     PeekableIter::new(&mut checked_signed_number_iter, 1);
-    // let mut trimmed_document_iter = TrimDocumentIter::new(&mut peekable_checked_signed_number_iter);
-
     // Normalize signed numbers
     let mut peekable_lexer_iter = PeekableIter::new(&mut lexer, 1);
-    // let mut peekable_merged_newlines_iter = PeekableIter::new(&mut merged_newlines_iter, 1);
-    let mut normalizer_iter = CheckSignedNumberIter::new(&mut peekable_lexer_iter);
+    let mut normalizer_iter = NormalizeSignedNumberIter::new(&mut peekable_lexer_iter);
 
     // Parse
     let mut peekable_trimmed_document_iter =
@@ -127,48 +109,6 @@ impl<'a> Parser<'a> {
             self.peek_token(offset)?,
             Some(token) if token == expected_token))
     }
-
-    // /// Returns:
-    // /// - `None` if the specified token is not found.
-    // /// - `Some(false)` found the token without new-line.
-    // /// - `Some(true)` found the token and new-line
-    // fn peek_token_and_equals_with_ignoring_newline(
-    //     &self,
-    //     offset: usize,
-    //     expected_token: &Token,
-    // ) -> Result<Option<bool>, AsonError> {
-    //     if self.peek_token_and_equals(offset, expected_token)? {
-    //         Ok(Some(false))
-    //     } else if self.peek_token_and_equals(offset, &Token::NewLine)?
-    //         && self.peek_token_and_equals(offset + 1, expected_token)?
-    //     {
-    //         Ok(Some(true))
-    //     } else {
-    //         Ok(None)
-    //     }
-    // }
-
-    // // consume '\n' if it exists.
-    // fn consume_new_line_if_exist(&mut self) -> Result<bool, AsonError> {
-    //     match self.peek_token(0)? {
-    //         Some(Token::NewLine) => {
-    //             self.next_token()?;
-    //             Ok(true)
-    //         }
-    //         _ => Ok(false),
-    //     }
-    // }
-
-    // // consume '\n' or ',' if they exist.
-    // fn consume_new_line_or_comma_if_exist(&mut self) -> Result<bool, AsonError> {
-    //     match self.peek_token(0)? {
-    //         Some(Token::NewLine | Token::Comma) => {
-    //             self.next_token()?;
-    //             Ok(true)
-    //         }
-    //         _ => Ok(false),
-    //     }
-    // }
 
     fn consume_token_and_expect(
         &mut self,
@@ -246,7 +186,7 @@ impl Parser<'_> {
                     }
                     Token::Variant(type_name, member_name) => {
                         match self.peek_token(1)? {
-                            Some(Token::LeftParenthesis) => {
+                            Some(Token::OpeningParenthesis) => {
                                 // tuple-like variant or the single value variant
                                 self.parse_tuple_like_variant()?
                             }
@@ -276,7 +216,7 @@ impl Parser<'_> {
                         // named-list (map): ["name":value, ...]
                         self.parse_list()?
                     }
-                    Token::LeftParenthesis => {
+                    Token::OpeningParenthesis => {
                         // tuple: (...)
                         self.parse_tuple()?
                     }
@@ -387,7 +327,6 @@ impl Parser<'_> {
         // ```
 
         self.next_token()?; // consume '{'
-        // self.consume_new_line_if_exist()?; // consume new-line if exists
 
         let mut kvps: Vec<KeyValuePair> = vec![];
 
@@ -412,9 +351,7 @@ impl Parser<'_> {
                 }
             };
 
-            // self.consume_new_line_if_exist()?;
             self.consume_colon()?;
-            // self.consume_new_line_if_exist()?;
 
             let value = self.parse_node()?;
             let name_value_pair = KeyValuePair {
@@ -422,11 +359,6 @@ impl Parser<'_> {
                 value: Box::new(value),
             };
             kvps.push(name_value_pair);
-
-            // let found_sep = self.consume_new_line_or_comma_if_exist()?;
-            // if !found_sep {
-            //     break;
-            // }
         }
 
         self.consume_closing_brace()?; // consume '}'
@@ -445,7 +377,6 @@ impl Parser<'_> {
         // ```
 
         self.next_token()?; // consume '['
-        // self.consume_new_line_if_exist()?; // consume new-line if exists
 
         let mut list_items: Vec<AsonNode> = vec![];
         let mut named_list_entries: Vec<NamedListEntry> = vec![];
@@ -480,9 +411,7 @@ impl Parser<'_> {
             } else {
                 // Named list
 
-                // self.consume_new_line_if_exist()?;
                 self.consume_colon()?;
-                // self.consume_new_line_if_exist()?;
 
                 let value = self.parse_node()?;
                 let entry = NamedListEntry {
@@ -491,11 +420,6 @@ impl Parser<'_> {
                 };
                 named_list_entries.push(entry);
             }
-
-            // let found_sep = self.consume_new_line_or_comma_if_exist()?;
-            // if !found_sep {
-            //     break;
-            // }
         }
 
         // self.next_token()?; // consume ']'
@@ -516,53 +440,18 @@ impl Parser<'_> {
         // ```
 
         self.next_token()?; // consume '('
-        // self.consume_new_line_if_exist()?;
 
         let mut items: Vec<AsonNode> = vec![];
 
-        // // to indicate it is parsing the first element of List, Tuple or Object
-        // let mut is_first_element = true;
-
-        // loop {
         while let Some(token) = self.peek_token(0)? {
-            //             let exists_separator = if is_first_element {
-            //                 self.consume_new_line_if_exist()?
-            //             } else {
-            //                 self.consume_new_line_or_comma_if_exist()?
-            //             };
-            //
-            //             if matches!(self.peek_token(0)?, Some(Token::ClosingParenthesis)) {
-            //                 break;
-            //             }
             if token == &Token::ClosingParenthesis {
                 break;
             }
 
-            //             if !is_first_element && !matches!(exists_separator, Some(true)) {
-            //                 if let Some(false) = exists_separator {
-            //                     return Err(AsonError::MessageWithRange(
-            //                         "Expect a comma or new-line.".to_owned(),
-            //                         self.peek_range(0)?.unwrap().get_position_by_range_start(),
-            //                     ));
-            //                 } else {
-            //                     return Err(AsonError::UnexpectedEndOfDocument(
-            //                         "Incomplete Tuple.".to_owned(),
-            //                     ));
-            //                 }
-            //             }
-            //
-            //             is_first_element = false;
-
             let value = self.parse_node()?;
             items.push(value);
-
-            // let found_sep = self.consume_new_line_or_comma_if_exist()?;
-            // if !found_sep {
-            //     break;
-            // }
         }
 
-        // self.next_token()?; // consume ')'
         self.consume_closing_parenthesis()?; // consume ')'
 
         if items.is_empty() {
@@ -607,10 +496,6 @@ mod tests {
     };
 
     use super::AsonNode;
-
-    // fn new_string_node(s: &str) -> AsonNode {
-    //     AsonNode::String(s.to_owned())
-    // }
 
     #[test]
     fn test_parse_primitive_value() {

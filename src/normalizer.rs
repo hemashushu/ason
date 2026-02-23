@@ -13,176 +13,32 @@ use crate::{
     token::{NumberToken, Token, TokenWithRange},
 };
 
-// /// Remove all comments from the token stream.
-// pub struct RemoveCommentsIter<'a> {
-//     upstream: &'a mut dyn Iterator<Item = Result<TokenWithRange, AsonError>>,
-// }
-
-// impl<'a> RemoveCommentsIter<'a> {
-//     pub fn new(upstream: &'a mut dyn Iterator<Item = Result<TokenWithRange, AsonError>>) -> Self {
-//         Self { upstream }
-//     }
-// }
-
-// impl Iterator for RemoveCommentsIter<'_> {
-//     type Item = Result<TokenWithRange, AsonError>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         // Remove all comments from the token stream.
-//         loop {
-//             match self.upstream.next() {
-//                 Some(result) => {
-//                     match &result {
-//                         Ok(TokenWithRange {
-//                             token: Token::Comment(_),
-//                             ..
-//                         }) => {
-//                             // consume comments
-//                         }
-//                         _ => {
-//                             return Some(result);
-//                         }
-//                     }
-//                 }
-//                 None => {
-//                     return None;
-//                 }
-//             }
-//         }
-//     }
-// }
-
-// /// Merge multiple continuous newlines into one newline.
-// pub struct MergeNewlinesIter<'a> {
-//     upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
-// }
-
-// impl<'a> MergeNewlinesIter<'a> {
-//     pub fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
-//         Self { upstream }
-//     }
-// }
-
-// impl Iterator for MergeNewlinesIter<'_> {
-//     type Item = Result<TokenWithRange, AsonError>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         // - combine multiple continuous newlines into one newline.
-//         //   rules:
-//         //     + multiple newlines => single newline
-//         //     + comma + newline(s) => comma
-//         //     + newline(s) + comma => comma
-//         //     + newline(s) + comma + newline(s) => comma
-//         //
-//         //   because the comments have been removed, the following conclusions
-//         //   can be inferred:
-//         //     + comma + comment(s) + comma => comma + comma
-//         //     + newline(s) + comment(s) + newline(s) => newline
-//         //
-//         match self.upstream.next() {
-//             Some(result) => match &result {
-//                 Ok(token_with_range) => {
-//                     let TokenWithRange {
-//                         token: current_token,
-//                         range: current_range,
-//                     } = token_with_range;
-
-//                     let mut start_range = *current_range;
-//                     let mut end_range = *current_range;
-
-//                     match current_token {
-//                         Token::NewLine => {
-//                             // consume continuous newlines
-//                             while let Some(Ok(TokenWithRange {
-//                                 token: Token::NewLine,
-//                                 range: next_range,
-//                             })) = self.upstream.peek(0)
-//                             {
-//                                 end_range = *next_range;
-//                                 self.upstream.next();
-//                             }
-
-//                             // found ','
-//                             if let Some(Ok(TokenWithRange {
-//                                 token: Token::Comma,
-//                                 range: next_range,
-//                             })) = self.upstream.peek(0)
-//                             {
-//                                 // consume comma
-//                                 start_range = *next_range;
-//                                 end_range = *next_range;
-//                                 self.upstream.next();
-
-//                                 // consume trailing continuous newlines
-//                                 while let Some(Ok(TokenWithRange {
-//                                     token: Token::NewLine,
-//                                     range: _,
-//                                 })) = self.upstream.peek(0)
-//                                 {
-//                                     self.upstream.next();
-//                                 }
-
-//                                 Some(Ok(TokenWithRange::new(
-//                                     Token::Comma,
-//                                     Range::merge(&start_range, &end_range),
-//                                 )))
-//                             } else {
-//                                 Some(Ok(TokenWithRange::new(
-//                                     Token::NewLine,
-//                                     Range::merge(&start_range, &end_range),
-//                                 )))
-//                             }
-//                         }
-//                         Token::Comma => {
-//                             // consume trailing continuous newlines
-//                             while let Some(Ok(TokenWithRange {
-//                                 token: Token::NewLine,
-//                                 range: _,
-//                             })) = self.upstream.peek(0)
-//                             {
-//                                 self.upstream.next();
-//                             }
-
-//                             Some(Ok(TokenWithRange::new(
-//                                 Token::Comma,
-//                                 Range::merge(&start_range, &end_range),
-//                             )))
-//                         }
-//                         _ => Some(result),
-//                     }
-//                 }
-//                 Err(_) => Some(result),
-//             },
-//             None => None,
-//         }
-//     }
-// }
-
-/// Check and normalize signed numbers in the token stream.
-pub struct CheckSignedNumberIter<'a> {
+/// Normalize and check signed numbers in the token stream.
+///
+/// Token `Plus` and `Minus` are removed after normalization.
+pub struct NormalizeSignedNumberIter<'a> {
     upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
 }
 
-impl<'a> CheckSignedNumberIter<'a> {
+impl<'a> NormalizeSignedNumberIter<'a> {
     pub fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
         Self { upstream }
     }
 }
 
-impl Iterator for CheckSignedNumberIter<'_> {
+impl Iterator for NormalizeSignedNumberIter<'_> {
     type Item = Result<TokenWithRange, AsonError>;
 
+    // The normalization and checking rules are as follows:
+    //
+    // - Remove the '+' tokens in front of numbers (includes `+Inf`).
+    // - Apply the '-' tokens to numbers (includes `-Inf`).
+    // - Checks if the signed number is overflowed.
+    //
+    // Note that the lexer only checked the number width, it does not check the valid range of a signed integer,
+    // because it lexes the sign token and the number token separately, for example,
+    // `-128_i8` is lexed into two tokens: `-` and `128_i8`,
     fn next(&mut self) -> Option<Self::Item> {
-        // - remove the '+' tokens in front of numbers (includes `+Inf`).
-        // - apply the '-' tokens to numbers (includes `-Inf`).
-        // - checks if the signed number is overflowed.
-        //
-        //   note that the lexer only checked the number width, it does not check the valid range of a signed integer
-        //   because it does not know if there is a plus or minus sign in front of the number token.
-        //
-        //   for example, "128" is invalid for `i8`, but "-128" is a valid `i8`.
-        //   thus the valid range of an integer can only be checked in the normalization
-        //   phase after combining the plus or minus sign and the number of tokens.
         match self.upstream.next() {
             Some(result) => match &result {
                 Ok(token_with_range) => {
@@ -194,7 +50,7 @@ impl Iterator for CheckSignedNumberIter<'_> {
                     let start_range = *current_range;
 
                     match current_token {
-                        Token::Plus => {
+                        Token::_Plus => {
                             match self.upstream.peek(0) {
                                 Some(Ok(TokenWithRange {
                                     token: Token::Number(num),
@@ -292,7 +148,7 @@ impl Iterator for CheckSignedNumberIter<'_> {
                                 }
                             }
                         }
-                        Token::Minus => {
+                        Token::_Minus => {
                             match self.upstream.peek(0) {
                                 Some(Ok(TokenWithRange {
                                     token: Token::Number(num),
@@ -538,51 +394,6 @@ impl Iterator for CheckSignedNumberIter<'_> {
     }
 }
 
-// /// Trim the leading and trailing newlines of the document.
-// pub struct TrimDocumentIter<'a> {
-//     upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
-// }
-
-// impl<'a> TrimDocumentIter<'a> {
-//     pub fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
-//         // consume the leading '\n of document
-//         if let Some(Ok(TokenWithRange {
-//             token: Token::NewLine,
-//             ..
-//         })) = upstream.peek(0)
-//         {
-//             upstream.next();
-//         }
-
-//         Self { upstream }
-//     }
-// }
-
-// impl Iterator for TrimDocumentIter<'_> {
-//     type Item = Result<TokenWithRange, AsonError>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         match self.upstream.next() {
-//             Some(r) => {
-//                 match &r {
-//                     Ok(tl) => {
-//                         let TokenWithRange { token, .. } = tl;
-//                         match token {
-//                             Token::NewLine if self.upstream.peek(0).is_none() => {
-//                                 // it is the last '\n' of document
-//                                 None
-//                             }
-//                             _ => Some(r),
-//                         }
-//                     }
-//                     Err(_) => Some(r),
-//                 }
-//             }
-//             None => None,
-//         }
-//     }
-// }
-
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
@@ -591,7 +402,7 @@ mod tests {
         char_with_position::CharsWithPositionIter,
         error::AsonError,
         lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
-        normalizer::CheckSignedNumberIter,
+        normalizer::NormalizeSignedNumberIter,
         peekable_iter::PeekableIter,
         position::Position,
         range::Range,
@@ -607,24 +418,10 @@ mod tests {
             PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
         let mut lexer = Lexer::new(&mut peekable_char_position_iter);
 
-        // // Remove comments
-        // let mut removed_comments_iter = RemoveCommentsIter::new(&mut lexer);
-
-        // // Merge newlines
-        // let mut peekable_removed_comments_iter = PeekableIter::new(&mut removed_comments_iter, 1);
-        // let mut merged_newlines_iter = MergeNewlinesIter::new(&mut peekable_removed_comments_iter);
-
         // Normalize signed numbers
         let mut peekable_lexer_iter = PeekableIter::new(&mut lexer, 1);
         // let mut peekable_merged_newlines_iter = PeekableIter::new(&mut merged_newlines_iter, 1);
-        let normalizer_iter =
-            CheckSignedNumberIter::new(&mut peekable_lexer_iter);
-
-        // // Trim document
-        // let mut peekable_checked_signed_number_iter =
-        //     PeekableIter::new(&mut checked_signed_number_iter, 1);
-        // let mut trimmed_document_iter =
-        //     TrimDocumentIter::new(&mut peekable_checked_signed_number_iter);
+        let normalizer_iter = NormalizeSignedNumberIter::new(&mut peekable_lexer_iter);
 
         // Collect tokens
         //
@@ -651,217 +448,6 @@ mod tests {
             .map(|e| e.token)
             .collect::<Vec<Token>>();
         Ok(tokens)
-    }
-
-    #[test]
-    fn test_remove_comments() {
-        assert_eq!(
-            lex_from_str_without_location(
-                r#"11 // line comment 1
-                // line comment 2
-                13 /* block comment 1 */
-                /*
-                block comment 2
-                */
-                17
-                "#
-            )
-            .unwrap(),
-            vec![
-                Token::Number(NumberToken::I32(11)),
-                // Token::NewLine,
-                Token::Number(NumberToken::I32(13)),
-                // Token::NewLine,
-                Token::Number(NumberToken::I32(17)),
-            ]
-        );
-
-        assert_eq!(
-            lex_from_str(r#"11 /* foo */ 13"#).unwrap(),
-            vec![
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(11)),
-                    Range::from_position_and_length(&Position::new(0, 0, 0), 2)
-                ),
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(13)),
-                    Range::from_position_and_length(&Position::new(13, 0, 13), 2)
-                ),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_merge_newlines() {
-        // test items:
-        //
-        // unchaged:
-        // - comma => comma
-        //
-        // normalized:
-        // - comma + blank(s) => comma
-        // - blank(s) + comma => comma
-        // - blank(s) + comma + blank(s) => comma
-        //
-        // inferred:
-        // - comma + comment(s) + comma => comma + comma
-        // - blank(s) + comment(s) + blank(s) => blank
-        //
-        // normalization:
-        // - blanks => blank
-
-        assert_eq!(
-            lex_from_str_without_location(
-                r#"
-                    [1,2,
-
-                    3
-
-                    ,4
-
-                    ,
-
-                    5
-                    ,
-                    // comment between commas
-                    ,
-                    6
-
-                    // comment between blank lines
-
-                    7
-                    8
-                    ]
-
-                    "#
-            )
-            .unwrap(),
-            vec![
-                Token::OpeningBracket,
-                Token::Number(NumberToken::I32(1)),
-                // Token::Comma,
-                Token::Number(NumberToken::I32(2)),
-                // Token::Comma,
-                Token::Number(NumberToken::I32(3)),
-                // Token::Comma,
-                Token::Number(NumberToken::I32(4)),
-                // Token::Comma,
-                Token::Number(NumberToken::I32(5)),
-                // Token::Comma,
-                // Token::Comma,
-                Token::Number(NumberToken::I32(6)),
-                // Token::NewLine,
-                Token::Number(NumberToken::I32(7)),
-                // Token::NewLine,
-                Token::Number(NumberToken::I32(8)),
-                // Token::NewLine,
-                Token::ClosingBracket,
-            ]
-        );
-
-        // range
-
-        // blanks -> blank
-        assert_eq!(
-            lex_from_str("11\n \n  \n13").unwrap(),
-            vec![
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(11)),
-                    Range::from_position_and_length(&Position::new(0, 0, 0), 2)
-                ),
-                // TokenWithRange::new(
-                //     Token::NewLine,
-                //     Range::new(&Position::new(2, 0, 2), &Position::new(7, 2, 2))
-                // ),
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(13)),
-                    Range::from_position_and_length(&Position::new(8, 3, 0), 2)
-                ),
-            ]
-        );
-
-        // comma + blanks -> comma
-        assert_eq!(
-            lex_from_str(",\n\n\n11").unwrap(),
-            vec![
-                // TokenWithRange::new(
-                //     Token::Comma,
-                //     Range::from_position_and_length(&Position::new(0, 0, 0), 1)
-                // ),
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(11)),
-                    Range::from_position_and_length(&Position::new(4, 3, 0), 2)
-                ),
-            ]
-        );
-
-        // blanks + comma -> comma
-        assert_eq!(
-            lex_from_str("11\n\n\n,").unwrap(),
-            vec![
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(11)),
-                    Range::from_position_and_length(&Position::new(0, 0, 0), 2)
-                ),
-                // TokenWithRange::new(
-                //     Token::Comma,
-                //     Range::from_position_and_length(&Position::new(5, 3, 0), 1)
-                // ),
-            ]
-        );
-
-        // blanks + comma + blanks -> comma
-        assert_eq!(
-            lex_from_str("11\n\n,\n\n13").unwrap(),
-            vec![
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(11)),
-                    Range::from_position_and_length(&Position::new(0, 0, 0), 2)
-                ),
-                // TokenWithRange::new(
-                //     Token::Comma,
-                //     Range::from_position_and_length(&Position::new(4, 2, 0), 1)
-                // ),
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(13)),
-                    Range::from_position_and_length(&Position::new(7, 4, 0), 2)
-                ),
-            ]
-        );
-
-        // comma + comment + comma -> comma + comma
-        assert_eq!(
-            lex_from_str(",//abc\n,").unwrap(),
-            vec![
-                // TokenWithRange::new(
-                //     Token::Comma,
-                //     Range::from_position_and_length(&Position::new(0, 0, 0), 1)
-                // ),
-                // TokenWithRange::new(
-                //     Token::Comma,
-                //     Range::from_position_and_length(&Position::new(7, 1, 0), 1)
-                // ),
-            ]
-        );
-
-        // blanks + comment + blanks -> blank
-        assert_eq!(
-            lex_from_str("11\n\n//abc\n\n13").unwrap(),
-            vec![
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(11)),
-                    Range::from_position_and_length(&Position::new(0, 0, 0), 2)
-                ),
-                // TokenWithRange::new(
-                //     Token::NewLine,
-                //     Range::new(&Position::new(2, 0, 2), &Position::new(10, 3, 0))
-                // ),
-                TokenWithRange::new(
-                    Token::Number(NumberToken::I32(13)),
-                    Range::from_position_and_length(&Position::new(11, 4, 0), 2)
-                ),
-            ]
-        );
     }
 
     #[test]
@@ -1251,10 +837,6 @@ mod tests {
                         Token::Number(NumberToken::I32(11)),
                         Range::from_position_and_length(&Position::new(0, 0, 0), 3)
                     ),
-                    // TokenWithRange::new(
-                    //     Token::Comma,
-                    //     Range::from_position_and_length(&Position::new(3, 0, 3), 1)
-                    // ),
                     TokenWithRange::new(
                         Token::Number(NumberToken::I32(-13_i32 as u32)),
                         Range::from_position_and_length(&Position::new(4, 0, 4), 3)
@@ -2028,10 +1610,6 @@ mod tests {
                         Token::Number(NumberToken::I32(0x11)),
                         Range::from_position_and_length(&Position::new(0, 0, 0), 5)
                     ),
-                    // TokenWithRange::new(
-                    //     Token::Comma,
-                    //     Range::from_position_and_length(&Position::new(5, 0, 5), 1)
-                    // ),
                     TokenWithRange::new(
                         Token::Number(NumberToken::I32(-0x13_i32 as u32)),
                         Range::from_position_and_length(&Position::new(6, 0, 6), 5)
@@ -2064,10 +1642,6 @@ mod tests {
                     Token::Number(NumberToken::F32(std::f32::consts::PI)),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 16)
                 ),
-                // TokenWithRange::new(
-                //     Token::Comma,
-                //     Range::from_position_and_length(&Position::new(16, 0, 16), 1)
-                // ),
                 TokenWithRange::new(
                     Token::Number(NumberToken::F64(-std::f64::consts::E)),
                     Range::from_position_and_length(&Position::new(17, 0, 17), 25)
@@ -2462,10 +2036,6 @@ mod tests {
                             Token::Number(NumberToken::I32(0b101_i32 as u32)),
                             Range::from_position_and_length(&Position::new(0, 0, 0), 6)
                         ),
-                        // TokenWithRange::new(
-                        //     Token::Comma,
-                        //     Range::from_position_and_length(&Position::new(6, 0, 6), 1)
-                        // ),
                         TokenWithRange::new(
                             Token::Number(NumberToken::I32(-0b010_i32 as u32)),
                             Range::from_position_and_length(&Position::new(7, 0, 7), 6)
@@ -2478,7 +2048,398 @@ mod tests {
 
     #[test]
     fn test_normalize_plus_and_minus_octal_numbers() {
-        // todo
+        // implicit type, default `i32`
+        {
+            assert_eq!(
+                lex_from_str_without_location("+0o11").unwrap(),
+                vec![Token::Number(NumberToken::I32(0o11_i32 as u32))]
+            );
+
+            assert_eq!(
+                lex_from_str_without_location("-0o13").unwrap(),
+                vec![Token::Number(NumberToken::I32(-0o13_i32 as u32))]
+            );
+
+            // err: positive overflow
+            // i32 max: 0o17777777777
+            assert!(matches!(
+                lex_from_str("+0o20000000000"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 13,
+                            line: 0,
+                            column: 13,
+                        }
+                    }
+                ))
+            ));
+
+            // err: negative overflow
+            // i32 min: -0o20000000000
+            assert!(matches!(
+                lex_from_str("-0o20000000001"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 13,
+                            line: 0,
+                            column: 13,
+                        }
+                    }
+                ))
+            ));
+        }
+
+        // i8/u8
+        {
+            assert_eq!(
+                lex_from_str_without_location("+0o177_i8").unwrap(),
+                vec![Token::Number(NumberToken::I8(0o177_i8 as u8))]
+            );
+
+            assert_eq!(
+                lex_from_str_without_location("-0o200_i8").unwrap(),
+                vec![Token::Number(NumberToken::I8(-0o200_i8 as u8))]
+            );
+
+            // err: positive overflow
+            // i8 max: 0o177
+            assert!(matches!(
+                lex_from_str("+0o200_i8"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 8,
+                            line: 0,
+                            column: 8,
+                        }
+                    }
+                ))
+            ));
+
+            // err: negative overflow
+            // i8 min: -0o200
+            assert!(matches!(
+                lex_from_str("-0o201_i8"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 8,
+                            line: 0,
+                            column: 8,
+                        }
+                    }
+                ))
+            ));
+
+            // err: minus sign preceding unsigned number
+            assert!(matches!(
+                lex_from_str("-0o1_u8"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 6,
+                            line: 0,
+                            column: 6,
+                        }
+                    }
+                ))
+            ));
+        }
+
+        // i16/u16
+        {
+            assert_eq!(
+                lex_from_str_without_location("+0o77777_i16").unwrap(),
+                vec![Token::Number(NumberToken::I16(0o77777_i16 as u16))]
+            );
+
+            assert_eq!(
+                lex_from_str_without_location("-0o100000_i16").unwrap(),
+                vec![Token::Number(NumberToken::I16(-0o100000_i16 as u16))]
+            );
+
+            // err: positive overflow
+            // i16 max: 0o77777
+            assert!(matches!(
+                lex_from_str("+0o100000_i16"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 12,
+                            line: 0,
+                            column: 12,
+                        }
+                    }
+                ))
+            ));
+
+            // err: negative overflow
+            // i16 min: -0o100000
+            assert!(matches!(
+                lex_from_str("-0o100001_i16"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 12,
+                            line: 0,
+                            column: 12,
+                        }
+                    }
+                ))
+            ));
+
+            // err: minus sign preceding unsigned number
+            assert!(matches!(
+                lex_from_str("-0o1_u16"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 7,
+                            line: 0,
+                            column: 7,
+                        }
+                    }
+                ))
+            ));
+        }
+
+        // i32/u32
+        {
+            assert_eq!(
+                lex_from_str_without_location("+0o17777777777_i32").unwrap(),
+                vec![Token::Number(NumberToken::I32(0o17777777777_i32 as u32))]
+            );
+
+            assert_eq!(
+                lex_from_str_without_location("-0o20000000000_i32").unwrap(),
+                vec![Token::Number(NumberToken::I32(-0o20000000000_i32 as u32))]
+            );
+
+            // err: positive overflow
+            // i32 max: 0o17777777777
+            assert!(matches!(
+                lex_from_str("+0o20000000000_i32"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 17,
+                            line: 0,
+                            column: 17,
+                        }
+                    }
+                ))
+            ));
+
+            // err: negative overflow
+            // i32 min: -0o20000000000
+            assert!(matches!(
+                lex_from_str("-0o20000000001_i32"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 17,
+                            line: 0,
+                            column: 17,
+                        }
+                    }
+                ))
+            ));
+
+            // err: minus sign preceding unsigned number
+            assert!(matches!(
+                lex_from_str("-0o1_u32"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 7,
+                            line: 0,
+                            column: 7,
+                        }
+                    }
+                ))
+            ));
+        }
+
+        // i64/u64
+        {
+            assert_eq!(
+                lex_from_str_without_location("+0o777777777777777777777_i64").unwrap(),
+                vec![Token::Number(NumberToken::I64(
+                    0o777777777777777777777_i64 as u64
+                ))]
+            );
+
+            assert_eq!(
+                lex_from_str_without_location("-0o1000000000000000000000_i64").unwrap(),
+                vec![Token::Number(NumberToken::I64(
+                    -0o1000000000000000000000_i64 as u64
+                ))]
+            );
+
+            // err: positive overflow
+            // i64 max: 0o777777777777777777777
+            assert!(matches!(
+                lex_from_str("+0o1000000000000000000000_i64"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 28,
+                            line: 0,
+                            column: 28,
+                        }
+                    }
+                ))
+            ));
+
+            // err: negative overflow
+            // i64 min: -0o1000000000000000000000
+            assert!(matches!(
+                lex_from_str("-0o1000000000000000000001_i64"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 28,
+                            line: 0,
+                            column: 28,
+                        }
+                    }
+                ))
+            ));
+
+            // err: minus sign preceding unsigned number
+            assert!(matches!(
+                lex_from_str("-0o1_u64"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_included: Position {
+                            index: 7,
+                            line: 0,
+                            column: 7,
+                        }
+                    }
+                ))
+            ));
+
+            // range
+
+            {
+                assert_eq!(
+                    lex_from_str("+0o11").unwrap(),
+                    vec![TokenWithRange::new(
+                        Token::Number(NumberToken::I32(0o11_i32 as u32)),
+                        Range::from_position_and_length(&Position::new(0, 0, 0), 5)
+                    )]
+                );
+
+                assert_eq!(
+                    lex_from_str("-0o13").unwrap(),
+                    vec![TokenWithRange::new(
+                        Token::Number(NumberToken::I32(-0o13_i32 as u32)),
+                        Range::from_position_and_length(&Position::new(0, 0, 0), 5)
+                    )]
+                );
+
+                assert_eq!(
+                    lex_from_str("+0o11,-0o13").unwrap(),
+                    vec![
+                        TokenWithRange::new(
+                            Token::Number(NumberToken::I32(0o11_i32 as u32)),
+                            Range::from_position_and_length(&Position::new(0, 0, 0), 5)
+                        ),
+                        TokenWithRange::new(
+                            Token::Number(NumberToken::I32(-0o13_i32 as u32)),
+                            Range::from_position_and_length(&Position::new(6, 0, 6), 5)
+                        )
+                    ]
+                );
+            }
+        }
     }
 
     #[test]
@@ -2793,7 +2754,105 @@ mod tests {
 
     #[test]
     fn test_check_signed_octal_integer_overflow() {
-        // todo
+        // i32 max: 0o17777777777
+        assert!(matches!(
+            lex_from_str("0o20000000000"),
+            Err(AsonError::MessageWithRange(
+                _,
+                Range {
+                    start: Position {
+                        index: 0,
+                        line: 0,
+                        column: 0,
+                    },
+                    end_included: Position {
+                        index: 12,
+                        line: 0,
+                        column: 12
+                    }
+                }
+            ))
+        ));
+
+        // i8 max: 0o177
+        assert!(matches!(
+            lex_from_str("0o200_i8"),
+            Err(AsonError::MessageWithRange(
+                _,
+                Range {
+                    start: Position {
+                        index: 0,
+                        line: 0,
+                        column: 0,
+                    },
+                    end_included: Position {
+                        index: 7,
+                        line: 0,
+                        column: 7
+                    }
+                }
+            ))
+        ));
+
+        // i16 max: 0o77777
+        assert!(matches!(
+            lex_from_str("0o100000_i16"),
+            Err(AsonError::MessageWithRange(
+                _,
+                Range {
+                    start: Position {
+                        index: 0,
+                        line: 0,
+                        column: 0,
+                    },
+                    end_included: Position {
+                        index: 11,
+                        line: 0,
+                        column: 11
+                    }
+                }
+            ))
+        ));
+
+        // i32 max: 0o17777777777
+        assert!(matches!(
+            lex_from_str("0o20000000000_i32"),
+            Err(AsonError::MessageWithRange(
+                _,
+                Range {
+                    start: Position {
+                        index: 0,
+                        line: 0,
+                        column: 0,
+                    },
+                    end_included: Position {
+                        index: 16,
+                        line: 0,
+                        column: 16
+                    }
+                }
+            ))
+        ));
+
+        // i64 max: 0o777777777777777777777
+        assert!(matches!(
+            lex_from_str("0o1000000000000000000000_i64"),
+            Err(AsonError::MessageWithRange(
+                _,
+                Range {
+                    start: Position {
+                        index: 0,
+                        line: 0,
+                        column: 0,
+                    },
+                    end_included: Position {
+                        index: 27,
+                        line: 0,
+                        column: 27
+                    }
+                }
+            ))
+        ));
     }
 
     #[test]
@@ -2811,7 +2870,6 @@ mod tests {
             .unwrap(),
             vec![
                 Token::Number(NumberToken::I32(11)),
-                // Token::NewLine,
                 Token::Number(NumberToken::I32(13)),
             ]
         );

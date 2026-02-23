@@ -1,10 +1,10 @@
 {
-    modules: [
-        "foo": {version: "1.0", repo: "default"}
+    string_name: [
+        "foo": {version: "1.0"}
         "bar": {version: "2.0"}
     ]
-    orders: [
-        123: [1,2,3]
-        456: [4,5,6]
+    number_name: [
+        11: ["foo", "bar"]
+        13: ["baz", "qux"]
     ]
 }

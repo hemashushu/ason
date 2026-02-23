@@ -12,7 +12,8 @@ mod peekable_iter;
 mod position;
 mod range;
 mod token;
-mod utf8_char_stream;
+mod token_stream_reader;
+mod utf8_char_iterator;
 
 mod parser;
 mod printer;

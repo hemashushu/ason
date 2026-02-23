@@ -4,8 +4,6 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::fmt::Display;
-
 use chrono::{DateTime, FixedOffset};
 
 use crate::range::Range;
@@ -17,10 +15,8 @@ pub enum Token {
     ClosingBrace,       // `}`
     OpeningBracket,     // `[`
     ClosingBracket,     // `]`
-    LeftParenthesis,    // `(`
+    OpeningParenthesis, // `(`
     ClosingParenthesis, // `)`
-    Plus,               // `+`
-    Minus,              // `-`
 
     Number(NumberToken),
     Char(char),
@@ -50,21 +46,35 @@ pub enum Token {
     Variant(String, String),
 
     HexadecimalByteData(Vec<u8>),
-    // In previous ASON versions, the following tokens were provided
-    // for testing and write full ASON files purposes.
-    // They are now deprecated and removed for simplicity.
-    // Since commas and newlines are identical to whitespace in ASON, they are
-    // removed either.
-    //
-    // Comment(Comment), // line comment or block comment
-    // NewLine,          // `\n` or `\r\n`
-    // Comma,            // `,`
+
+    // Sign tokens, used for number literals.
+    // Note that they are removed after normalization.
+    _Plus,  // `+`
+    _Minus, // `-`
 }
 
-// Sign token (minus `-` and plus `+`) is not part of the `NumberToken`,
-// e.g., in `-128`, the `-` is a `Token::Minus` token,
-// and the `128` is a `NumberToken::I8(128)` token.
+// Tokens for number literals.
+//
+// Note that the sign token (minus `-` and plus `+`) is not part of the `NumberToken` in
+// the first stage of lexing. For example, `-128` is tokenized into two tokens:
+//
+// - `Token::Minus`
+// - `Token::Number(NumberToken::I8(128))`
+//
 // Since `128` overflows `i8`, so using `u8` to represent the value part.
+// After normalization, the sign token is merged into the `NumberToken`,
+// so `-128` will be normalized to `Token::Number(NumberToken::I8(128))`.
+// Where `128` is Two's Complement Representation of `-128` in `i8`.
+//
+// Another example, `-3` is tokenized into two tokens:
+// - `Token::Minus`
+// - `Token::Number(NumberToken::I32(3))`
+//
+// After normalization, it will be normalized to `Token::Number(NumberToken::I32(253))`.
+// Where `253` is Two's Complement Representation of `-3` in `i32`.
+//
+// The reason for this design is that it simplifies the lexing process, as we can first tokenize
+// the number literal without worrying about the sign and the valid range.
 #[derive(Debug, PartialEq)]
 pub enum NumberToken {
     I8(u8),
@@ -77,37 +87,6 @@ pub enum NumberToken {
     U64(u64),
     F32(f32),
     F64(f64),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum NumberType {
-    I8,
-    I16,
-    I32,
-    I64,
-    U8,
-    U16,
-    U32,
-    U64,
-    F32,
-    F64,
-}
-
-impl Display for NumberType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NumberType::I8 => write!(f, "i8"),
-            NumberType::I16 => write!(f, "i16"),
-            NumberType::I32 => write!(f, "i32"),
-            NumberType::I64 => write!(f, "i64"),
-            NumberType::U8 => write!(f, "u8"),
-            NumberType::U16 => write!(f, "u16"),
-            NumberType::U32 => write!(f, "u32"),
-            NumberType::U64 => write!(f, "u64"),
-            NumberType::F32 => write!(f, "f32"),
-            NumberType::F64 => write!(f, "f64"),
-        }
-    }
 }
 
 #[derive(Debug, PartialEq)]

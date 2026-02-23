@@ -1,8 +1,8 @@
 {
     variant_without_value: Option::None
     variant_single_value: Option::Some(123)
-    variant_tuple_like: Color::RGB(255, 127, 63)
-    variant_object_like: Shape::Rect{
+    variant_tuple_like_value: Color::RGB(255, 127, 63)
+    variant_object_like_value: Shape::Rect{
         width: 200
         height: 100
     }

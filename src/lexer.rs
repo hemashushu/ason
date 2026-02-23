@@ -4,6 +4,8 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
+use std::fmt::Display;
+
 use chrono::DateTime;
 
 use crate::{
@@ -12,7 +14,7 @@ use crate::{
     peekable_iter::PeekableIter,
     position::Position,
     range::Range,
-    token::{NumberToken, NumberType, Token, TokenWithRange},
+    token::{NumberToken, Token, TokenWithRange},
 };
 
 pub const PEEK_BUFFER_LENGTH_LEX: usize = 3;
@@ -188,7 +190,7 @@ impl Lexer<'_> {
                     self.next_char(); // Consume '('
 
                     break Ok(TokenWithRange::new(
-                        Token::LeftParenthesis,
+                        Token::OpeningParenthesis,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
@@ -204,7 +206,7 @@ impl Lexer<'_> {
                     self.next_char(); // Consume '+'
 
                     break Ok(TokenWithRange::new(
-                        Token::Plus,
+                        Token::_Plus,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
@@ -212,7 +214,7 @@ impl Lexer<'_> {
                     self.next_char(); // Consume '-'
 
                     break Ok(TokenWithRange::new(
-                        Token::Minus,
+                        Token::_Minus,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
@@ -1862,16 +1864,10 @@ impl Lexer<'_> {
         //
         // ```
 
-        // note that the trailing '\n' or '\r\n' does not belong to line comment token,
-        // a line comment (e.g., `... // comment\n`) will be lexed into a
-        // `Comment::Line` token and a `Token::NewLine` token.
-
-        // self.push_peek_position_into_stack();
+        // note that the trailing '\n' or '\r\n' does not belong to line comment
 
         self.next_char(); // consume the 1st '/'
         self.next_char(); // consume the 2nd '/'
-
-        // let mut comment_buffer = String::new();
 
         while let Some(current_char) = self.peek_char(0) {
             // ignore all chars until encountering '\n' or '\r\n'.
@@ -1890,15 +1886,6 @@ impl Lexer<'_> {
                 }
             }
         }
-
-        // let comment_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
-
-        // Ok(TokenWithRange::new(
-        //     Token::Comment(Comment::Line(comment_buffer)),
-        //     comment_range,
-        // ))
-
-        // Ok(())
     }
 
     fn lex_block_comment(&mut self) -> Result<(), AsonError> {
@@ -1909,12 +1896,9 @@ impl Lexer<'_> {
         // |_________// current char, validated
         // ```
 
-        // self.push_peek_position_into_stack();
-
         self.next_char(); // consume '/'
         self.next_char(); // consume '*'
 
-        // let mut comment_buffer = String::new();
         let mut block_comment_depth = 1;
 
         loop {
@@ -1923,8 +1907,6 @@ impl Lexer<'_> {
                     match current_char {
                         '/' if self.peek_char_and_equals(0, '*') => {
                             // nested block comment
-                            // comment_buffer.push_str("/*");
-
                             self.next_char(); // consume '*'
 
                             // increase depth
@@ -1939,14 +1921,11 @@ impl Lexer<'_> {
                             // check pairs
                             if block_comment_depth == 0 {
                                 break;
-                            } else {
-                                // comment_buffer.push_str("*/");
                             }
                         }
                         _ => {
                             // ignore all chars except "/*" and "*/"
                             // note that line comments within block comments are ignored also.
-                            // comment_buffer.push(current_char);
                         }
                     }
                 }
@@ -1962,14 +1941,37 @@ impl Lexer<'_> {
             }
         }
 
-        // let comment_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
-
-        // Ok(TokenWithRange::new(
-        //     Token::Comment(Comment::Block(comment_buffer)),
-        //     comment_range,
-        // ))
-
         Ok(())
+    }
+}
+
+enum NumberType {
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    F32,
+    F64,
+}
+
+impl Display for NumberType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NumberType::I8 => write!(f, "i8"),
+            NumberType::I16 => write!(f, "i16"),
+            NumberType::I32 => write!(f, "i32"),
+            NumberType::I64 => write!(f, "i64"),
+            NumberType::U8 => write!(f, "u8"),
+            NumberType::U16 => write!(f, "u16"),
+            NumberType::U32 => write!(f, "u32"),
+            NumberType::U64 => write!(f, "u64"),
+            NumberType::F32 => write!(f, "f32"),
+            NumberType::F64 => write!(f, "f64"),
+        }
     }
 }
 
@@ -2190,28 +2192,32 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("()").unwrap(),
-            vec![Token::LeftParenthesis, Token::ClosingParenthesis]
+            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
         );
 
         assert_eq!(
             lex_from_str_without_location("(  )").unwrap(),
-            vec![Token::LeftParenthesis, Token::ClosingParenthesis]
+            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
         );
 
         assert_eq!(
             lex_from_str_without_location("( , )").unwrap(),
-            vec![Token::LeftParenthesis, Token::ClosingParenthesis]
+            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
+        );
+
+        assert_eq!(
+            lex_from_str_without_location("( , , ,, )").unwrap(),
+            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
         );
 
         assert_eq!(
             lex_from_str_without_location("(\t\r\n\n\n)").unwrap(),
-            vec![
-                Token::LeftParenthesis,
-                // Token::NewLine,
-                // Token::NewLine,
-                // Token::NewLine,
-                Token::ClosingParenthesis,
-            ]
+            vec![Token::OpeningParenthesis, Token::ClosingParenthesis,]
+        );
+
+        assert_eq!(
+            lex_from_str_without_location("(\n,\n)").unwrap(),
+            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
         );
 
         // Testing the ranges
@@ -2221,7 +2227,7 @@ mod tests {
         assert_eq!(
             lex_from_str("()").unwrap(),
             vec![
-                TokenWithRange::new(Token::LeftParenthesis, Range::from_detail(0, 0, 0, 1)),
+                TokenWithRange::new(Token::OpeningParenthesis, Range::from_detail(0, 0, 0, 1)),
                 TokenWithRange::new(Token::ClosingParenthesis, Range::from_detail(1, 0, 1, 1)),
             ]
         );
@@ -2229,7 +2235,7 @@ mod tests {
         assert_eq!(
             lex_from_str("(  )").unwrap(),
             vec![
-                TokenWithRange::new(Token::LeftParenthesis, Range::from_detail(0, 0, 0, 1)),
+                TokenWithRange::new(Token::OpeningParenthesis, Range::from_detail(0, 0, 0, 1)),
                 TokenWithRange::new(Token::ClosingParenthesis, Range::from_detail(3, 0, 3, 1)),
             ]
         );
@@ -2244,10 +2250,7 @@ mod tests {
         assert_eq!(
             lex_from_str("(\t\r\n\n\n)").unwrap(),
             vec![
-                TokenWithRange::new(Token::LeftParenthesis, Range::from_detail(0, 0, 0, 1)),
-                // TokenWithRange::new(Token::NewLine, Range::from_detail(2, 0, 2, 2,)),
-                // TokenWithRange::new(Token::NewLine, Range::from_detail(4, 1, 0, 1,)),
-                // TokenWithRange::new(Token::NewLine, Range::from_detail(5, 2, 0, 1,)),
+                TokenWithRange::new(Token::OpeningParenthesis, Range::from_detail(0, 0, 0, 1)),
                 TokenWithRange::new(Token::ClosingParenthesis, Range::from_detail(6, 3, 0, 1)),
             ]
         );
@@ -2258,16 +2261,15 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location(",:{}[]()+-").unwrap(),
             vec![
-                // Token::Comma,
                 Token::Colon,
                 Token::OpeningBrace,
                 Token::ClosingBrace,
                 Token::OpeningBracket,
                 Token::ClosingBracket,
-                Token::LeftParenthesis,
+                Token::OpeningParenthesis,
                 Token::ClosingParenthesis,
-                Token::Plus,
-                Token::Minus
+                Token::_Plus,
+                Token::_Minus
             ]
         );
     }
@@ -2282,7 +2284,7 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location("(name)").unwrap(),
             vec![
-                Token::LeftParenthesis,
+                Token::OpeningParenthesis,
                 Token::new_identifier("name"),
                 Token::ClosingParenthesis,
             ]
@@ -2291,7 +2293,7 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location("( a )").unwrap(),
             vec![
-                Token::LeftParenthesis,
+                Token::OpeningParenthesis,
                 Token::new_identifier("a"),
                 Token::ClosingParenthesis,
             ]
@@ -2402,26 +2404,14 @@ mod tests {
                     Token::OpeningBracket,
                     Range::from_position_and_length(&Position::new(0, 0, 0), 1)
                 ),
-                // TokenWithRange::new(
-                //     Token::NewLine,
-                //     Range::from_position_and_length(&Position::new(1, 0, 1), 1)
-                // ),
                 TokenWithRange::new(
                     Token::Boolean(true),
                     Range::from_position_and_length(&Position::new(6, 1, 4), 4)
                 ),
-                // TokenWithRange::new(
-                //     Token::NewLine,
-                //     Range::from_position_and_length(&Position::new(10, 1, 8), 1)
-                // ),
                 TokenWithRange::new(
                     Token::Boolean(false),
                     Range::from_position_and_length(&Position::new(15, 2, 4), 5)
                 ),
-                // TokenWithRange::new(
-                //     Token::NewLine,
-                //     Range::from_position_and_length(&Position::new(20, 2, 9), 1)
-                // ),
                 TokenWithRange::new(
                     Token::ClosingBracket,
                     Range::from_position_and_length(&Position::new(21, 3, 0), 1)
@@ -2435,7 +2425,7 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location("(211)").unwrap(),
             vec![
-                Token::LeftParenthesis,
+                Token::OpeningParenthesis,
                 Token::Number(NumberToken::I32(211)),
                 Token::ClosingParenthesis,
             ]
@@ -2448,12 +2438,12 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("-2017").unwrap(),
-            vec![Token::Minus, Token::Number(NumberToken::I32(2017))]
+            vec![Token::_Minus, Token::Number(NumberToken::I32(2017))]
         );
 
         assert_eq!(
             lex_from_str_without_location("+2024").unwrap(),
-            vec![Token::Plus, Token::Number(NumberToken::I32(2024))]
+            vec![Token::_Plus, Token::Number(NumberToken::I32(2024))]
         );
 
         assert_eq!(
@@ -2549,12 +2539,12 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("+1.414").unwrap(),
-            vec![Token::Plus, Token::Number(NumberToken::F64(1.414))]
+            vec![Token::_Plus, Token::Number(NumberToken::F64(1.414))]
         );
 
         assert_eq!(
             lex_from_str_without_location("-2.718").unwrap(),
-            vec![Token::Minus, Token::Number(NumberToken::F64(2.718))]
+            vec![Token::_Minus, Token::Number(NumberToken::F64(2.718))]
         );
 
         assert_eq!(
@@ -2902,12 +2892,12 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("-0xaabb").unwrap(),
-            vec![Token::Minus, Token::Number(NumberToken::I32(0xaabb))]
+            vec![Token::_Minus, Token::Number(NumberToken::I32(0xaabb))]
         );
 
         assert_eq!(
             lex_from_str_without_location("+0xccdd").unwrap(),
-            vec![Token::Plus, Token::Number(NumberToken::I32(0xccdd))]
+            vec![Token::_Plus, Token::Number(NumberToken::I32(0xccdd))]
         );
 
         // Testing the ranges
@@ -3323,12 +3313,12 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("-0b1010").unwrap(),
-            vec![Token::Minus, Token::Number(NumberToken::I32(0b1010))]
+            vec![Token::_Minus, Token::Number(NumberToken::I32(0b1010))]
         );
 
         assert_eq!(
             lex_from_str_without_location("+0b0101").unwrap(),
-            vec![Token::Plus, Token::Number(NumberToken::I32(0b0101))]
+            vec![Token::_Plus, Token::Number(NumberToken::I32(0b0101))]
         );
 
         // Testing the ranges
@@ -3612,12 +3602,12 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("-0o644").unwrap(),
-            vec![Token::Minus, Token::Number(NumberToken::I32(0o644))]
+            vec![Token::_Minus, Token::Number(NumberToken::I32(0o644))]
         );
 
         assert_eq!(
             lex_from_str_without_location("+0o777").unwrap(),
-            vec![Token::Plus, Token::Number(NumberToken::I32(0o777))]
+            vec![Token::_Plus, Token::Number(NumberToken::I32(0o777))]
         );
 
         // Testing the ranges
@@ -3902,7 +3892,11 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("('a')").unwrap(),
-            vec![Token::LeftParenthesis, Token::Char('a'), Token::ClosingParenthesis]
+            vec![
+                Token::OpeningParenthesis,
+                Token::Char('a'),
+                Token::ClosingParenthesis
+            ]
         );
 
         assert_eq!(
@@ -4214,7 +4208,7 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location(r#"("abc")"#).unwrap(),
             vec![
-                Token::LeftParenthesis,
+                Token::OpeningParenthesis,
                 Token::new_string("abc"),
                 Token::ClosingParenthesis,
             ]
@@ -4227,12 +4221,7 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("\"abc\"\n\n\"xyz\"").unwrap(),
-            vec![
-                Token::new_string("abc"),
-                // Token::NewLine,
-                // Token::NewLine,
-                Token::new_string("xyz"),
-            ]
+            vec![Token::new_string("abc"), Token::new_string("xyz"),]
         );
 
         // unicode
@@ -4243,11 +4232,7 @@ mod tests {
                 "#
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::new_string("abc文字😊"),
-                // Token::NewLine,
-            ]
+            vec![Token::new_string("abc文字😊"),]
         );
 
         // empty string
@@ -4264,11 +4249,7 @@ mod tests {
                 "#
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::new_string("\\\'\"\t\r\n\0-文"),
-                // Token::NewLine,
-            ]
+            vec![Token::new_string("\\\'\"\t\r\n\0-文"),]
         );
 
         // Testing the ranges
@@ -4636,11 +4617,7 @@ mod tests {
                 "#
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::new_string("one\n  two\n    three\nend"),
-                // Token::NewLine,
-            ]
+            vec![Token::new_string("one\n  two\n    three\nend"),]
         );
 
         assert_eq!(
@@ -4655,11 +4632,7 @@ mod tests {
                 "#
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::new_string("    one\n  two\nthree\n    end"),
-                // Token::NewLine,
-            ]
+            vec![Token::new_string("    one\n  two\nthree\n    end"),]
         );
 
         // contains empty lines
@@ -4674,11 +4647,7 @@ mod tests {
                 "#
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::new_string("one\\\\\\\"\\t\\r\\n\\u{1234}\n\nend"),
-                // Token::NewLine,
-            ]
+            vec![Token::new_string("one\\\\\\\"\\t\\r\\n\\u{1234}\n\nend"),]
         );
 
         // including (""")
@@ -4692,11 +4661,7 @@ mod tests {
                 "#
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::new_string("one\"\"\"\ntwo"),
-                // Token::NewLine,
-            ]
+            vec![Token::new_string("one\"\"\"\ntwo"),]
         );
 
         // inline
@@ -4710,11 +4675,9 @@ mod tests {
             )
             .unwrap(),
             vec![
-                // Token::NewLine,
                 Token::Number(NumberToken::I32(11)),
                 Token::new_string("abc"),
                 Token::Number(NumberToken::I32(13)),
-                // Token::NewLine,
             ]
         );
 
@@ -4740,10 +4703,6 @@ mod tests {
                     Token::new_string("foo\nbar"),
                     Range::new(&Position::new(1, 0, 1), &Position::new(23, 3, 2))
                 ),
-                // TokenWithRange::new(
-                //     Token::Comma,
-                //     Range::new(&Position::new(24, 3, 3), &Position::new(24, 3, 3))
-                // ),
                 TokenWithRange::new(
                     Token::new_string("hello\nworld"),
                     Range::new(&Position::new(26, 3, 5), &Position::new(52, 6, 2))
@@ -4816,11 +4775,7 @@ hello
                 "#
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::HexadecimalByteData(vec![]),
-                // Token::NewLine
-            ]
+            vec![Token::HexadecimalByteData(vec![]),]
         );
 
         assert_eq!(
@@ -4830,11 +4785,7 @@ hello
                 "#
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::HexadecimalByteData(vec![0x11]),
-                // Token::NewLine,
-            ]
+            vec![Token::HexadecimalByteData(vec![0x11]),]
         );
 
         assert_eq!(
@@ -4844,11 +4795,7 @@ hello
                 "#
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::HexadecimalByteData(vec![0x11, 0x13, 0x17, 0x19]),
-                // Token::NewLine,
-            ]
+            vec![Token::HexadecimalByteData(vec![0x11, 0x13, 0x17, 0x19]),]
         );
 
         assert_eq!(
@@ -4858,11 +4805,7 @@ hello
                 "
             )
             .unwrap(),
-            vec![
-                // Token::NewLine,
-                Token::HexadecimalByteData(vec![0x11, 0x13, 0x17, 0x19]),
-                // Token::NewLine,
-            ]
+            vec![Token::HexadecimalByteData(vec![0x11, 0x13, 0x17, 0x19]),]
         );
 
         // Testing the ranges
@@ -5088,7 +5031,7 @@ hello
             lex_from_str_without_location("Option::Some(123)").unwrap(),
             vec![
                 Token::new_variant("Option", "Some"),
-                Token::LeftParenthesis,
+                Token::OpeningParenthesis,
                 Token::Number(NumberToken::I32(123)),
                 Token::ClosingParenthesis,
             ]
@@ -5100,7 +5043,7 @@ hello
                 Token::new_identifier("value"),
                 Token::Colon,
                 Token::new_variant("Result", "Ok"),
-                Token::LeftParenthesis,
+                Token::OpeningParenthesis,
                 Token::Number(NumberToken::I32(456)),
                 Token::ClosingParenthesis,
             ]
@@ -5120,19 +5063,10 @@ hello
             )
             .unwrap(),
             vec![
-                // Token::NewLine,
                 Token::Number(NumberToken::I32(7)),
-                // Token::Comment(Comment::Line("11".to_owned())),
-                // Token::NewLine,
                 Token::Number(NumberToken::I32(13)),
                 Token::Number(NumberToken::I32(17)),
-                // Token::Comment(Comment::Line(" 19 23".to_owned())),
-                // Token::NewLine,
-                // Token::Comment(Comment::Line("  29".to_owned())),
-                // Token::NewLine,
                 Token::Number(NumberToken::I32(31)),
-                // Token::Comment(Comment::Line("    37".to_owned())),
-                // Token::NewLine,
             ]
         );
 
@@ -5140,42 +5074,18 @@ hello
 
         assert_eq!(
             lex_from_str("foo // bar").unwrap(),
-            vec![
-                TokenWithRange::new(
-                    Token::Identifier("foo".to_owned()),
-                    Range::from_position_and_length(&Position::new(0, 0, 0), 3)
-                ),
-                // TokenWithRange::new(
-                //     Token::Comment(Comment::Line(" bar".to_owned())),
-                //     Range::from_position_and_length(&Position::new(4, 0, 4), 6)
-                // ),
-            ]
+            vec![TokenWithRange::new(
+                Token::Identifier("foo".to_owned()),
+                Range::from_position_and_length(&Position::new(0, 0, 0), 3)
+            ),]
         );
 
         assert_eq!(
             lex_from_str("abc // def\n// xyz\n").unwrap(),
-            vec![
-                TokenWithRange::new(
-                    Token::Identifier("abc".to_owned()),
-                    Range::from_position_and_length(&Position::new(0, 0, 0), 3)
-                ),
-                // TokenWithRange::new(
-                //     Token::Comment(Comment::Line(" def".to_owned())),
-                //     Range::from_position_and_length(&Position::new(4, 0, 4), 6)
-                // ),
-                // TokenWithRange::new(
-                //     Token::NewLine,
-                //     Range::from_position_and_length(&Position::new(10, 0, 10), 1)
-                // ),
-                // TokenWithRange::new(
-                //     Token::Comment(Comment::Line(" xyz".to_owned())),
-                //     Range::from_position_and_length(&Position::new(11, 1, 0), 6)
-                // ),
-                // TokenWithRange::new(
-                //     Token::NewLine,
-                //     Range::from_position_and_length(&Position::new(17, 1, 6), 1)
-                // ),
-            ]
+            vec![TokenWithRange::new(
+                Token::Identifier("abc".to_owned()),
+                Range::from_position_and_length(&Position::new(0, 0, 0), 3)
+            ),]
         );
     }
 
@@ -5189,11 +5099,8 @@ hello
             )
             .unwrap(),
             vec![
-                // Token::NewLine,
                 Token::Number(NumberToken::I32(7)),
-                // Token::Comment(Comment::Block(" 11 13 ".to_owned())),
                 Token::Number(NumberToken::I32(17)),
-                // Token::NewLine,
             ]
         );
 
@@ -5206,11 +5113,8 @@ hello
             )
             .unwrap(),
             vec![
-                // Token::NewLine,
                 Token::Number(NumberToken::I32(7)),
-                // Token::Comment(Comment::Block(" 11 /* 13 */ 17 ".to_owned())),
                 Token::Number(NumberToken::I32(19)),
-                // Token::NewLine,
             ]
         );
 
@@ -5223,11 +5127,8 @@ hello
             )
             .unwrap(),
             vec![
-                // Token::NewLine,
                 Token::Number(NumberToken::I32(7)),
-                // Token::Comment(Comment::Block(" 11 // 13 17 ".to_owned())),
                 Token::Number(NumberToken::I32(19)),
-                // Token::NewLine,
             ]
         );
 
@@ -5240,10 +5141,6 @@ hello
                     Token::Identifier("foo".to_owned()),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 3)
                 ),
-                // TokenWithRange::new(
-                //     Token::Comment(Comment::Block(" hello ".to_owned())),
-                //     Range::from_position_and_length(&Position::new(4, 0, 4), 11)
-                // ),
                 TokenWithRange::new(
                     Token::Identifier("bar".to_owned()),
                     Range::from_position_and_length(&Position::new(16, 0, 16), 3)
@@ -5251,19 +5148,7 @@ hello
             ]
         );
 
-        assert_eq!(
-            lex_from_str("/* abc\nxyz */ /* hello */").unwrap(),
-            vec![
-                // TokenWithRange::new(
-                //     Token::Comment(Comment::Block(" abc\nxyz ".to_owned())),
-                //     Range::new(&Position::new(0, 0, 0), &Position::new(12, 1, 5))
-                // ),
-                // TokenWithRange::new(
-                //     Token::Comment(Comment::Block(" hello ".to_owned())),
-                //     Range::new(&Position::new(14, 1, 7), &Position::new(24, 1, 17))
-                // ),
-            ]
-        );
+        assert_eq!(lex_from_str("/* abc\nxyz */ /* hello */").unwrap(), vec![]);
 
         // err: incomplete, missing "*/"
         assert!(matches!(
@@ -5291,7 +5176,154 @@ hello
     }
 
     #[test]
-    fn test_lex_multiple_tokens() {
+    fn test_lex_combined_line_comments_and_block_comments() {
+        assert_eq!(
+            lex_from_str_without_location(
+                r#"11 // line comment 1
+                // line comment 2
+                13 /* block comment 1 */
+                /*
+                block comment 2
+                */
+                17
+                "#
+            )
+            .unwrap(),
+            vec![
+                Token::Number(NumberToken::I32(11)),
+                Token::Number(NumberToken::I32(13)),
+                Token::Number(NumberToken::I32(17)),
+            ]
+        );
+
+        assert_eq!(
+            lex_from_str(r#"11 /* foo */ 13"#).unwrap(),
+            vec![
+                TokenWithRange::new(
+                    Token::Number(NumberToken::I32(11)),
+                    Range::from_position_and_length(&Position::new(0, 0, 0), 2)
+                ),
+                TokenWithRange::new(
+                    Token::Number(NumberToken::I32(13)),
+                    Range::from_position_and_length(&Position::new(13, 0, 13), 2)
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lex_combined_comments_and_whitespaces() {
+        assert_eq!(
+            lex_from_str_without_location(
+                r#"
+                    [1,2,
+
+                    3
+
+                    ,4
+
+                    ,
+
+                    5
+                    ,
+                    // comment between commas
+                    ,
+                    6
+
+                    // comment between blank lines
+
+                    7
+                    8
+                    ]
+
+                    "#
+            )
+            .unwrap(),
+            vec![
+                Token::OpeningBracket,
+                Token::Number(NumberToken::I32(1)),
+                Token::Number(NumberToken::I32(2)),
+                Token::Number(NumberToken::I32(3)),
+                Token::Number(NumberToken::I32(4)),
+                Token::Number(NumberToken::I32(5)),
+                Token::Number(NumberToken::I32(6)),
+                Token::Number(NumberToken::I32(7)),
+                Token::Number(NumberToken::I32(8)),
+                Token::ClosingBracket,
+            ]
+        );
+
+        // range
+
+        // blanks -> blank
+        assert_eq!(
+            lex_from_str("11\n \n  \n13").unwrap(),
+            vec![
+                TokenWithRange::new(
+                    Token::Number(NumberToken::I32(11)),
+                    Range::from_position_and_length(&Position::new(0, 0, 0), 2)
+                ),
+                TokenWithRange::new(
+                    Token::Number(NumberToken::I32(13)),
+                    Range::from_position_and_length(&Position::new(8, 3, 0), 2)
+                ),
+            ]
+        );
+
+        // comma + blanks -> comma
+        assert_eq!(
+            lex_from_str(",\n\n\n11").unwrap(),
+            vec![TokenWithRange::new(
+                Token::Number(NumberToken::I32(11)),
+                Range::from_position_and_length(&Position::new(4, 3, 0), 2)
+            ),]
+        );
+
+        // blanks + comma -> comma
+        assert_eq!(
+            lex_from_str("11\n\n\n,").unwrap(),
+            vec![TokenWithRange::new(
+                Token::Number(NumberToken::I32(11)),
+                Range::from_position_and_length(&Position::new(0, 0, 0), 2)
+            ),]
+        );
+
+        // blanks + comma + blanks -> comma
+        assert_eq!(
+            lex_from_str("11\n\n,\n\n13").unwrap(),
+            vec![
+                TokenWithRange::new(
+                    Token::Number(NumberToken::I32(11)),
+                    Range::from_position_and_length(&Position::new(0, 0, 0), 2)
+                ),
+                TokenWithRange::new(
+                    Token::Number(NumberToken::I32(13)),
+                    Range::from_position_and_length(&Position::new(7, 4, 0), 2)
+                ),
+            ]
+        );
+
+        // comma + comment + comma -> comma + comma
+        assert_eq!(lex_from_str(",//abc\n,").unwrap(), vec![]);
+
+        // blanks + comment + blanks -> blank
+        assert_eq!(
+            lex_from_str("11\n\n//abc\n\n13").unwrap(),
+            vec![
+                TokenWithRange::new(
+                    Token::Number(NumberToken::I32(11)),
+                    Range::from_position_and_length(&Position::new(0, 0, 0), 2)
+                ),
+                TokenWithRange::new(
+                    Token::Number(NumberToken::I32(13)),
+                    Range::from_position_and_length(&Position::new(11, 4, 0), 2)
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lex_combined_tokens() {
         assert_eq!(
             lex_from_str_without_location(
                 r#"
@@ -5300,17 +5332,14 @@ hello
             )
             .unwrap(),
             vec![
-                // Token::NewLine,
                 Token::OpeningBrace,
                 Token::new_identifier("id"),
                 Token::Colon,
                 Token::Number(NumberToken::I32(123)),
-                // Token::Comma,
                 Token::new_identifier("name"),
                 Token::Colon,
                 Token::new_string("foo"),
                 Token::ClosingBrace,
-                // Token::NewLine,
             ]
         );
 
@@ -5322,16 +5351,11 @@ hello
             )
             .unwrap(),
             vec![
-                // Token::NewLine,
                 Token::OpeningBracket,
                 Token::Number(NumberToken::I32(123)),
-                // Token::Comma,
                 Token::Number(NumberToken::I32(456)),
-                // Token::Comma,
                 Token::Number(NumberToken::I32(789)),
-                // Token::Comma,
                 Token::ClosingBracket,
-                // Token::NewLine,
             ]
         );
 
@@ -5343,14 +5367,11 @@ hello
             )
             .unwrap(),
             vec![
-                // Token::NewLine,
-                Token::LeftParenthesis,
+                Token::OpeningParenthesis,
                 Token::Number(NumberToken::I32(123)),
                 Token::new_string("foo"),
                 Token::Boolean(true),
                 Token::ClosingParenthesis,
-                // Token::Comment(Comment::Line(" line comment".to_owned())),
-                // Token::NewLine,
             ]
         );
 
@@ -5366,27 +5387,20 @@ hello
             )
             .unwrap(),
             vec![
-                // Token::NewLine,
                 Token::OpeningBrace, // {
-                // Token::NewLine,
                 Token::new_identifier("a"),
                 Token::Colon,
                 Token::OpeningBracket, // [
                 Token::Number(NumberToken::I32(1)),
-                // Token::Comma,
                 Token::Number(NumberToken::I32(2)),
-                // Token::Comma,
                 Token::Number(NumberToken::I32(3)),
                 Token::ClosingBracket, // ]
-                // Token::NewLine,
                 Token::new_identifier("b"),
                 Token::Colon,
-                Token::LeftParenthesis, // (
+                Token::OpeningParenthesis, // (
                 Token::Boolean(false),
-                // Token::Comma,
                 Token::Date(DateTime::parse_from_rfc3339("2000-01-01 10:10:10Z").unwrap()),
                 Token::ClosingParenthesis, // )
-                // Token::NewLine,
                 Token::new_identifier("c"),
                 Token::Colon,
                 Token::OpeningBrace, // {
@@ -5394,9 +5408,7 @@ hello
                 Token::Colon,
                 Token::Number(NumberToken::I32(11)),
                 Token::ClosingBrace, // }
-                // Token::NewLine,
                 Token::ClosingBrace, // }
-                                   // Token::NewLine,
             ]
         );
     }

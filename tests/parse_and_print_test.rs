@@ -146,39 +146,39 @@ fn test_example_file_list() {
     assert_eq!(
         document,
         r#"{
-    number_array: [
+    number_list: [
         1
         2
         3
     ]
-    string_array: [
+    string_list: [
         "one"
         "two"
         "three"
     ]
-    array_with_trailing_comma: [
+    list_with_trailing_comma: [
         1
         2
         3
         4
     ]
-    array_with_space_separator: [
+    list_with_space_separator: [
         "one"
         "two"
         "three"
         "four"
     ]
-    mulitline_array: [
+    mulitline_list: [
         1
         2
         3
     ]
-    mulitline_array_with_commas: [
+    mulitline_list_with_commas: [
         1
         2
         3
     ]
-    mulitline_array_with_trailing_comma: [
+    mulitline_list_with_trailing_comma: [
         1
         2
         3
@@ -247,25 +247,22 @@ fn test_example_file_named_list() {
     assert_eq!(
         document,
         r#"{
-    modules: [
+    string_name: [
         "foo": {
             version: "1.0"
-            repo: "default"
         }
         "bar": {
             version: "2.0"
         }
     ]
-    orders: [
-        123: [
-            1
-            2
-            3
+    number_name: [
+        11: [
+            "foo"
+            "bar"
         ]
-        456: [
-            4
-            5
-            6
+        13: [
+            "baz"
+            "qux"
         ]
     ]
 }"#
@@ -283,8 +280,8 @@ fn test_example_file_variant() {
         r#"{
     variant_without_value: Option::None
     variant_single_value: Option::Some(123)
-    variant_tuple_like: Color::RGB(255, 127, 63)
-    variant_object_like: Shape::Rect{
+    variant_tuple_like_value: Color::RGB(255, 127, 63)
+    variant_object_like_value: Shape::Rect{
         width: 200
         height: 100
     }
