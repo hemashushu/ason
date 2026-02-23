@@ -8,7 +8,7 @@ use std::ops::Neg;
 
 use crate::{
     error::AsonError,
-    peekable_iter::PeekableIter,
+    peekable_iterator::PeekableIterator,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
 };
@@ -16,17 +16,17 @@ use crate::{
 /// Normalize and check signed numbers in the token stream.
 ///
 /// Token `Plus` and `Minus` are removed after normalization.
-pub struct NormalizeSignedNumberIter<'a> {
-    upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
+pub struct NormalizeSignedNumberIter {
+    upstream: PeekableIterator<Result<TokenWithRange, AsonError>>,
 }
 
-impl<'a> NormalizeSignedNumberIter<'a> {
-    pub fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
+impl NormalizeSignedNumberIter {
+    pub fn new(upstream: PeekableIterator<Result<TokenWithRange, AsonError>>) -> Self {
         Self { upstream }
     }
 }
 
-impl Iterator for NormalizeSignedNumberIter<'_> {
+impl Iterator for NormalizeSignedNumberIter {
     type Item = Result<TokenWithRange, AsonError>;
 
     // The normalization and checking rules are as follows:
@@ -399,29 +399,28 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        char_with_position::CharsWithPositionIter,
+        char_with_position::CharsWithPositionIterator,
         error::AsonError,
         lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
         normalizer::NormalizeSignedNumberIter,
-        peekable_iter::PeekableIter,
+        peekable_iterator::PeekableIterator,
         position::Position,
         range::Range,
         token::{NumberToken, Token, TokenWithRange},
     };
 
     /// Helper function to lex tokens from a string.
-    fn lex_from_str(s: &str) -> Result<Vec<TokenWithRange>, AsonError> {
+    fn lex_from_str(s: &'static str) -> Result<Vec<TokenWithRange>, AsonError> {
         // Lex
-        let mut chars = s.chars();
-        let mut char_position_iter = CharsWithPositionIter::new(&mut chars);
-        let mut peekable_char_position_iter =
-            PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
-        let mut lexer = Lexer::new(&mut peekable_char_position_iter);
+        let chars = s.chars();
+        let char_position_iter = CharsWithPositionIterator::new(Box::new(chars));
+        let peekable_char_position_iter =
+            PeekableIterator::new( Box::new(char_position_iter), PEEK_BUFFER_LENGTH_LEX);
+        let lexer = Lexer::new( peekable_char_position_iter);
 
         // Normalize signed numbers
-        let mut peekable_lexer_iter = PeekableIter::new(&mut lexer, 1);
-        // let mut peekable_merged_newlines_iter = PeekableIter::new(&mut merged_newlines_iter, 1);
-        let normalizer_iter = NormalizeSignedNumberIter::new(&mut peekable_lexer_iter);
+        let peekable_lexer_iter = PeekableIterator::new(Box::new(lexer), 1);
+        let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
 
         // Collect tokens
         //
@@ -442,7 +441,7 @@ mod tests {
     }
 
     /// Helper function to lex tokens from a string, without location info
-    fn lex_from_str_without_location(s: &str) -> Result<Vec<Token>, AsonError> {
+    fn lex_from_str_without_location(s: &'static str) -> Result<Vec<Token>, AsonError> {
         let tokens = lex_from_str(s)?
             .into_iter()
             .map(|e| e.token)

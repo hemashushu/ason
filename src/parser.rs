@@ -4,48 +4,37 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::io::Read;
+use std::io::{Cursor, Read};
 
 use crate::{
     ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Variant},
-    char_with_position::CharsWithPositionIter,
     error::AsonError,
-    lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
-    normalizer::NormalizeSignedNumberIter,
-    peekable_iter::PeekableIter,
+    peekable_iterator::PeekableIterator,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
+    token_stream_reader::stream_from_char_iterator,
     utf8_char_iterator::UTF8CharIterator,
 };
 
 pub const PEEK_BUFFER_LENGTH_PARSE: usize = 3;
 
-pub fn parse_from_str(s: &str) -> Result<AsonNode, AsonError> {
-    let mut chars = s.chars();
-    parse_from_char_iterator(&mut chars)
+pub fn parse_from_string(s: String) -> Result<AsonNode, AsonError> {
+    let cursor = Cursor::new(s);
+    parse_from_reader(Box::new(cursor))
 }
 
-pub fn parse_from_reader<R: Read>(mut r: R) -> Result<AsonNode, AsonError> {
-    let mut char_stream = UTF8CharIterator::new(&mut r);
-    parse_from_char_iterator(&mut char_stream)
+pub fn parse_from_reader(reader: Box<dyn Read>) -> Result<AsonNode, AsonError> {
+    let char_iter = UTF8CharIterator::new(reader);
+    parse_from_char_iterator(Box::new(char_iter))
 }
 
 pub fn parse_from_char_iterator(
-    char_iterator: &mut dyn Iterator<Item = char>,
+    char_iterator: Box<dyn Iterator<Item = char>>,
 ) -> Result<AsonNode, AsonError> {
-    let mut char_position_iter = CharsWithPositionIter::new(char_iterator);
-    let mut peekable_char_position_iter =
-        PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
-    let mut lexer = Lexer::new(&mut peekable_char_position_iter);
-
-    // Normalize signed numbers
-    let mut peekable_lexer_iter = PeekableIter::new(&mut lexer, 1);
-    let mut normalizer_iter = NormalizeSignedNumberIter::new(&mut peekable_lexer_iter);
-
-    // Parse
-    let mut peekable_trimmed_document_iter =
-        PeekableIter::new(&mut normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
-    let mut parser = Parser::new(&mut peekable_trimmed_document_iter);
+    let token_stream_reader = stream_from_char_iterator(char_iterator);
+    let peekable_token_stream_iter =
+        PeekableIterator::new(Box::new(token_stream_reader), PEEK_BUFFER_LENGTH_PARSE);
+    let mut parser = Parser::new(peekable_token_stream_iter);
     let root = parser.parse_node()?;
 
     // Check extraneous tokens
@@ -58,15 +47,15 @@ pub fn parse_from_char_iterator(
     }
 }
 
-struct Parser<'a> {
-    upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
+struct Parser {
+    upstream: PeekableIterator<Result<TokenWithRange, AsonError>>,
 
     /// The range of the last consumed token by `next_token` or `next_token_with_range`.
     last_range: Range,
 }
 
-impl<'a> Parser<'a> {
-    fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
+impl Parser {
+    fn new(upstream: PeekableIterator<Result<TokenWithRange, AsonError>>) -> Self {
         Self {
             upstream,
             last_range: Range::default(),
@@ -154,7 +143,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl Parser<'_> {
+impl Parser {
     fn parse_node(&mut self) -> Result<AsonNode, AsonError> {
         match self.peek_token(0)? {
             Some(current_token) => {
@@ -490,12 +479,17 @@ mod tests {
     use crate::{
         ast::{KeyValuePair, NamedListEntry, Number, Variant},
         error::AsonError,
-        parser::parse_from_str,
+        parser::parse_from_char_iterator,
         position::Position,
         range::Range,
     };
 
     use super::AsonNode;
+
+    fn parse_from_str(s: &'static str) -> Result<AsonNode, AsonError> {
+        let chars = s.chars();
+        parse_from_char_iterator(Box::new(chars))
+    }
 
     #[test]
     fn test_parse_primitive_value() {
@@ -1242,6 +1236,39 @@ mod tests {
 
     #[test]
     fn test_parse_document() {
+        assert_eq!(
+            parse_from_str(
+                r#"
+            {
+                name: "foo"
+                version: "0.1.0"
+                dependencies: [
+                    "registry.domain/user/random@1.0.1"
+                    "registry.domain/user/regex@2.0.0"
+                ]
+            }
+            "#
+            )
+            .unwrap(),
+            AsonNode::Object(vec![
+                KeyValuePair {
+                    key: "name".to_owned(),
+                    value: Box::new(AsonNode::String("foo".to_owned())),
+                },
+                KeyValuePair {
+                    key: "version".to_owned(),
+                    value: Box::new(AsonNode::String("0.1.0".to_owned())),
+                },
+                KeyValuePair {
+                    key: "dependencies".to_owned(),
+                    value: Box::new(AsonNode::List(vec![
+                        AsonNode::String("registry.domain/user/random@1.0.1".to_owned()),
+                        AsonNode::String("registry.domain/user/regex@2.0.0".to_owned()),
+                    ])),
+                },
+            ])
+        );
+
         assert_eq!(
             parse_from_str(
                 r#"

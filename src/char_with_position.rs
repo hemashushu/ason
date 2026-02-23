@@ -6,8 +6,8 @@
 
 use crate::position::Position;
 
-#[derive(Debug, PartialEq)]
 /// Represents a character along with its position in the source text.
+#[derive(Debug, PartialEq)]
 pub struct CharWithPosition {
     /// The character from the source text.
     pub character: char,
@@ -26,16 +26,16 @@ impl CharWithPosition {
 }
 
 /// An iterator that yields each character from the upstream iterator along with its position in the source text.
-pub struct CharsWithPositionIter<'a> {
+pub struct CharsWithPositionIterator {
     /// The underlying iterator that provides characters.
-    upstream: &'a mut dyn Iterator<Item = char>,
+    upstream: Box<dyn Iterator<Item = char>>,
 
     /// Tracks the current position in the source text.
     current_position: Position,
 }
 
-impl<'a> CharsWithPositionIter<'a> {
-    pub fn new(upstream: &'a mut dyn Iterator<Item = char>) -> Self {
+impl CharsWithPositionIterator {
+    pub fn new(upstream: Box<dyn Iterator<Item = char>>) -> Self {
         Self {
             upstream,
             current_position: Position::new(0, 0, 0),
@@ -43,7 +43,7 @@ impl<'a> CharsWithPositionIter<'a> {
     }
 }
 
-impl Iterator for CharsWithPositionIter<'_> {
+impl Iterator for CharsWithPositionIterator {
     type Item = CharWithPosition;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -74,15 +74,15 @@ impl Iterator for CharsWithPositionIter<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        char_with_position::{CharWithPosition, CharsWithPositionIter},
+        char_with_position::{CharWithPosition, CharsWithPositionIterator},
         position::Position,
     };
 
     #[test]
     fn test_chars_with_position_iter() {
         {
-            let mut chars = "a\nmn\nxyz".chars();
-            let mut char_position_iter = CharsWithPositionIter::new(&mut chars);
+            let chars = "a\nmn\nxyz".chars();
+            let mut char_position_iter = CharsWithPositionIterator::new(Box::new(chars));
 
             assert_eq!(
                 char_position_iter.next(),
@@ -128,8 +128,8 @@ mod tests {
         }
 
         {
-            let mut chars = "\n\r\n\n".chars();
-            let mut char_position_iter = CharsWithPositionIter::new(&mut chars);
+            let chars = "\n\r\n\n".chars();
+            let mut char_position_iter = CharsWithPositionIterator::new(Box::new(chars));
 
             assert_eq!(
                 char_position_iter.next(),

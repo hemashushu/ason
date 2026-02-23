@@ -8,11 +8,11 @@ pub const ROUND_QUEUE_LENGTH: usize = 8;
 
 /// `PeekableIter` extends the functionality of `std::iter::Peekable` by allowing
 /// peeking at elements at any specified offset, not just the next one.
-pub struct PeekableIter<'a, T>
+pub struct PeekableIterator<T>
 where
     T: PartialEq,
 {
-    upstream: &'a mut dyn Iterator<Item = T>,
+    upstream: Box<dyn Iterator<Item = T>>,
     buffer: RoundQueue<T>,
     buffer_size: usize,
 }
@@ -83,16 +83,16 @@ where
     }
 }
 
-impl<'a, T> PeekableIter<'a, T>
+impl<T> PeekableIterator<T>
 where
     T: PartialEq,
 {
     /// Creates a new PeekableIter with the specified buffer size.
     /// The buffer is pre-filled with elements from the upstream iterator.
     ///
-    /// `buffer_size` The size of the buffer to use for peeking. For example,
-    /// if `buffer_size` is 2, you can peek with offsets 0 and 1.
-    pub fn new(upstream: &'a mut dyn Iterator<Item = T>, buffer_size: usize) -> Self {
+    /// `buffer_size` The size of the buffer to use for peeking.
+    /// For example, if `buffer_size` is 2, you can peek with offsets 0 and 1.
+    pub fn new(mut upstream: Box<dyn Iterator<Item = T>>, buffer_size: usize) -> Self {
         let mut buffer = RoundQueue::new(buffer_size);
 
         // Pre-fill the buffer with the first `buffer_size` elements from the upstream iterator.
@@ -116,7 +116,7 @@ where
     }
 }
 
-impl<T> Iterator for PeekableIter<'_, T>
+impl<T> Iterator for PeekableIterator<T>
 where
     T: PartialEq,
 {
@@ -137,13 +137,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::peekable_iter::PeekableIter;
+    use crate::peekable_iterator::PeekableIterator;
 
     #[test]
     fn test_peekable_iter() {
         let s = "0123";
-        let mut chars = s.chars();
-        let mut iter = PeekableIter::new(&mut chars, 3);
+        let chars = s.chars();
+        let mut iter = PeekableIterator::new(Box::new(chars), 3);
 
         // Initial state: buffer contains '0', '1', '2'
         assert_eq!(Some(&'0'), iter.peek(0));
@@ -184,9 +184,9 @@ mod tests {
     #[test]
     fn test_nested_peekable_iter() {
         let s = "0123";
-        let mut chars = s.chars();
-        let mut iter1 = PeekableIter::new(&mut chars, 3);
-        let mut iter2 = PeekableIter::new(&mut iter1, 3);
+        let chars = s.chars();
+        let iter1 = PeekableIterator::new(Box::new(chars), 3);
+        let mut iter2 = PeekableIterator::new(Box::new(iter1), 3);
 
         // Initial state: buffer contains '0', '1', '2'
         assert_eq!(Some(&'0'), iter2.peek(0));

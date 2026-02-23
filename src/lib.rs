@@ -5,30 +5,26 @@
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
 mod char_with_position;
-mod error_printer;
 mod lexer;
 mod normalizer;
-mod peekable_iter;
+mod parser;
+mod peekable_iterator;
 mod position;
 mod range;
 mod token;
 mod token_stream_reader;
 mod utf8_char_iterator;
-
-mod parser;
-mod printer;
+// mod printer;
 
 pub mod ast;
 pub mod error;
+pub mod error_printer;
 
 pub use parser::parse_from_reader;
-pub use parser::parse_from_str;
-pub use printer::print_to_string;
-pub use printer::print_to_writer;
+pub use parser::parse_from_string;
+pub use token_stream_reader::stream_from_reader;
+pub use token_stream_reader::stream_from_string;
 
-// pub use serde::de::from_reader;
-// pub use serde::de::from_str;
-// pub use serde::ser::to_string;
-// pub use serde::ser::to_writer;
-
-// pub use serde::serde_date::Date;
+// pub use parser::parse_from_str;
+// pub use printer::print_to_string;
+// pub use printer::print_to_writer;

@@ -6,28 +6,19 @@
 
 use std::io::{BufReader, Read};
 
-pub struct UTF8CharIterator<'a, R>
-where
-    R: Read,
-{
-    bufreader: BufReader<&'a mut R>,
+pub struct UTF8CharIterator {
+    bufreader: BufReader<Box<dyn Read>>, // &'a mut R>,
 }
 
-impl<'a, R> UTF8CharIterator<'a, R>
-where
-    R: Read,
-{
-    pub fn new(reader: &'a mut R) -> Self {
+impl UTF8CharIterator {
+    pub fn new(reader: Box<dyn Read>) -> Self {
         Self {
             bufreader: BufReader::new(reader),
         }
     }
 }
 
-impl<R> UTF8CharIterator<'_, R>
-where
-    R: Read,
-{
+impl UTF8CharIterator {
     /// Read a UTF-8 character from the stream.
     /// Ignores invalid UTF-8 sequences and I/O errors.
     #[inline]
@@ -135,10 +126,7 @@ where
     }
 }
 
-impl<R> Iterator for UTF8CharIterator<'_, R>
-where
-    R: Read,
-{
+impl Iterator for UTF8CharIterator {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -148,6 +136,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use pretty_assertions::assert_eq;
 
     use crate::utf8_char_iterator::UTF8CharIterator;
@@ -155,8 +145,8 @@ mod tests {
     #[test]
     fn test_utf8_char_iterator() {
         {
-            let mut bytes = b"abc" as &[u8];
-            let mut charstream = UTF8CharIterator::new(&mut bytes);
+            let bytes = b"abc" as &[u8];
+            let mut charstream = UTF8CharIterator::new(Box::new(bytes));
 
             assert_eq!(charstream.next(), Some('a'));
             assert_eq!(charstream.next(), Some('b'));
@@ -166,8 +156,8 @@ mod tests {
 
         {
             let data = "a文b😋c".bytes().collect::<Vec<u8>>();
-            let mut bytes = &data[..];
-            let mut charstream = UTF8CharIterator::new(&mut bytes);
+            let bytes = Cursor::new(data);
+            let mut charstream = UTF8CharIterator::new(Box::new(bytes));
 
             assert_eq!(charstream.next(), Some('a'));
             assert_eq!(charstream.next(), Some('文'));
