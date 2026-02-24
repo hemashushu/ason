@@ -8,13 +8,73 @@ pub const ROUND_QUEUE_LENGTH: usize = 8;
 
 /// `PeekableIter` extends the functionality of `std::iter::Peekable` by allowing
 /// peeking at elements at any specified offset, not just the next one.
-pub struct PeekableIterator<T>
+pub struct PeekableIterator<T, U>
 where
     T: PartialEq,
+    U: Iterator<Item = T> //  + Sized,
 {
-    upstream: Box<dyn Iterator<Item = T>>,
+    upstream: U,
     buffer: RoundQueue<T>,
     buffer_size: usize,
+}
+
+impl<T, U> PeekableIterator<T, U>
+where
+    T: PartialEq,
+    U: Iterator<Item = T> // + Sized,
+{
+    /// Creates a new PeekableIter with the specified buffer size.
+    /// The buffer is pre-filled with elements from the upstream iterator.
+    ///
+    /// `buffer_size` The size of the buffer to use for peeking.
+    /// For example, if `buffer_size` is 2, you can peek with offsets 0 and 1.
+    ///
+    /// The default and minimum buffer size is 1, which allows peeking at the next element only,
+    /// i.e., `peek(0)`.
+    /// The maximum buffer size is `ROUND_QUEUE_LENGTH - 1` (i.e., 7), which allows
+    /// peeking up to 7 elements ahead.
+    pub fn new(mut upstream: U, buffer_size: usize) -> Self {
+        let mut buffer = RoundQueue::new(buffer_size);
+
+        // Pre-fill the buffer with the first `buffer_size` elements from the upstream iterator.
+        for _ in 0..buffer_size {
+            let value = upstream.next();
+            buffer.enqueue(value);
+        }
+
+        Self {
+            upstream,
+            buffer,
+            buffer_size,
+        }
+    }
+
+    /// Returns a reference to the element at the specified offset in the buffer,
+    /// or None if that position is empty. The offset must be less than the buffer size.
+    pub fn peek(&self, offset: usize) -> Option<&T> {
+        assert!(offset < self.buffer_size);
+        self.buffer.peek(offset)
+    }
+}
+
+impl<T, U> Iterator for PeekableIterator<T, U>
+where
+    T: PartialEq,
+    U: Iterator<Item = T> // + Sized,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Remove and return the next value from the buffer.
+        // The buffer is pre-filled during initialization, so we always dequeue first,
+        // then fetch the next value from the upstream iterator and enqueue it.
+        let value = self.buffer.dequeue();
+
+        let next_value = self.upstream.next();
+        self.buffer.enqueue(next_value);
+
+        value
+    }
 }
 
 /// A fixed-size circular queue used for buffering elements in PeekableIter.
@@ -83,58 +143,6 @@ where
     }
 }
 
-impl<T> PeekableIterator<T>
-where
-    T: PartialEq,
-{
-    /// Creates a new PeekableIter with the specified buffer size.
-    /// The buffer is pre-filled with elements from the upstream iterator.
-    ///
-    /// `buffer_size` The size of the buffer to use for peeking.
-    /// For example, if `buffer_size` is 2, you can peek with offsets 0 and 1.
-    pub fn new(mut upstream: Box<dyn Iterator<Item = T>>, buffer_size: usize) -> Self {
-        let mut buffer = RoundQueue::new(buffer_size);
-
-        // Pre-fill the buffer with the first `buffer_size` elements from the upstream iterator.
-        for _ in 0..buffer_size {
-            let value = upstream.next();
-            buffer.enqueue(value);
-        }
-
-        Self {
-            upstream,
-            buffer,
-            buffer_size,
-        }
-    }
-
-    /// Returns a reference to the element at the specified offset in the buffer,
-    /// or None if that position is empty. The offset must be less than the buffer size.
-    pub fn peek(&self, offset: usize) -> Option<&T> {
-        assert!(offset < self.buffer_size);
-        self.buffer.peek(offset)
-    }
-}
-
-impl<T> Iterator for PeekableIterator<T>
-where
-    T: PartialEq,
-{
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // Remove and return the next value from the buffer.
-        // The buffer is pre-filled during initialization, so we always dequeue first,
-        // then fetch the next value from the upstream iterator and enqueue it.
-        let value = self.buffer.dequeue();
-
-        let next_value = self.upstream.next();
-        self.buffer.enqueue(next_value);
-
-        value
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::peekable_iterator::PeekableIterator;
@@ -143,7 +151,7 @@ mod tests {
     fn test_peekable_iter() {
         let s = "0123";
         let chars = s.chars();
-        let mut iter = PeekableIterator::new(Box::new(chars), 3);
+        let mut iter = PeekableIterator::new(chars, 3);
 
         // Initial state: buffer contains '0', '1', '2'
         assert_eq!(Some(&'0'), iter.peek(0));
@@ -185,8 +193,8 @@ mod tests {
     fn test_nested_peekable_iter() {
         let s = "0123";
         let chars = s.chars();
-        let iter1 = PeekableIterator::new(Box::new(chars), 3);
-        let mut iter2 = PeekableIterator::new(Box::new(iter1), 3);
+        let iter1 = PeekableIterator::new(chars, 3);
+        let mut iter2 = PeekableIterator::new(iter1, 3);
 
         // Initial state: buffer contains '0', '1', '2'
         assert_eq!(Some(&'0'), iter2.peek(0));

@@ -19,6 +19,18 @@ pub enum Token {
     ClosingParenthesis, // `)`
 
     Number(NumberToken),
+
+    // ASON only supports certain escaped characters in character and string literals,
+    // which is similar to Rust's character and string literals. The supported escape sequences are:
+    //
+    // - `\\` (backslash)
+    // - `\'` (single quote)
+    // - `\"` (double quote)
+    // - `\t` (tab)
+    // - `\r` (carriage return)
+    // - `\n` (newline)
+    // - `\0` (null character)
+    // - `\u{...}` (Unicode code point, where `...` is a hexadecimal number)
     Char(char),
     String(String),
 

@@ -26,16 +26,22 @@ impl CharWithPosition {
 }
 
 /// An iterator that yields each character from the upstream iterator along with its position in the source text.
-pub struct CharsWithPositionIterator {
+pub struct CharsWithPositionIterator<T>
+where
+    T: Iterator<Item = char>,
+{
     /// The underlying iterator that provides characters.
-    upstream: Box<dyn Iterator<Item = char>>,
+    upstream: T,
 
     /// Tracks the current position in the source text.
     current_position: Position,
 }
 
-impl CharsWithPositionIterator {
-    pub fn new(upstream: Box<dyn Iterator<Item = char>>) -> Self {
+impl<T> CharsWithPositionIterator<T>
+where
+    T: Iterator<Item = char>,
+{
+    pub fn new(upstream: T) -> Self {
         Self {
             upstream,
             current_position: Position::new(0, 0, 0),
@@ -43,7 +49,10 @@ impl CharsWithPositionIterator {
     }
 }
 
-impl Iterator for CharsWithPositionIterator {
+impl<T> Iterator for CharsWithPositionIterator<T>
+where
+    T: Iterator<Item = char>,
+{
     type Item = CharWithPosition;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -82,7 +91,7 @@ mod tests {
     fn test_chars_with_position_iter() {
         {
             let chars = "a\nmn\nxyz".chars();
-            let mut char_position_iter = CharsWithPositionIterator::new(Box::new(chars));
+            let mut char_position_iter = CharsWithPositionIterator::new(chars);
 
             assert_eq!(
                 char_position_iter.next(),
@@ -129,7 +138,7 @@ mod tests {
 
         {
             let chars = "\n\r\n\n".chars();
-            let mut char_position_iter = CharsWithPositionIterator::new(Box::new(chars));
+            let mut char_position_iter = CharsWithPositionIterator::new(chars);
 
             assert_eq!(
                 char_position_iter.next(),

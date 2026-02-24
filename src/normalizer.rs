@@ -13,20 +13,31 @@ use crate::{
     token::{NumberToken, Token, TokenWithRange},
 };
 
+pub const PEEK_BUFFER_LENGTH_NORMALIZE: usize = 1;
+
 /// Normalize and check signed numbers in the token stream.
 ///
 /// Token `Plus` and `Minus` are removed after normalization.
-pub struct NormalizeSignedNumberIter {
-    upstream: PeekableIterator<Result<TokenWithRange, AsonError>>,
+pub struct NormalizeSignedNumberIter<T>
+where
+    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
+{
+    upstream: PeekableIterator<Result<TokenWithRange, AsonError>, T>,
 }
 
-impl NormalizeSignedNumberIter {
-    pub fn new(upstream: PeekableIterator<Result<TokenWithRange, AsonError>>) -> Self {
+impl<T> NormalizeSignedNumberIter<T>
+where
+    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
+{
+    pub fn new(upstream: PeekableIterator<Result<TokenWithRange, AsonError>, T>) -> Self {
         Self { upstream }
     }
 }
 
-impl Iterator for NormalizeSignedNumberIter {
+impl<T> Iterator for NormalizeSignedNumberIter<T>
+where
+    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
+{
     type Item = Result<TokenWithRange, AsonError>;
 
     // The normalization and checking rules are as follows:
@@ -402,7 +413,7 @@ mod tests {
         char_with_position::CharsWithPositionIterator,
         error::AsonError,
         lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
-        normalizer::NormalizeSignedNumberIter,
+        normalizer::{NormalizeSignedNumberIter, PEEK_BUFFER_LENGTH_NORMALIZE},
         peekable_iterator::PeekableIterator,
         position::Position,
         range::Range,
@@ -410,16 +421,16 @@ mod tests {
     };
 
     /// Helper function to lex tokens from a string.
-    fn lex_from_str(s: &'static str) -> Result<Vec<TokenWithRange>, AsonError> {
+    fn lex_from_str(s: &str) -> Result<Vec<TokenWithRange>, AsonError> {
         // Lex
         let chars = s.chars();
-        let char_position_iter = CharsWithPositionIterator::new(Box::new(chars));
+        let char_position_iter = CharsWithPositionIterator::new(chars);
         let peekable_char_position_iter =
-            PeekableIterator::new( Box::new(char_position_iter), PEEK_BUFFER_LENGTH_LEX);
-        let lexer = Lexer::new( peekable_char_position_iter);
+            PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+        let lexer = Lexer::new(peekable_char_position_iter);
 
         // Normalize signed numbers
-        let peekable_lexer_iter = PeekableIterator::new(Box::new(lexer), 1);
+        let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
         let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
 
         // Collect tokens

@@ -7,24 +7,15 @@
 mod char_with_position;
 mod lexer;
 mod normalizer;
-mod parser;
 mod peekable_iterator;
 mod position;
 mod range;
-mod token;
-mod token_stream_reader;
 mod utf8_char_iterator;
-// mod printer;
 
 pub mod ast;
 pub mod error;
 pub mod error_printer;
-
-pub use parser::parse_from_reader;
-pub use parser::parse_from_string;
-pub use token_stream_reader::stream_from_reader;
-pub use token_stream_reader::stream_from_string;
-
-// pub use parser::parse_from_str;
-// pub use printer::print_to_string;
-// pub use printer::print_to_writer;
+pub mod parser;
+pub mod token;
+pub mod token_stream_reader;
+pub mod token_stream_writer;

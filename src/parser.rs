@@ -4,36 +4,50 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::io::{Cursor, Read};
+use std::io::Read;
 
 use crate::{
     ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Variant},
+    char_with_position::CharsWithPositionIterator,
     error::AsonError,
+    lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
+    normalizer::{NormalizeSignedNumberIter, PEEK_BUFFER_LENGTH_NORMALIZE},
     peekable_iterator::PeekableIterator,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
-    token_stream_reader::stream_from_char_iterator,
     utf8_char_iterator::UTF8CharIterator,
 };
 
 pub const PEEK_BUFFER_LENGTH_PARSE: usize = 3;
 
-pub fn parse_from_string(s: String) -> Result<AsonNode, AsonError> {
-    let cursor = Cursor::new(s);
-    parse_from_reader(Box::new(cursor))
+pub fn parse_from_str(s: &str) -> Result<AsonNode, AsonError> {
+    let chars = s.chars();
+    parse_from_char_iterator(chars)
 }
 
 pub fn parse_from_reader(reader: Box<dyn Read>) -> Result<AsonNode, AsonError> {
     let char_iter = UTF8CharIterator::new(reader);
-    parse_from_char_iterator(Box::new(char_iter))
+    parse_from_char_iterator(char_iter)
 }
 
-pub fn parse_from_char_iterator(
-    char_iterator: Box<dyn Iterator<Item = char>>,
-) -> Result<AsonNode, AsonError> {
-    let token_stream_reader = stream_from_char_iterator(char_iterator);
+pub fn parse_from_char_iterator<T>(char_iterator: T) -> Result<AsonNode, AsonError>
+where
+    T: Iterator<Item = char>,
+{
+    let char_position_iter = CharsWithPositionIterator::new(char_iterator);
+
+    // Lex
+    let peekable_char_position_iter =
+        PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+    let lexer = Lexer::new(peekable_char_position_iter);
+
+    // Normalize signed numbers
+    let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+    let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
+
+    // Parse
     let peekable_token_stream_iter =
-        PeekableIterator::new(Box::new(token_stream_reader), PEEK_BUFFER_LENGTH_PARSE);
+        PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
     let mut parser = Parser::new(peekable_token_stream_iter);
     let root = parser.parse_node()?;
 
@@ -47,15 +61,21 @@ pub fn parse_from_char_iterator(
     }
 }
 
-struct Parser {
-    upstream: PeekableIterator<Result<TokenWithRange, AsonError>>,
+struct Parser<T>
+where
+    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
+{
+    upstream: PeekableIterator<Result<TokenWithRange, AsonError>, T>,
 
     /// The range of the last consumed token by `next_token` or `next_token_with_range`.
     last_range: Range,
 }
 
-impl Parser {
-    fn new(upstream: PeekableIterator<Result<TokenWithRange, AsonError>>) -> Self {
+impl<T> Parser<T>
+where
+    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
+{
+    fn new(upstream: PeekableIterator<Result<TokenWithRange, AsonError>, T>) -> Self {
         Self {
             upstream,
             last_range: Range::default(),
@@ -143,7 +163,10 @@ impl Parser {
     }
 }
 
-impl Parser {
+impl<T> Parser<T>
+where
+    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
+{
     fn parse_node(&mut self) -> Result<AsonNode, AsonError> {
         match self.peek_token(0)? {
             Some(current_token) => {
@@ -479,17 +502,12 @@ mod tests {
     use crate::{
         ast::{KeyValuePair, NamedListEntry, Number, Variant},
         error::AsonError,
-        parser::parse_from_char_iterator,
+        parser::parse_from_str,
         position::Position,
         range::Range,
     };
 
     use super::AsonNode;
-
-    fn parse_from_str(s: &'static str) -> Result<AsonNode, AsonError> {
-        let chars = s.chars();
-        parse_from_char_iterator(Box::new(chars))
-    }
 
     #[test]
     fn test_parse_primitive_value() {
