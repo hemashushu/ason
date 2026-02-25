@@ -191,7 +191,7 @@ where
                         self.next_token()?;
                         v
                     }
-                    Token::Date(d) => {
+                    Token::DateTime(d) => {
                         let v = AsonNode::DateTime(*d);
                         self.next_token()?;
                         v
@@ -215,7 +215,7 @@ where
                         }
                     }
                     Token::HexadecimalByteData(b) => {
-                        let v = AsonNode::ByteData(b.to_owned());
+                        let v = AsonNode::HexadecimalByteData(b.to_owned());
                         self.next_token()?;
                         v
                     }
@@ -574,7 +574,7 @@ mod tests {
             "#
             )
             .unwrap(),
-            AsonNode::ByteData(vec![0x11u8, 0x13, 0x17, 0x19])
+            AsonNode::HexadecimalByteData(vec![0x11u8, 0x13, 0x17, 0x19])
         );
     }
 

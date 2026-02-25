@@ -44,7 +44,7 @@ pub enum Token {
     // `NaN` and `Inf` are interpreted to `Token::NumberToken`.
     Boolean(bool),
 
-    Date(DateTime<FixedOffset>),
+    DateTime(DateTime<FixedOffset>),
 
     // An identifier is used for object (or struct) field name,
     // It is a sequence of letters, digits, underscores:

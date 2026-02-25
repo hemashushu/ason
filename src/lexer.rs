@@ -1744,7 +1744,7 @@ where
             )
         })?;
 
-        Ok(TokenWithRange::new(Token::Date(rfc3339), date_range))
+        Ok(TokenWithRange::new(Token::DateTime(rfc3339), date_range))
     }
 
     fn lex_hexadecimal_byte_data(&mut self) -> Result<TokenWithRange, AsonError> {
@@ -4924,37 +4924,37 @@ hello
 
         assert_eq!(
             lex_from_str_without_location("d\"2024-03-16\"").unwrap(),
-            vec![Token::Date(expect_date1)]
+            vec![Token::DateTime(expect_date1)]
         );
 
         assert_eq!(
             lex_from_str_without_location("d\"2024-03-16T16:30:50Z\"").unwrap(),
-            vec![Token::Date(expect_date2)]
+            vec![Token::DateTime(expect_date2)]
         );
 
         assert_eq!(
             lex_from_str_without_location("d\"2024-03-16T16:30:50z\"").unwrap(),
-            vec![Token::Date(expect_date2)]
+            vec![Token::DateTime(expect_date2)]
         );
 
         assert_eq!(
             lex_from_str_without_location("d\"2024-03-16T16:30:50\"").unwrap(),
-            vec![Token::Date(expect_date2)]
+            vec![Token::DateTime(expect_date2)]
         );
 
         assert_eq!(
             lex_from_str_without_location("d\"2024-03-16t16:30:50\"").unwrap(),
-            vec![Token::Date(expect_date2)]
+            vec![Token::DateTime(expect_date2)]
         );
 
         assert_eq!(
             lex_from_str_without_location("d\"2024-03-16 16:30:50\"").unwrap(),
-            vec![Token::Date(expect_date2)]
+            vec![Token::DateTime(expect_date2)]
         );
 
         assert_eq!(
             lex_from_str_without_location("d\"2024-03-16T16:30:50+08:00\"").unwrap(),
-            vec![Token::Date(expect_date3)]
+            vec![Token::DateTime(expect_date3)]
         );
 
         // Testing the ranges
@@ -4963,11 +4963,11 @@ hello
             lex_from_str("d\"2024-03-16\" d\"2024-03-16T16:30:50+08:00\"").unwrap(),
             vec![
                 TokenWithRange::new(
-                    Token::Date(expect_date1),
+                    Token::DateTime(expect_date1),
                     Range::from_position_and_length(&Position::new(0, 0, 0), 13)
                 ),
                 TokenWithRange::new(
-                    Token::Date(expect_date3),
+                    Token::DateTime(expect_date3),
                     Range::from_position_and_length(&Position::new(14, 0, 14), 28)
                 ),
             ]
@@ -5412,7 +5412,7 @@ hello
                 Token::Colon,
                 Token::OpeningParenthesis, // (
                 Token::Boolean(false),
-                Token::Date(DateTime::parse_from_rfc3339("2000-01-01 10:10:10Z").unwrap()),
+                Token::DateTime(DateTime::parse_from_rfc3339("2000-01-01 10:10:10Z").unwrap()),
                 Token::ClosingParenthesis, // )
                 Token::new_identifier("c"),
                 Token::Colon,

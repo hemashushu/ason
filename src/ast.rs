@@ -62,7 +62,7 @@ pub enum AsonNode {
     DateTime(DateTime<FixedOffset>),
 
     Variant(Variant),
-    ByteData(Vec<u8>),
+    HexadecimalByteData(Vec<u8>),
     List(Vec<AsonNode>),
     NamedList(Vec<NamedListEntry>),
     Tuple(Vec<AsonNode>),

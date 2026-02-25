@@ -102,7 +102,7 @@ For developers, JSON offers additional advantages:
 JSON has a simple syntax and has been around for decades, but it struggles to meet diverse modern needs. Many JSON variants have emerged to address its limitations—such as JSONC (which adds comments) and JSON5 (which allows trailing commas and unquoted object keys). However, these variants still cannot represent data accurately due to limitations like the lack of strong typing. ASON takes a significant step forward based on JSON with the following improvements:
 
 - **Explicit Numeric Types:** ASON numbers can be explicitly typed (e.g., `u8`, `i32`, `f32`, `f64`) ensuring more precise and rigirous data representation. Additionally, integers can be represented in hexadecimal, octal, and binary formats.
-- **New Data Types:** New data types such as `Char`, `DateTime`, and `ByteData` to better represent common data types.
+- **New Data Types:** New data types such as `Char`, `DateTime`, and `HexadecimalByteData` to better represent common data types.
 - **More string formats:** "Multi-line strings", "Concatenate strings", "Raw strings", and "Auto-trimmed strings" are added to enhance string representation.
 - **Separate List and Tuple Types:** ASON distinguishes between `List` (homogeneous elements) and `Tuple` (heterogeneous elements), enhancing data structure clarity.
 - **Separate Named-List and Object Types:** ASON introduces `Named-List` (also called `Map`) alongside `Object` (also called `Struct`), enhancing data structure clarity in further.
