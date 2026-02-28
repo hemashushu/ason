@@ -33,21 +33,21 @@ pub struct NamedListEntry {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Variant {
-    // Variant type name.
+pub struct Enumeration {
+    // Enumeration type name.
     // e.g., the "Option" of "Option::None"
     pub type_name: String,
 
-    // Variant member name.
+    // Variant name.
     // e.g., the "None" of "Option::None"
-    pub member_name: String,
+    pub variant_name: String,
 
     pub value: VariantValue,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum VariantValue {
-    Empty,                     // No value variant
+    Empty,                     // Empty value variant
     Value(Box<AsonNode>),      // Single value variant
     Tuple(Vec<AsonNode>),      // tuple-like variant
     Object(Vec<KeyValuePair>), // object-like variant
@@ -61,7 +61,7 @@ pub enum AsonNode {
     String(String),
     DateTime(DateTime<FixedOffset>),
 
-    Variant(Variant),
+    Enumeration(Enumeration),
     HexadecimalByteData(Vec<u8>),
     List(Vec<AsonNode>),
     NamedList(Vec<NamedListEntry>),
@@ -78,39 +78,39 @@ impl KeyValuePair {
     }
 }
 
-impl Variant {
-    pub fn new(type_name: &str, member_name: &str) -> Self {
+impl Enumeration {
+    pub fn new(type_name: &str, variant_name: &str) -> Self {
         Self {
             type_name: type_name.to_owned(),
-            member_name: member_name.to_owned(),
+            variant_name: variant_name.to_owned(),
             value: VariantValue::Empty,
         }
     }
 
-    pub fn with_value(type_name: &str, member_name: &str, value: AsonNode) -> Self {
+    pub fn with_value(type_name: &str, variant_name: &str, value: AsonNode) -> Self {
         Self {
             type_name: type_name.to_owned(),
-            member_name: member_name.to_owned(),
+            variant_name: variant_name.to_owned(),
             value: VariantValue::Value(Box::new(value)),
         }
     }
 
-    pub fn with_tuple_like(type_name: &str, member_name: &str, values: Vec<AsonNode>) -> Self {
+    pub fn with_tuple_like(type_name: &str, variant_name: &str, values: Vec<AsonNode>) -> Self {
         Self {
             type_name: type_name.to_owned(),
-            member_name: member_name.to_owned(),
+            variant_name: variant_name.to_owned(),
             value: VariantValue::Tuple(values),
         }
     }
 
     pub fn with_object_like(
         type_name: &str,
-        member_name: &str,
+        variant_name: &str,
         key_value_pairs: Vec<KeyValuePair>,
     ) -> Self {
         Self {
             type_name: type_name.to_owned(),
-            member_name: member_name.to_owned(),
+            variant_name: variant_name.to_owned(),
             value: VariantValue::Object(key_value_pairs),
         }
     }

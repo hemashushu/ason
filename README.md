@@ -1,10 +1,10 @@
 # ASON
 
-_ASON_ is a data serialization format that evolved from JSON, featuring strong numeric typing and native support for variant types. With excellent readability and maintainability, ASON is well-suited for configuration files, data transfer, and data storage.
+_ASON_ is a data serialization format that evolved from JSON, featuring strong numeric typing and native support for enumeration types. With excellent readability and maintainability, ASON is well-suited for configuration files, data transfer, and data storage.
 
 **Table of Content**
 
-<!-- @import "[TOC]" {cmd="toc" depthFrom=2 depthTo=6 orderedList=false} -->
+<!-- @import "[TOC]" {cmd="toc" depthFrom=2 depthTo=4 orderedList=false} -->
 
 <!-- code_chunk_output -->
 
@@ -13,7 +13,8 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
 - [3. What improvements does ASON bring over JSON?](#3-what-improvements-does-ason-bring-over-json)
 - [4 Library and APIs](#4-library-and-apis)
   - [4.1 Serialization and Deserialization](#41-serialization-and-deserialization)
-  - [4.2 Parser and Printer](#42-parser-and-printer)
+  - [4.2 Parser and Writer](#42-parser-and-writer)
+  - [4.3 Token Stream Reader and Writer](#43-token-stream-reader-and-writer)
 - [5 ASON Quick Reference](#5-ason-quick-reference)
   - [5.1 Primitive Values](#51-primitive-values)
     - [5.1.1 Digit Separators](#511-digit-separators)
@@ -22,18 +23,16 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
     - [5.1.4 Hexadecimal Floating-Point Numbers](#514-hexadecimal-floating-point-numbers)
     - [5.1.5 Special Floating-Point Numbers](#515-special-floating-point-numbers)
     - [5.1.6 String Presentation](#516-string-presentation)
-      - [5.1.6.1 Multi-Line Strings](#5161-multi-line-strings)
-        - [5.1.6.2 Concatenated Strings](#5162-concatenated-strings)
-        - [5.1.6.3 Auto-Trimmed Strings](#5163-auto-trimmed-strings)
   - [5.2 Compound Values](#52-compound-values)
-    - [5.2.1 Objects](#521-objects)
-    - [5.2.2 Lists](#522-lists)
-    - [5.2.3 Named Lists](#523-named-lists)
-    - [5.2.4 Tuples](#524-tuples)
-    - [5.2.5 Variants](#525-variants)
+    - [5.2.1 Lists](#521-lists)
+    - [5.2.2 Tuples](#522-tuples)
+    - [5.2.3 Objects](#523-objects)
+    - [5.2.4 Named Lists](#524-named-lists)
+    - [5.2.5 Enumerations](#525-enumerations)
+    - [5.2.6 Type of Compound Values](#526-type-of-compound-values)
   - [5.3 Comments](#53-comments)
   - [5.4 Documents](#54-documents)
-- [6 Mapping between ASON and Rust Data Types](#6-mapping-between-ason-and-rust-data-types)
+- [6 Mapping between Rust Data Types and ASON Types](#6-mapping-between-rust-data-types-and-ason-types)
   - [6.1 Structs](#61-structs)
   - [6.2 Vecs](#62-vecs)
   - [6.3 HashMaps](#63-hashmaps)
@@ -76,7 +75,7 @@ An example of ASON document:
         name: "HttpClient"
         version: "1.0.1"
     }
-    variant: Option::None
+    variant_without_value: Option::None
     variant_with_value: Option::Some(123)
     variant_with_tuple_like_value: Color::RGB(255, 127, 63)
     variant_with_object_like_value: Shape::Rect{
@@ -90,7 +89,7 @@ An example of ASON document:
 
 There are many solid data serialization formats available today, such as JSON, YAML, TOML and XML. They are all designed to be readble and writable by both humans and machines.
 
-The differences between these formats are minor for small datasets, but become more pronounced as datasets grow or structures become more complex. For example, YAML's indentation-based syntax can cause errors in large documents, and TOML's limited support for complex structures can make representing hierarchical data cumbersome. JSON, by contrast, is designed to stay simple, consistent, and expressive at any scale.
+The differences between these formats are minor for small datasets, but become more pronounced as datasets grow or structures become more complex. For example, YAML's indentation-based syntax can cause errors in editing large documents, and TOML's limited support for complex structures can make representing hierarchical data cumbersome. JSON, by contrast, is designed to stay simple, consistent, and expressive at any scale.
 
 For developers, JSON offers additional advantages:
 
@@ -99,25 +98,24 @@ For developers, JSON offers additional advantages:
 
 ## 3. What improvements does ASON bring over JSON?
 
-JSON has a simple syntax and has been around for decades, but it struggles to meet diverse modern needs. Many JSON variants have emerged to address its limitations—such as JSONC (which adds comments) and JSON5 (which allows trailing commas and unquoted object keys). However, these variants still cannot represent data accurately due to limitations like the lack of strong typing. ASON takes a significant step forward based on JSON with the following improvements:
+JSON has a simple syntax and has been around for decades, but it struggles to meet diverse modern needs. Many JSON variants have emerged to address its limitations—such as JSONC (which adds comments) and JSON5 (which allows trailing commas and unquoted object keys). However, these variants still cannot represent data accurately due to JSON has a limited type system and lacks fine-grained numeric and domain-specific data types. ASON takes a significant step forward based on JSON with the following improvements:
 
 - **Explicit Numeric Types:** ASON numbers can be explicitly typed (e.g., `u8`, `i32`, `f32`, `f64`) ensuring more precise and rigirous data representation. Additionally, integers can be represented in hexadecimal, octal, and binary formats.
 - **New Data Types:** New data types such as `Char`, `DateTime`, and `HexadecimalByteData` to better represent common data types.
 - **More string formats:** "Multi-line strings", "Concatenate strings", "Raw strings", and "Auto-trimmed strings" are added to enhance string representation.
-- **Separate List and Tuple Types:** ASON distinguishes between `List` (homogeneous elements) and `Tuple` (heterogeneous elements), enhancing data structure clarity.
-- **Separate Named-List and Object Types:** ASON introduces `Named-List` (also called `Map`) alongside `Object` (also called `Struct`), enhancing data structure clarity in further.
-- **Native Variant Type Support:** ASON natively supports variant types (also known as _algebraic types_ or _enumerations_). This enables seamless serialization of complex data structures from high-level programming languages.
-- **Eliminating the Null Value:** ASON uses the `Option` variant to represent optional values, eliminating the error-prone `null` value and `undefined`.
-- **Familiar to JSON Users:** ASON is designed to resemble JSON, making it easy for JSON users to learn and adopt.
+- **Separate List and Tuple:** ASON distinguishes between `List` (homogeneous elements) and `Tuple` (heterogeneous elements), enhancing data structure clarity.
+- **Separate Named-List and Object:** ASON introduces `Named-List` (also called `Map`) alongside `Object` (also called `Struct`), enhancing data structure clarity in further.
+- **Native Enumerations Support:** ASON natively supports enumerations types (also known as _Algebraic types_ or _Variants_). This enables seamless serialization of complex data structures from high-level programming languages.
+- **Eliminating the Null Value:** ASON uses the `Option` enumeration to represent optional values, eliminating the error-prone `null` value.
 - **Simple and Consistent:** ASON supports comments, unquoted object field names, trailing commas, and whitespace-separated elements (in addition to commas). These features enhance writing fluency.
 
-In addition to the text format, ASON provides a binary format called _ASONB_ (ASON Binary) for efficient data storage and transmission, supporting incremental storage, memory-mapped file access, and fast random access.
+In addition to the text format, ASON provides a binary format called _ASONB_ (ASON Binary) for efficient data storage and transmission. ASONB supports incremental storage, memory-mapped file access, and fast random access.
 
-It is worth noting that ASON is not compatible with JSON, but conversion between ASON and JSON is straightforward, and implementing an ASON parser is also simple.
+While ASON is designed to resemble JSON, making it easy for JSON users to learn and adopt, it is not compatible with JSON, but conversion between ASON and JSON is straightforward, and implementing an ASON parser is also simple.
 
 ## 4 Library and APIs
 
-The Rust [ason](https://github.com/hemashushu/ason) library provides AST (Abstract Syntax Tree) level ASON access, and [serde_ason](https://github.com/hemashushu/serde_ason) provides [serde](https://github.com/serde-rs/serde) based for serialization and deserialization.
+The Rust [ason](https://github.com/hemashushu/ason) library provides AST (Abstract Syntax Tree) and Token level ASON access, and [serde_ason](https://github.com/hemashushu/serde_ason) provides [serde](https://github.com/serde-rs/serde) based for serialization and deserialization.
 
 In general, it is recommended to use the serde API since it is simple enough to meet most needs.
 
@@ -130,8 +128,8 @@ Consider the following ASON document:
     name: "foo"
     version: "0.1.0"
     dependencies: [
-        "registry.domain/user/random@1.0.1"
-        "registry.domain/user/regex@2.0.0"
+        "random@1.0.1"
+        "regex@2.0.0"
     ]
 }
 ```
@@ -149,35 +147,37 @@ struct Package {
 
 The struct needs to be annotated with a `derive` attribute, in which `Serialize` and `Deserialize` are traits provided by the _serde_ serialization framework.
 
-The following code shows how to use the serde API `ason::from_str` for deserializing the ASON document into a Rust struct instance:
+The following code shows how to use the serde API `ason::serde::from_str` for deserializing the ASON document into a Rust struct instance:
 
 ```rust
 let text = "..."; // The above ASON document
-let package = from_str::<Package>(text).unwrap();
+let package = from_str::<Package>(text).unwrap(); // Now you get a `Package` struct instance
 ```
 
-And serialize a Rust struct instance to string with `ason::to_string` function:
+You can serialize a Rust struct instance to string with `ason::serde::to_string` function:
 
 ```rust
 let package = Package{
     name: String::new("foo"),
     version: String::new("0.1.0"),
     dependencies: vec![
-        String::new("registry.domain/user/random@1.0.1"),
-        String::new("registry.domain/user/regex@2.0.0"),
+        String::new("random@1.0.1"),
+        String::new("regex@2.0.0"),
     ],
 };
 let text = to_string(&package);
+// The `text` should be resemble the above ASON document
 ```
 
-### 4.2 Parser and Printer
+### 4.2 Parser and Writer
 
-The `ason::parse_from_str` function is used to parse the ASON document into AST:
+You can parse the ASON document into AST object using the `ason::parser::parse_from_str` function:
 
 ```rust
 let text = "..."; // The above ASON document
-let node = parse_from_str(text).unwrap();
+let node = parse_from_str(text).unwrap(); // Now you get an AST object of type `AsonNode`
 
+// Let's verify the structure of the AST object
 assert_eq!(
     node,
     AsonNode::Object(vec![
@@ -192,20 +192,98 @@ assert_eq!(
         KeyValuePair {
             key: String::from("dependencies"),
             value: Box::new(AsonNode::List(vec![
-                AsonNode::String(String::from("registry.domain/user/random@1.0.1")),
-                AsonNode::String(String::from("registry.domain/user/regex@2.0.0"))
+                AsonNode::String(String::from("random@1.0.1")),
+                AsonNode::String(String::from("regex@2.0.0"))
             ]))
         }
     ])
 );
 ```
 
-And, the function `ason::print_to_string` is used to format the AST into text:
+You can also turn the AST object into a string using the `ason::writer::write_to_string` function:
 
 ```rust
-let text = print_to_string(&node);
+let text = write_to_string(&node);
 // The `text` should be resemble the above ASON document
 ```
+
+Since AST object lacks some information such as comments, whitespace, the original string format (e.g., multi-line string, raw string, etc.), and the original numeric types (e.g., hexadecimal, octal, binary), so the output text may not be exactly the same as the input text, do not use the writer for formatting ASON documents.
+
+### 4.3 Token Stream Reader and Writer
+
+ASON Rust library also provides a token stream reader and writer for even more low-level access to ASON documents.
+
+Consider the following ASON document:
+
+```json5
+{
+    id: 123
+}
+```
+
+The token stream reader can be used to read the document token by token:
+
+```rust
+let text = "..."; // The above ASON document
+let mut reader = stream_from_str(text);
+
+// The first token should be the opening brace `{`.
+// `reader.next()` returns `Option<Result<Token, AsonError>>`,
+// so we need to unwrap the `Option` first.
+let first_result = reader.next().unwrap();
+assert!(first_result.is_ok());
+
+let first_token = first_result.unwrap();
+assert_eq!(first_token, Token::OpeningBrace);
+
+// The next token should be the identifier `id`.
+assert_eq!(
+    reader.next().unwrap().unwrap(),
+    Token::Identifier("id".to_string())
+);
+
+// The next token should be the colon `:`.
+assert_eq!(reader.next().unwrap().unwrap(), Token::Colon);
+
+// The next token should be the number `123`, which is of type `i32` by default.
+assert_eq!(
+    reader.next().unwrap().unwrap(),
+    Token::Number(NumberToken::I32(123))
+);
+
+// The last token should be the closing brace `}`.
+assert_eq!(reader.next().unwrap().unwrap(), Token::ClosingBrace);
+
+// There should be no more tokens.
+assert!(reader.next().is_none());
+```
+
+Token stream reader does not verify the syntax of the document while it checks the validity of each token, it is generally used for syntax highlighting and linting, or reading large documents without loading the entire document into memory.
+
+There is also a token stream writer for writing tokens into a stream, which is typically used for generating ASON documents incrementally.
+
+```rust
+let mut output = Vec::new(); // Or other types of output stream
+
+let mut writer = TokenStreamWriter::new(&mut output);
+writer.print_token(&Token::OpeningBrace)?;
+writer.print_token(&Token::Identifier("id".to_owned()))?;
+writer.print_token(&Token::Colon)?;
+writer.print_space()?;
+writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+writer.print_space()?;
+writer.print_token(&Token::Identifier("name".to_owned()))?;
+writer.print_token(&Token::Colon)?;
+writer.print_space()?;
+writer.print_token(&Token::String("Alice".to_owned()))?;
+writer.print_token(&Token::ClosingBrace)?;
+
+// Verify the output
+let text = String::from_utf8(output).unwrap();
+assert_eq!(text, "\n{    id: 123 name: \"Alice\"\n}");
+```
+
+Similar to the token stream reader, the token stream writer does not verify the token sequence, it can write any string (including comments and whitespace) as you want, it is just a thin wrapper around the output stream.
 
 ## 5 ASON Quick Reference
 
@@ -406,13 +484,109 @@ The two strings are equivalent to `"Hello"` and `"Earth\n  &\nMars"`.
 
 ### 5.2 Compound Values
 
-ASON supports the following compound value types: Objects, Lists, Named Lists, Tuples and Variants.
+ASON supports the following compound value types: Lists, Tuples, Objects, Named Lists and Enumerations.
 
-#### 5.2.1 Objects
+#### 5.2.1 Lists
 
-An _Object_ can contain multiple values, each with a name called a _key_. The keys are _identifiers_ which are similar to strings but without quotation marks (`"`). A combination of a key and a value is called a _key-value pair_.
+A List is a collection of values, for example, this is a List of integers:
 
-In other words, an Object is a collection of key-value pairs. For example:
+```json5
+[11, 13, 17, 19]
+```
+
+And this is a List of strings:
+
+```json5
+["Alice", "Bob", "Carol", "Dan"]
+```
+
+All the elements in a List must be of the same type. For example, the following List is invalid because it contains both integers and strings:
+
+```json5
+[11, 13, "Alice", "Bob"]    // invalid list
+```
+
+##### 5.2.1.1 Element Separators
+
+The elements in a List can also be written on separate lines, with optional commas at the end of each line:
+
+```json5
+[
+    "Alice",
+    "Bob",
+    "Carol",
+    "Dan",  // Tail comma is allowed.
+]
+```
+
+A comma following the last element (tail comma) is allowed, this feature is primarily intended to make it easy to reorder elements when editing multi-line lists.
+
+Commas in ASON are used as separators for readability, but they are not mandatory. Therefore, the following List is valid and is equivalent to the above List:
+
+```json5
+[
+    "Alice"  // Commas can be omitted.
+    "Bob"
+    "Carol"
+    "Dan"
+]
+```
+
+Whitespace (such as spaces, tabs, and line breaks) can also be used as separators, so the following List is also valid:
+
+```json5
+["Alice" "Bob" "Carol" "Dan"]
+```
+
+> In ASON, commas are optional and whitespace can be used as separators.
+
+##### 5.2.1.2 Number of Elements
+
+The number of elements in a List is variable, even a List with no elements (called an empty list) is valid:
+
+```json5
+[] // An empty list.
+```
+
+#### 5.2.2 Tuples
+
+A Tuple is a collection of values with different data types, for example:
+
+```json5
+(11, "Alice", true)
+```
+
+As described above, commas in ASON are optional and whitespace can be used as separators, so the following Tuple are identical to the above Tuple:
+
+```json5
+(11 "Alice" true)
+```
+
+```json5
+(
+  11,
+  "Alice",
+  true,
+)
+```
+
+```json5
+(
+  11
+  "Alice"
+  true
+)
+```
+
+Tuples are different from Lists in that:
+
+- The elements in a Tuple can be of different data types, while the elements in a List must be of the same data type.
+- The amount of elements in a Tuple is fixed, while the amount of elements in a List is dynamic.
+- Tuples are enclosed in parentheses (`(...)`), while Lists are enclosed in square brackets (`[...]`).
+
+#### 5.2.3 Objects
+
+An Object is a collection of key-value pairs, where the key is an identifier and the value can be any type.
 
 ```json5
 {
@@ -422,13 +596,20 @@ In other words, an Object is a collection of key-value pairs. For example:
 }
 ```
 
-Key-value pairs are separated by commas (the last key-value pair can also be followed by a comma) or whitespace (such as spaces, tabs, and line breaks). Thus the followings Objects are all identical:
+The keys are _identifiers_ which are similar to strings but without quotation marks (`"`). An identifier must start with a letter (a-z, A-Z) or an underscore (`_`), followed by any combination of letters, digits (0-9), and underscores. For example, `name`, `version`, `_edition`, `foo_bar123` are all valid identifiers.
+
+> Objects are also called Structs in some programming languages.
+
+Key-value pairs in an Object can be separated by commas, whitespace, or line breaks, the following Objects are all identical:
 
 ```json5
 // separated by commas
 { name: "ason", version: "1.0.1", edition: "2021" }
 
-// separated by whitespace
+// separated by commas, and an additional tail comma
+{ name: "ason", version: "1.0.1", edition: "2021",}
+
+// separated by spaces
 { name: "ason" version: "1.0.1" edition: "2021" }
 
 // separated by line breaks
@@ -438,7 +619,7 @@ Key-value pairs are separated by commas (the last key-value pair can also be fol
     edition: "2021"
 }
 
-// separated by commas and line breaks
+// separated by both commas and line breaks
 {
     name: "ason",
     version: "1.0.1",
@@ -446,115 +627,26 @@ Key-value pairs are separated by commas (the last key-value pair can also be fol
 }
 ```
 
-A comma at the end of the last key-value pair (which is called a trailing comma) is allowed in ASON, this feature is primarily intended to make it easy to reorder key-value pairs when editing multi-line objects.
-
-> In ASON, commas are optional and whitespace can be used as separators.
-
-The values within an Object can be any type, including primitive values (such as numbers, strings, dates) and compound values (such as Lists, Objects, Tuples). In the real world, an Object usually contains other Objects, for example:
+The values within an Object can be any type, including primitive values and compound values. In the real world, an Object usually contains other Objects and Lists, for example:
 
 ```json5
 {
     name: "ason"
     version: "1.0.1"
-    edition: "2021"
-    dependencies: {
-        serde: "1.0"
-        chrono: "0.4"
+    author: {
+        name: "Alice"
+        email: "alice@example.com"
     }
-    dev_dependencies: {
-        pretty_assertions: "1.4"
-    }
+    dependencies: [
+        "serde@1.0"
+        "chrono@0.4"
+    ]
 }
 ```
 
-#### 5.2.2 Lists
+#### 5.2.4 Named Lists
 
-A List is a collection of values of the same data type, for example:
-
-```json5
-[11, 13, 17, 19]
-```
-
-Similar to objects, the elements in a List can also be written on separate lines, with optional commas at the end of each line, and a comma is allowed at the end of the last element. For example:
-
-```json5
-[
-    "Alice",
-    "Bob",
-    "Carol",
-    "Dan",  // Note that ths comma is allowed.
-]
-```
-
-and
-
-```json5
-[
-    "Alice"  // Note that commas can be omitted.
-    "Bob"
-    "Carol"
-    "Dan"
-]
-```
-
-The elements in List can be of any data type, but all the elements in a List must be of the same type. For instance, the following List is invalid:
-
-```json5
-// invalid list due to inconsistent data types of elements
-[11, 13, "Alice", "Bob"]
-```
-
-If the elements in a List are Objects, then the keys in each object, as well as the data type of the corresponding values, must be consistent. In other words, the type of object is determined by the type of all key-value pairs, and the type of key-value pair is determined by the key name and data type of the value. For example, the following List is valid:
-
-```json5
-[
-    {
-        id: 123
-        name: "Alice"
-    }
-    {
-        id: 456
-        name: "Bob"
-    }
-]
-```
-
-While the following List is invalid:
-
-```json5
-[
-    {
-        id: 123
-        name: "Alice"
-    }
-    {
-        id: 456
-        name: 'A'   // The data type of the value is not consistent.
-    }
-    {
-        id: 789
-        addr: "Green St." // The key name is not consistent.
-    }
-]
-```
-
-If the elements in a List are Lists, then the data type of the elements in each sub-list must be the same. In other words, the type of List is determined by the data type of its elements. But the number of elements is irrelevant, for instance, the following list is valid:
-
-```json5
-[
-    [11, 13, 17] // The length of this list is 3.
-    [101, 103, 107, 109] // A list of length 4 is Ok.
-    [211, 223] // This list has length 2 is also Ok.
-]
-```
-
-In the example above, although the length of each sub-list is different, since the type of a List is determined ONLY by the type of its elements, the types of these sub-lists are asserted to be the same, and therefore it is a valid List.
-
-#### 5.2.3 Named Lists
-
-TODO
-
-<!-- A Map is a list composed of one or more key-value pairs. In appearance, a Map is similar to an Object, but the keys of items in a Map are typically strings or numbers (primitive data types), rather than identifiers. Additionally, a Map is a special kind of list, so it is enclosed in square brackets (`[...]`) instead of curly braces (`{...}`). -->
+Named Lists are special Lists that each value is associated with a name, we call such elements "name-value pairs". The following is an example of a Named List which consists of string-string pairs:
 
 ```json5
 [
@@ -564,82 +656,40 @@ TODO
 ]
 ```
 
-#### 5.2.4 Tuples
-
-A Tuple can be considered as an Object that omits the keys, for example:
+The names are typically strings or numbers, other types are also allowed. For example, the following is a Named List that consists of integer-string pairs:
 
 ```json5
-(11, "Alice", true)
+[
+    0xff0000: "red"
+    0x00ff00: "green"
+    0x0000ff: "blue"
+]
 ```
 
-Tuples are similar in appearance to Lists, but Tuples do not require the data types of each element to be consistent. Secondly, both the data type and number of the elements are part of the type of Tuple, for example `("Alice", "Bob")` and `("Alice", "Bob", "Carol")` are different types of Tuples because they don't have the same number of elements.
+> Named Lists are also called Maps in some programming languages.
 
-Similar to Objects and Lists, the elements of a Tuple can also be written on separate lines, with optional commas at the end of each line, and there can be a comma at the end of the last element. For example:
+Named Lists are different from Objects in that:
 
-```json5
-(
-    "Alice",
-    11,
-    true, // Note that ths comma is allowed.
-)
-```
+- The keys in an Object are identifiers, while the names in a Named List can be of any type.
+- The amount of key-value pairs in an Object is fixed, while the amount of name-value pairs in a Named List is dynamic.
+- Objects are enclosed in curly braces (`{...}`), while Named Lists are enclosed in square brackets (`[...]`).
 
-and
+#### 5.2.5 Enumerations
 
-```json5
-(
-    "Alice" // Note that commas can be omitted.
-    11
-    true
-)
-```
+An Enumeration is a custom data type that consists of a type name and a set of variants. Each variant can optionally carry a value. The following demonstrates an Enumeration type named `Option` with two variants: `None` and `Some`, where `None` does not carry a value, while `Some` carries a value of type integer:
 
-#### 5.2.5 Variants
-
-Variants also called enumeration. A Variant is a data type that can have multiple named members, and each member can optionally carry a value. Variants are useful for representing data that can take on different forms.
-
-A Variant consists of three parts: the Variant type name, the Variant member name, and the optional member value. For example:
-
-```json5
-// Variant without value.
+```json
 Option::None
-```
-
-and
-
-```json5
-// Variant with a value.
 Option::Some(11)
 ```
 
-In the two Variants in the above example, "Option" is the Variant type name, "None" and "Some" are the Variant member names, and "11" is the Variant member value.
+> Enumerations are also known as _Algebraic types_ or _Variants_ in some programming languages.
 
-The types are the same as long as the Variant type names are the same. For example, `Color::Red` and `Color::Green` are of the same type, while `Option::None` and `Color::Red` are of different types.
-
-If a Variant member carries a value, then the type of the value is also part of the type of the Variant member. For example, `Option::Some(11)` and `Option::Some(13)` are of the same types, but `Option::Some(11)` and `Option::Some("John")` are of different types.
-
-Therefore, the following List is valid because all elements have the same Variant type name and the member `Some` has the same type:
+A Variant can carry a value of any type, such as List, Object or Tuple:
 
 ```json5
-[
-    Option::None
-    Option::Some(11)
-    Option::None
-    Option::Some(13)
-]
+Option::Some([11, 13, 17])
 ```
-
-However, the following List is invalid, although the variant type names of all the elements are consistent, the type of the member `Some` is inconsistent:
-
-```json5
-[
-    Option::None
-    Option::Some(11)
-    Option::Some("John") // The type of this member is not consistent.
-]
-```
-
-A Variant member can carry a value of any type, such as an Object:
 
 ```json5
 Option::Some({
@@ -648,16 +698,14 @@ Option::Some({
 })
 ```
 
-Or a Tuple:
-
 ```json5
-Option::Some((211, 223))
+Option::Some((1, "foo", true))
 ```
 
-In fact, a Variant member can also carry directly multiple values, which can be either Object-style or Tuple-style, for example:
+There are also Object-like and Tuple-like variants, these forms are more convenient when the variant carries multiple values, for example:
 
 ```json5
-// Object-style variant member
+// Object-like variant
 Shape::Rectangle{
     width: 307
     height: 311
@@ -667,20 +715,71 @@ Shape::Rectangle{
 and
 
 ```json5
-// Tuple-style variant member
+// Tuple-like variant
 Color::RGB(255, 127, 63)
 ```
 
+#### 5.2.6 Type of Compound Values
+
+Similar to primitive values, compound values also have their own types. When deserializing an ASON document into values of a programming language, the type of compound values must match the expected type, otherwise deserialization will fail.
+
+> List requires all elements to be of the same type, if a List contains compound values, the type of the compound values must also be consistent.
+
+##### 5.2.6.1 Type of Lists
+
+The type of a List is determined by the type of its elements. For example, a List of integers has the type `[i32]`, a List of strings has the type `[String]`.
+
+Since the amount of elements in a List is variable, the type of a List does not depend on the number of elements. For example, `[11, 13, 17]` and `[101, 103, 107, 109]` are both of type `[i32]`, even though the first List has 3 elements while the second List has 4 elements.
+
+##### 5.2.6.2 Type of Tuples
+
+The type of a Tuple is determined by the type and order of its elements. For example, the Tuple `(11, "Alice", true)` has the type `(i32, String, bool)`, while the Tuple `("Bob", 3.14)` has the type `(String, f64)`.
+
+##### 5.2.6.3 Type of Objects
+
+The type of an Object is determined by the keys and the corresponding value types. For example, the Object
+
+```json5
+{
+    id: 123
+    name: "Alice"
+}
+```
+
+has the type `{ id: i32, name: String }`.
+
+Note that some programming languages allow default values for missing fields in an Object, in such cases, the type of `{id: 123, name: "Alice"}` and `{id: 123}` can both be `{ id: i32, name: String }`, because the `name` field can be filled with a default value when it is missing.
+
+But `{id: 123, user: "Bob"}` and `{id: 123, user: {name: "Bob", email: "bob@example.com"}}` are not of the same type, because the type of `user` field is different in the two Objects.
+
+##### 5.2.6.4 Type of Named Lists
+
+The type of a Named List is determined by the type of its name-value pairs. For example, the Named List
+
+```json5
+[
+    "red": 0xff0000
+    "green": 0x00ff00
+    "blue": 0x0000ff
+]
+```
+
+has the type `[String: i32]`.
+
+##### 5.2.6.5 Type of Enumerations
+
+The type of an Enumeration is determined by its type name. For example, the Enumeration `Option` has the type `Option`, and the Enumeration `Shape` has the type `Shape`.
+
 ### 5.3 Comments
 
-Like JavaScript and C/C++, ASON also supports two types of comments: line comments and block comments. Comments are for human readability and are completely ignored by the parser.
+Like JavaScript, C/C++ and Rust, ASON also supports two types of comments: line comments and block comments. Comments are for human readability and are completely ignored by the parser.
 
 Line comments start with the `//` symbol and continue until the end of the line. For example:
 
 ```json5
 // This is a line comment.
 {
-    id: 123 // This is also a line comment.
+    id: 123     // This is another line comment.
     name: "Bob"
 }
 ```
@@ -698,7 +797,7 @@ Block comments start with the `/*` symbol and end with the `*/` symbol. For exam
 }
 ```
 
-Unlike JavaScript and C/C++, ASON block comments support nesting. For example:
+Unlike JavaScript, C/C++ and Rust, ASON block comments support nesting. For example:
 
 ```json5
 /* 
@@ -710,28 +809,28 @@ Unlike JavaScript and C/C++, ASON block comments support nesting. For example:
 */  
 ```
 
-The nesting feature of block comments makes it more convenient for us to comment on a piece of code that **already has a block comment**. If block comments do not support nesting like JavaScript and C/C++, we need to remove the inner block comment first before adding a comment to the outer layer, because the inner block comment symbol `*/` will end the outer block comments, no doubt this is an annoying issue.
+The nesting feature of block comments makes it more convenient for us to comment on a piece of code that **already has a block comment**.
 
 ### 5.4 Documents
 
-An ASON document can only contain one value (one primitive value or one compound value), like JSON, a typical ASON document is usually an Object or a List. In fact, all types of values are allowed, not limited to Objects or Lists. For example, a Tuple, a Variant, even a number or a string is allowed. Just make sure that a document has exactly one value. For example, the following are both valid ASON documents:
+The root of an ASON document can only be a single value, which can be either a primitive value or a compound value. A typical ASON document is usually an Object or a List, however, all types of values are allowed, such as a single number, a string, a Tuple, etc. The following two are valid ASON documents:
 
 ```json5
-// Valid ASON document.
+// The root is a Tuple.
 (11, "Alice", true)
 ```
 
 and
 
 ```json5
-// Valid ASON document.
+// The root is a string.
 "Hello World!"
 ```
 
 While the following two are invalid:
 
 ```json5
-// Invalid ASON document because there are 2 values.
+// There are 2 values at the root
 (11, "Alice", true)
 "Hello World!"
 ```
@@ -739,15 +838,15 @@ While the following two are invalid:
 and
 
 ```json5
-// Invalid ASON document because there are 3 values.
+// There are 3 values at the root
 11, "Alice", true
 ```
 
-## 6 Mapping between ASON and Rust Data Types
+## 6 Mapping between Rust Data Types and ASON Types
 
-ASON natively supports most Rust data types, including Tuples, Enums and Vectors. Because ASON is also strongly data typed, both serialization and deserialization can ensure data accuracy. In fact, ASON is more compatible with Rust's data types than other data formats (such as JSON, YAML and TOML).
+ASON natively supports most Rust data types, including Tuples, Enums and Vectors. Because ASON is also strongly numeric typed, both serialization and deserialization can ensure data accuracy.
 
-> ASON is a data format that is perfectly compatible with Rust's data types.
+> ASON is perfectly compatible with Rust's data type system.
 
 The following is a list of supported Rust data types:
 
@@ -758,14 +857,14 @@ The following is a list of supported Rust data types:
 - String
 - Array, such as `[i32; 4]`
 - Vec
+- Tuple
 - Struct
 - HashMap
-- Tuple
 - Enum
 
 ### 6.1 Structs
 
-In general, we use structs in Rust to store a group of related data. Rust structs correspond to ASON `Object`. The following is an example of a struct named "User" and its instance `s1`:
+Rust structs correspond to ASON `Object`. The following is an example of a struct named "User":
 
 ```rust
 #[derive(Serialize, Deserialize)]
@@ -773,14 +872,9 @@ struct User {
     id: i32,
     name: String
 }
-
-let s1 = User {
-    id: 123,
-    name: String::from("John")
-};
 ```
 
-The corresponding ASON text for instance `s1` is:
+The following is an example ASON document for an instance of `User`:
 
 ```json5
 {
@@ -804,18 +898,9 @@ struct Address {
     city: String,
     street: String
 }
-
-let s2 = User {
-    id: 123,
-    name: String::from("John"),
-    address: Box::new(Address{
-        city: String::from("Shenzhen"),
-        street: String::from("Xinan")
-    })
-}
 ```
 
-The corresponding ASON text for instance `s2`:
+An example ASON document for above struct `User` is:
 
 ```json5
 {
@@ -823,14 +908,14 @@ The corresponding ASON text for instance `s2`:
     name: "John"
     address: {
         city: "Shenzhen"
-        street: "Xinan"
+        street: "Xin'an"
     }
 }
 ```
 
 ### 6.2 Vecs
 
-`Vec` (vector) is another common data structure in Rust, which is used for storing a series of similar data. `Vec` corresponds to ASON `List`. The following code demonstrates adding a field named `orders` to the struct `User` to store order numbers:
+`Vec` corresponds to ASON `List`. The following code demonstrates adding a field named `orders` to the struct `User` to store order numbers:
 
 ```rust
 #[derive(Serialize, Deserialize)]
@@ -839,15 +924,9 @@ struct User {
     name: String,
     orders: Vec<i32>
 }
-
-let v1 = User {
-    id: 123,
-    name: String::from("John"),
-    orders: vec![11, 13, 17, 19]
-};
 ```
 
-The corresponding ASON text for instance `v1` is:
+The following is an example ASON document for an instance of `User`:
 
 ```json5
 {
@@ -857,7 +936,7 @@ The corresponding ASON text for instance `v1` is:
 }
 ```
 
-The elements in a vector can be either simple data (such as `i32` in the above example) or complex data, such as struct. The following code demonstrates adding a field named `addresses` to the struct `User` to store shipping addresses:
+The elements in a vector can be also complex data, such as struct. The following code demonstrates adding a field named `addresses` to the struct `User`:
 
 ```rust
 #[derive(Serialize, Deserialize)]
@@ -872,24 +951,9 @@ struct Address {
     city: String,
     street: String
 }
-
-let v2 = User {
-    id: 123,
-    name: String::from("John"),
-    address: vec![
-        Address {
-            city: String::from("Guangzhou"),
-            street: String::from("Tianhe")
-        },
-        Address {
-            city: String::from("Shenzhen"),
-            street: String::from("Xinan")
-        },
-    ]
-};
 ```
 
-The corresponding ASON text for instance `v2` is:
+An example ASON document for above struct `User` is:
 
 ```json5
 {
@@ -898,11 +962,11 @@ The corresponding ASON text for instance `v2` is:
     addresses: [
         {
             city: "Guangzhou"
-            street: "Tianhe"
+            street: "Tian'he"
         }
         {
             city: "Shenzhen"
-            street: "Xinan"
+            street: "Xin'an"
         }
     ]
 }
@@ -910,116 +974,56 @@ The corresponding ASON text for instance `v2` is:
 
 ### 6.3 HashMaps
 
-Rust's HashMap corresponds to ASON's Map, e.g. the following creates a HashMap instance `m1` of type `<String, Option<String>>`:
+Rust's HashMap corresponds to ASON's Map, e.g. the following is a HashMap with key type `String` and value type `i32`:
 
 ```rust
-let mut m1 = HashMap::<String, Option<String>>::new();
-m1.insert("foo".to_owned(), Some("hello".to_owned()));
-m1.insert("bar".to_owned(), None);
-m1.insert("baz".to_owned(), Some("world".to_owned()));
+let mut m1 = HashMap::<String, i32>::new();
+m1.insert("foo".to_owned(), 11);
+m1.insert("bar".to_owned(), 22);
+m1.insert("baz".to_owned(), 33);
 ```
 
-The corresponding ASON text for instance `m1` is:
+The corresponding ASON document for instance `m1` is:
 
 ```json5
 {
-    "foo": Option::Some("hello")
-    "bar": Option::None
-    "baz": Option::Some("world")
+    "foo": 11
+    "bar": 22
+    "baz": 33
 }
 ```
 
 ### 6.4 Tuples
 
-There is another common data type _tuple_ in Rust, which can be considered as structs with omitted field names. Tuple just corresponds to ASON `Tuple`.
+Tuple in Rust can be considered as structs with omitted field names. Tuple just corresponds to ASON `Tuple`.
 
-For example, in the above example, if you want the order list to include not only the order number but also the order status, you can use the Tuple `(i32, String)` to replace `i32`. The modified code is:
+For example, the following code demonstrates a vector of tuples, where each tuple consists of an integer and a string:
 
 ```rust
-#[derive(Serialize, Deserialize)]
-struct User {
-    id: i32,
-    name: String,
-    orders: Vec<(i32, String)>
-}
-
-let t1 = User {
-    id: 123,
-    name: String::from("John"),
-    orders: vec![
-        (11, String::from("ordered"),
-        (13, String::from("shipped"),
-        (17, String::from("delivered"),
-        (19, String::from("cancelled")
-    ]
-};
+let orders = vec![
+    (11, String::from("ordered"),
+    (13, String::from("shipped"),
+    (17, String::from("delivered"),
+    (19, String::from("cancelled")
+]
 ```
 
-The corresponding ASON text for instance `v1` is:
+The corresponding ASON document for instance `orders` is:
 
 ```json5
-{
-    id: 123
-    name: "John"
-    orders: [
-        (11, "ordered")
-        (13, "shipped")
-        (17, "delivered")
-        (19, "cancelled")
-    ]
-}
+[
+    (11, "ordered")
+    (13, "shipped")
+    (17, "delivered")
+    (19, "cancelled")
+]
 ```
 
-It should be noted that in some programming languages, tuples and vectors are not clearly distinguished, but in Rust they are completely different data types. Vectors require that all elements have the same data type (Rust arrays are similar to vectors, but vectors have a variable number of elements, while arrays have a fixed size that cannot be changed after creation), while tuples do not require that their member data types be the same, but do require a fixed number of members. ASON's definition of `Tuple` is consistent with Rust's.
+In some programming languages, tuples and vectors are not clearly distinguished, but in Rust they are completely different data types. Vectors require that all elements have the same data type, while tuples require a fixed number and type of members. ASON's definition of `Tuple` is consistent with this convention.
 
 ### 6.5 Enums
 
-In the above example, the order status is represented by a string. From historical lessons, we know that a better solution is to use an enum. Rust enum corresponds to ASON `Variant`. The following code uses the enum `Status` to replace the `String` in `Vec<(i32, String)>`.
-
-```rust
-#[derive(Serialize, Deserialize)]
-enum Status {
-    Ordered,
-    Shipped,
-    Delivered,
-    Cancelled
-}
-
-#[derive(Serialize, Deserialize)]
-struct User {
-    id: i32,
-    name: String,
-    orders: Vec<(i32, Status)>
-}
-
-let e1 = User {
-    id: 123,
-    name: String::from("John"),
-    orders: vec![
-        (11, Status::Ordered),
-        (13, Status::Shipped),
-        (17, Status::Delivered),
-        (19, Status::Cancelled)
-    ]
-};
-```
-
-The corresponding ASON text for instance `e1` is:
-
-```json5
-{
-    id: 123
-    name: "John"
-    orders: [
-        (11, Status::Ordered)
-        (13, Status::Shipped)
-        (17, Status::Delivered)
-        (19, Status::Cancelled)
-    ]
-}
-```
-
-Rust enum type is actually quite powerful, it can not only represent different categories of something but also carry data. For example, consider the following enum `Color`:
+Rust enum corresponds to ASON Enumeration. The following code defines an enum named `Color` with four variants: `Transparent`, `Grayscale`, `Rgb` and `Hsl`.
 
 ```rust
 #[derive(Serialize, Deserialize)]
@@ -1035,14 +1039,7 @@ enum Color {
 }
 ```
 
-There are four types of values in Rust enums:
-
-- Without value, e.g., `Color::Transparent`
-- With one value, e.g., `Color::Grayscale(u8)`
-- Tuple-like with multiple values, e.g., `Color::Rgb(u8, u8, u8)`
-- Struct-like with multiple "key-value" pairs, e.g., `Color::Hsl{...}`
-
-ASON `Variant` fully supports all flavours of Rust enums, consider the following instance:
+Consider the following instance:
 
 ```rust
 let e2 = vec![
@@ -1057,7 +1054,7 @@ let e2 = vec![
 ];
 ```
 
-The corresponding ASON text for instance `e2` is:
+The corresponding ASON document for this instance is:
 
 ```json5
 [
@@ -1072,31 +1069,47 @@ The corresponding ASON text for instance `e2` is:
 ]
 ```
 
-The ASON text closely resembles the Rust data literals, which is intentional. The design aims to reduce the learning curve for users by making ASON similar to existing data formats (JSON) and programming languages (Rust).
-
 ### 6.6 Other Data Types
 
 Some Rust data types are not supported, includes:
 
-- Octal integer literals
 - Unit (i.e. `()`)
 - Unit struct, such as `struct Foo;`
 - New-type struct, such as `struct Width(u32);`
 - Tuple-like struct, such as `struct RGB(u8, u8, u8);`
 
-It is worth nothing that the [serde framework's data model](https://serde.rs/data-model.html) does not include the `DateTime` type, so ASON `DateTime` cannot be directly serialized or deserialized to Rust's `chrono::DateTime`. If you serialize a `chrono::DateTime` type value, you will get a regular string. A workaround is to wrap the `chrono::DateTime` value as an `ason::Date` type. For more details, please refer to the 'test_serialize' unit test in `ason::serde::serde_date::tests` in the library source code.
+According to the [serde framework's data model](https://serde.rs/data-model.html), it does not include the `DateTime` type, so ASON `DateTime` cannot be directly serialized or deserialized to Rust's `chrono::DateTime`. If you serialize a `chrono::DateTime` type value in Rust, you will get a regular string.
 
-In addition, serde treats fixed-length arrays such as `[i32; 4]` as tuples rather than vectors, so the Rust array `[11, 13, 17, 19]` will be serialized as ASON Tuple `(11, 13, 17, 19)`.
+In addition, serde treats fixed-length arrays such as `[i32; 4]` as tuples rather than vectors, so the Rust array `[11, 13, 17, 19]` (type `[i32; 4]`) will be serialized as ASON Tuple `(11, 13, 17, 19)`.
 
 ### 6.7 Default Values
 
-TODO
+Rust serde framework allows you to specify default values for missing fields in a struct, this feature is also supported by ASON. For example:
+
+```rust
+#[derive(Serialize, Deserialize)]
+struct User {
+    id: i32,
+    name: String,
+    #[serde(default = "default_age")]
+    age: u8
+}
+```
+
+In this example, the `age` field has a default value of `u8`, so if the `age` field is missing in the ASON document, it will be filled with the default value during deserialization. For example, the following ASON document is valid and can be deserialized into an instance of `User`:
+
+```json5
+{
+    id: 123
+    name: "John"
+}
+```
 
 ## 7 ASON Specification
 
 This section describes the ASON specification in detail, it is mainly for developers who want to implement ASON parsers and formatters in other programming languages. For general users, please refer to the previous sections.
 
-TODO
+[TODO]
 
 ## 8 Linking
 

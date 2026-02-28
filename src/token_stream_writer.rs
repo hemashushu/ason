@@ -91,7 +91,7 @@ where
             Token::Colon => {
                 self.print_str(":")?;
             }
-            Token::Variant(type_name, member_name) => {
+            Token::Enumeration(type_name, member_name) => {
                 self.print_str(type_name)?;
                 self.print_str("::")?;
                 self.print_str(member_name)?;
@@ -766,11 +766,11 @@ mod tests {
     #[test]
     fn test_print_variant_without_value() {
         assert_eq!(
-            print_token_to_string(&Token::Variant("Option".to_owned(), "None".to_owned())),
+            print_token_to_string(&Token::Enumeration("Option".to_owned(), "None".to_owned())),
             "Option::None"
         );
         assert_eq!(
-            print_token_to_string(&Token::Variant("Result".to_owned(), "Ok".to_owned())),
+            print_token_to_string(&Token::Enumeration("Result".to_owned(), "Ok".to_owned())),
             "Result::Ok"
         );
     }
@@ -781,7 +781,7 @@ mod tests {
         let t = || -> Result<String> {
             let mut output = Vec::new();
             let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Variant("Option".to_owned(), "Some".to_owned()))?;
+            writer.print_token(&Token::Enumeration("Option".to_owned(), "Some".to_owned()))?;
             writer.print_token(&Token::OpeningParenthesis)?;
             writer.print_token(&Token::Number(NumberToken::I32(123)))?;
             writer.print_token(&Token::ClosingParenthesis)?;
@@ -793,7 +793,7 @@ mod tests {
         let t = || -> Result<String> {
             let mut output = Vec::new();
             let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Variant("Result".to_owned(), "Err".to_owned()))?;
+            writer.print_token(&Token::Enumeration("Result".to_owned(), "Err".to_owned()))?;
             writer.print_token(&Token::OpeningParenthesis)?;
             writer.print_token(&Token::String("Error message".to_owned()))?;
             writer.print_token(&Token::ClosingParenthesis)?;
@@ -801,11 +801,11 @@ mod tests {
         };
         assert_eq!(t().unwrap(), "Result::Err(\"Error message\")");
 
-        // test print variant with list value, e.g., `Variant::List([1, 2, 3])`
+        // test print variant with list value, e.g., `Enumeration::List([1, 2, 3])`
         let t = || -> Result<String> {
             let mut output = Vec::new();
             let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Variant("Variant".to_owned(), "List".to_owned()))?;
+            writer.print_token(&Token::Enumeration("Enumeration".to_owned(), "List".to_owned()))?;
             writer.print_token(&Token::OpeningParenthesis)?;
             writer.print_token(&Token::OpeningBracket)?;
             print_tokens_with_space_separated_to_string(
@@ -820,13 +820,13 @@ mod tests {
             writer.print_token(&Token::ClosingParenthesis)?;
             Ok(String::from_utf8(output).unwrap())
         };
-        assert_eq!(t().unwrap(), "Variant::List([\n    1 2 3\n])");
+        assert_eq!(t().unwrap(), "Enumeration::List([\n    1 2 3\n])");
 
-        // test print variant with object value, e.g., `Variant::Object{id: 123 name: "Alice"}`
+        // test print variant with object value, e.g., `Enumeration::Object{id: 123 name: "Alice"}`
         let t = || -> Result<String> {
             let mut output = Vec::new();
             let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Variant("Variant".to_owned(), "Object".to_owned()))?;
+            writer.print_token(&Token::Enumeration("Enumeration".to_owned(), "Object".to_owned()))?;
             writer.print_token(&Token::OpeningParenthesis)?;
             writer.print_token(&Token::OpeningBrace)?;
             writer.print_token(&Token::Identifier("id".to_owned()))?;
@@ -844,17 +844,17 @@ mod tests {
         };
         assert_eq!(
             t().unwrap(),
-            "Variant::Object({\n    id: 123 name: \"Alice\"\n})"
+            "Enumeration::Object({\n    id: 123 name: \"Alice\"\n})"
         );
     }
 
     #[test]
     fn test_print_tuple_like_variant() {
-        // test print tuple-like variant, e.g., `Variant::Tuple(1, "Alice", true)`
+        // test print tuple-like variant, e.g., `Enumeration::Tuple(1, "Alice", true)`
         let t = || -> Result<String> {
             let mut output = Vec::new();
             let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Variant("Variant".to_owned(), "Tuple".to_owned()))?;
+            writer.print_token(&Token::Enumeration("Enumeration".to_owned(), "Tuple".to_owned()))?;
             writer.print_token(&Token::OpeningParenthesis)?;
             print_tokens_with_space_separated_to_string(
                 &mut writer,
@@ -869,16 +869,16 @@ mod tests {
             Ok(String::from_utf8(output).unwrap())
         };
 
-        assert_eq!(t().unwrap(), "Variant::Tuple(1 \"Alice\" true)");
+        assert_eq!(t().unwrap(), "Enumeration::Tuple(1 \"Alice\" true)");
     }
 
     #[test]
     fn test_print_object_like_variant() {
-        // test print object-like variant, e.g., `Variant::Object{id: 123, name: "Alice"}`
+        // test print object-like variant, e.g., `Enumeration::Object{id: 123, name: "Alice"}`
         let t = || -> Result<String> {
             let mut output = Vec::new();
             let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Variant("Variant".to_owned(), "Object".to_owned()))?;
+            writer.print_token(&Token::Enumeration("Enumeration".to_owned(), "Object".to_owned()))?;
             writer.print_token(&Token::OpeningBrace)?;
             writer.print_token(&Token::Identifier("id".to_owned()))?;
             writer.print_token(&Token::Colon)?;
@@ -896,7 +896,7 @@ mod tests {
 
         assert_eq!(
             t().unwrap(),
-            "Variant::Object{\n    id: 123 name: \"Alice\"\n}"
+            "Enumeration::Object{\n    id: 123 name: \"Alice\"\n}"
         );
     }
 }

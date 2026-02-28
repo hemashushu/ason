@@ -160,7 +160,7 @@ where
                 ':' => {
                     self.next_char(); // Consume ':'
 
-                    // Don't confuse with variant separator "::"
+                    // Don't confuse with the enumeration variant separator "::"
                     break Ok(TokenWithRange::new(
                         Token::Colon,
                         Range::from_position_and_length(&self.last_position, 1),
@@ -308,7 +308,7 @@ where
         let mut identifier_buffer = String::new();
 
         // A flag to indicate whether '::' is found.
-        // '::' is used to separate type name and member name in variant token.
+        // '::' is used to separate type name and variant name in enumeration token.
         let mut found_double_colon = false;
 
         self.push_peek_position_into_stack();
@@ -379,7 +379,7 @@ where
 
         let token = if found_double_colon {
             let (type_name, member_name) = identifier_buffer.split_once("::").unwrap();
-            Token::Variant(type_name.to_owned(), member_name.to_owned())
+            Token::Enumeration(type_name.to_owned(), member_name.to_owned())
         } else {
             match identifier_buffer.as_str() {
                 "true" => Token::Boolean(true),
@@ -2150,8 +2150,8 @@ mod tests {
     use super::{Lexer, PEEK_BUFFER_LENGTH_LEX, Token};
 
     impl Token {
-        pub fn new_variant(type_name: &str, member_name: &str) -> Self {
-            Token::Variant(type_name.to_owned(), member_name.to_owned())
+        pub fn new_enumeration(type_name: &str, variant_name: &str) -> Self {
+            Token::Enumeration(type_name.to_owned(), variant_name.to_owned())
         }
 
         pub fn new_identifier(s: &str) -> Self {
@@ -5037,13 +5037,13 @@ hello
     fn test_lex_variant() {
         assert_eq!(
             lex_from_str_without_location("Option::None").unwrap(),
-            vec![Token::new_variant("Option", "None")]
+            vec![Token::new_enumeration("Option", "None")]
         );
 
         assert_eq!(
             lex_from_str_without_location("Option::Some(123)").unwrap(),
             vec![
-                Token::new_variant("Option", "Some"),
+                Token::new_enumeration("Option", "Some"),
                 Token::OpeningParenthesis,
                 Token::Number(NumberToken::I32(123)),
                 Token::ClosingParenthesis,
@@ -5055,7 +5055,7 @@ hello
             vec![
                 Token::new_identifier("value"),
                 Token::Colon,
-                Token::new_variant("Result", "Ok"),
+                Token::new_enumeration("Result", "Ok"),
                 Token::OpeningParenthesis,
                 Token::Number(NumberToken::I32(456)),
                 Token::ClosingParenthesis,

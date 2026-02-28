@@ -8,7 +8,7 @@ use std::io::{Result, Write};
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Variant, VariantValue};
+use crate::ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Enumeration, VariantValue};
 
 pub const DEFAULT_INDENT_CHARS: &str = "    ";
 pub const DEFAULT_NEWLINE_CHARS: &str = "\n";
@@ -327,10 +327,10 @@ where
         Ok(())
     }
 
-    fn print_variant(&mut self, var: &Variant) -> Result<()> {
-        let (type_name, member_name, value) = (&var.type_name, &var.member_name, &var.value);
+    fn print_enumeration(&mut self, var: &Enumeration) -> Result<()> {
+        let (type_name, variant_name, value) = (&var.type_name, &var.variant_name, &var.value);
 
-        self.print_str(&format!("{}::{}", type_name, member_name))?;
+        self.print_str(&format!("{}::{}", type_name, variant_name))?;
 
         match value {
             VariantValue::Empty => {
@@ -364,7 +364,7 @@ where
             AsonNode::NamedList(items) => self.print_named_list(items),
             AsonNode::Tuple(items) => self.print_tuple(items),
             AsonNode::Object(kvps) => self.print_object(kvps),
-            AsonNode::Variant(var) => self.print_variant(var),
+            AsonNode::Enumeration(var) => self.print_enumeration(var),
         }
     }
 }
@@ -383,7 +383,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Variant},
+        ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Enumeration},
         writer::write_to_string,
     };
 
@@ -714,11 +714,11 @@ mod tests {
     #[test]
     fn test_print_variant_without_value() {
         assert_eq!(
-            write_to_string(&AsonNode::Variant(Variant::new("Option", "None"))),
+            write_to_string(&AsonNode::Enumeration(Enumeration::new("Option", "None"))),
             "Option::None".to_owned()
         );
         assert_eq!(
-            write_to_string(&AsonNode::Variant(Variant::new("Result", "Ok"))),
+            write_to_string(&AsonNode::Enumeration(Enumeration::new("Result", "Ok"))),
             "Result::Ok".to_owned()
         );
     }
@@ -727,7 +727,7 @@ mod tests {
     fn test_print_variant_with_single_value() {
         // test print variant with single integer value, e.g., `Option::Some(123)`
         assert_eq!(
-            write_to_string(&AsonNode::Variant(Variant::with_value(
+            write_to_string(&AsonNode::Enumeration(Enumeration::with_value(
                 "Option",
                 "Some",
                 AsonNode::new_number(123),
@@ -737,7 +737,7 @@ mod tests {
 
         // test print variant with a string value, e.g., `Result::Err("error message")`
         assert_eq!(
-            write_to_string(&AsonNode::Variant(Variant::with_value(
+            write_to_string(&AsonNode::Enumeration(Enumeration::with_value(
                 "Result",
                 "Err",
                 AsonNode::new_string("Error message"),
@@ -745,10 +745,10 @@ mod tests {
             "Result::Err(\"Error message\")".to_owned()
         );
 
-        // test print variant with list value, e.g., `Variant::List([1, 2, 3])`
+        // test print variant with list value, e.g., `Enumeration::List([1, 2, 3])`
         assert_eq!(
-            write_to_string(&AsonNode::Variant(Variant::with_value(
-                "Variant",
+            write_to_string(&AsonNode::Enumeration(Enumeration::with_value(
+                "Enumeration",
                 "List",
                 AsonNode::List(vec![
                     AsonNode::new_number(1),
@@ -756,29 +756,29 @@ mod tests {
                     AsonNode::new_number(3),
                 ]),
             ))),
-            "Variant::List([\n    1\n    2\n    3\n])".to_owned()
+            "Enumeration::List([\n    1\n    2\n    3\n])".to_owned()
         );
 
-        // test print variant with object value, e.g., `Variant::Object{id: 123 name: "Alice"}`
+        // test print variant with object value, e.g., `Enumeration::Object{id: 123 name: "Alice"}`
         assert_eq!(
-            write_to_string(&AsonNode::Variant(Variant::with_value(
-                "Variant",
+            write_to_string(&AsonNode::Enumeration(Enumeration::with_value(
+                "Enumeration",
                 "Object",
                 AsonNode::Object(vec![
                     KeyValuePair::new("id", AsonNode::new_number(123)),
                     KeyValuePair::new("name", AsonNode::new_string("Alice")),
                 ]),
             ))),
-            "Variant::Object({\n    id: 123\n    name: \"Alice\"\n})".to_owned()
+            "Enumeration::Object({\n    id: 123\n    name: \"Alice\"\n})".to_owned()
         );
     }
 
     #[test]
     fn test_print_tuple_like_variant() {
-        // test print tuple-like variant, e.g., `Variant::Tuple(1, "Alice", true)`
+        // test print tuple-like variant, e.g., `Enumeration::Tuple(1, "Alice", true)`
         assert_eq!(
-            write_to_string(&AsonNode::Variant(Variant::with_tuple_like(
-                "Variant",
+            write_to_string(&AsonNode::Enumeration(Enumeration::with_tuple_like(
+                "Enumeration",
                 "Tuple",
                 vec![
                     AsonNode::new_number(1),
@@ -786,23 +786,23 @@ mod tests {
                     AsonNode::Boolean(true),
                 ],
             ))),
-            "Variant::Tuple(1 \"Alice\" true)".to_owned()
+            "Enumeration::Tuple(1 \"Alice\" true)".to_owned()
         );
     }
 
     #[test]
     fn test_print_object_like_variant() {
-        // test print object-like variant, e.g., `Variant::Object{id: 123, name: "Alice"}`
+        // test print object-like variant, e.g., `Enumeration::Object{id: 123, name: "Alice"}`
         assert_eq!(
-            write_to_string(&AsonNode::Variant(Variant::with_object_like(
-                "Variant",
+            write_to_string(&AsonNode::Enumeration(Enumeration::with_object_like(
+                "Enumeration",
                 "Object",
                 vec![
                     KeyValuePair::new("id", AsonNode::new_number(123)),
                     KeyValuePair::new("name", AsonNode::new_string("Alice")),
                 ],
             ))),
-            "Variant::Object{\n    id: 123\n    name: \"Alice\"\n}".to_owned()
+            "Enumeration::Object{\n    id: 123\n    name: \"Alice\"\n}".to_owned()
         );
     }
 }

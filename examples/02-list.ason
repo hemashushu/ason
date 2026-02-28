@@ -1,7 +1,7 @@
 {
-    number_list: [1,2,3]
+    number_list: [1, 2, 3]
     string_list: ["one", "two", "three"]
-    list_with_trailing_comma: [1,2,3,4,]
+    list_with_trailing_comma: [1, 2, 3, 4,]
     list_with_space_separator: ["one" "two" "three" "four"]
     mulitline_list: [
         1

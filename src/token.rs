@@ -53,9 +53,9 @@ pub enum Token {
     // - '\u{e000}' - '\u{10ffff}'
     Identifier(String),
 
-    // A variant is consisted of a variant type name and a member name, e.g.,
-    // `Option::None`, the "Option" is type name, and "None" is member name.
-    Variant(String, String),
+    // An enumeration is consisted of a type name and a variant name, e.g.,
+    // `Option::None`, the "Option" is type name, and "None" is variant name.
+    Enumeration(String, String),
 
     HexadecimalByteData(Vec<u8>),
 

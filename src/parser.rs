@@ -7,7 +7,7 @@
 use std::io::Read;
 
 use crate::{
-    ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Variant},
+    ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Enumeration},
     char_with_position::CharsWithPositionIterator,
     error::AsonError,
     lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
@@ -196,7 +196,7 @@ where
                         self.next_token()?;
                         v
                     }
-                    Token::Variant(type_name, member_name) => {
+                    Token::Enumeration(type_name, variant_name) => {
                         match self.peek_token(1)? {
                             Some(Token::OpeningParenthesis) => {
                                 // tuple-like variant or the single value variant
@@ -208,7 +208,7 @@ where
                             }
                             _ => {
                                 // unit variant (that is, without value)
-                                let v = AsonNode::Variant(Variant::new(type_name, member_name));
+                                let v = AsonNode::Enumeration(Enumeration::new(type_name, variant_name));
                                 self.next_token()?;
                                 v
                             }
@@ -249,20 +249,20 @@ where
     }
 
     /// Parse:
-    /// - tuple-like variant: `type::member(..., ..., ...)`
-    /// - single value variant: `type::member(value)`
+    /// - tuple-like variant: `type::variant(..., ..., ...)`
+    /// - single value variant: `type::variant(value)`
     fn parse_tuple_like_variant(&mut self) -> Result<AsonNode, AsonError> {
         // ```diagram
-        // type::member(...)?  //
-        // ^           ^    ^__// to here
-        // |           |-------// opening parenthesis, validated
-        // |-------------------// current token, validated
+        // type::variant(...)?  //
+        // ^            ^    ^__// to here
+        // |            |-------// opening parenthesis, validated
+        // |--------------------// current token, validated
         // ```
 
         // consume variant token
-        let (type_name, member_name) =
-            if let Some(Token::Variant(type_name, member_name)) = self.next_token()? {
-                (type_name, member_name)
+        let (type_name, variant_name) =
+            if let Some(Token::Enumeration(type_name, variant_name)) = self.next_token()? {
+                (type_name, variant_name)
             } else {
                 unreachable!()
             };
@@ -297,31 +297,31 @@ where
                     self.last_range,
                 ));
             }
-            1 => Variant::with_value(&type_name, &member_name, items.remove(0)),
-            _ => Variant::with_tuple_like(&type_name, &member_name, items),
+            1 => Enumeration::with_value(&type_name, &variant_name, items.remove(0)),
+            _ => Enumeration::with_tuple_like(&type_name, &variant_name, items),
         };
 
-        Ok(AsonNode::Variant(variant_item))
+        Ok(AsonNode::Enumeration(variant_item))
     }
 
     fn parse_object_like_variant(&mut self) -> Result<AsonNode, AsonError> {
         // ```diagram
-        // type::member{...}?  //
-        // ^           ^    ^__// to here
-        // |           |_______// opening brace, validated
-        // |-------------------// current token, validated
+        // type::variant{...}?  //
+        // ^            ^    ^__// to here
+        // |            |_______// opening brace, validated
+        // |--------------------// current token, validated
         // ```
 
         // consume variant token
-        let Some(Token::Variant(type_name, member_name)) = self.next_token()? else {
+        let Some(Token::Enumeration(type_name, variant_name)) = self.next_token()? else {
             unreachable!()
         };
 
         let kvps = self.parse_key_value_pairs()?;
 
-        Ok(AsonNode::Variant(Variant::with_object_like(
+        Ok(AsonNode::Enumeration(Enumeration::with_object_like(
             &type_name,
-            &member_name,
+            &variant_name,
             kvps,
         )))
     }
@@ -500,7 +500,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        ast::{KeyValuePair, NamedListEntry, Number, Variant},
+        ast::{KeyValuePair, NamedListEntry, Number, Enumeration},
         error::AsonError,
         parser::parse_from_str,
         position::Position,
@@ -682,7 +682,7 @@ mod tests {
                         },
                         KeyValuePair {
                             key: "street".to_owned(),
-                            value: Box::new(AsonNode::Variant(Variant::new("Option", "None"))),
+                            value: Box::new(AsonNode::Enumeration(Enumeration::new("Option", "None"))),
                         },
                     ])),
                 },
@@ -1060,7 +1060,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_variant() {
+    fn test_parse_enumeration() {
         // empty value
         assert_eq!(
             parse_from_str(
@@ -1069,7 +1069,7 @@ mod tests {
             "#
             )
             .unwrap(),
-            AsonNode::Variant(Variant::new("Option", "None"))
+            AsonNode::Enumeration(Enumeration::new("Option", "None"))
         );
 
         // single value
@@ -1080,7 +1080,7 @@ mod tests {
             "#
             )
             .unwrap(),
-            AsonNode::Variant(Variant::with_value(
+            AsonNode::Enumeration(Enumeration::with_value(
                 "Option",
                 "Some",
                 AsonNode::Number(Number::I32(123))
@@ -1095,7 +1095,7 @@ mod tests {
             "#
             )
             .unwrap(),
-            AsonNode::Variant(Variant::with_tuple_like(
+            AsonNode::Enumeration(Enumeration::with_tuple_like(
                 "Color",
                 "RGB",
                 vec![
@@ -1114,7 +1114,7 @@ mod tests {
             "#
             )
             .unwrap(),
-            AsonNode::Variant(Variant::with_tuple_like(
+            AsonNode::Enumeration(Enumeration::with_tuple_like(
                 "Color",
                 "RGB",
                 vec![
@@ -1133,7 +1133,7 @@ mod tests {
             "#
             )
             .unwrap(),
-            AsonNode::Variant(Variant::with_object_like(
+            AsonNode::Enumeration(Enumeration::with_object_like(
                 "Shape",
                 "Rect",
                 vec![
@@ -1151,7 +1151,7 @@ mod tests {
             "#
             )
             .unwrap(),
-            AsonNode::Variant(Variant::with_object_like(
+            AsonNode::Enumeration(Enumeration::with_object_like(
                 "Shape",
                 "Rect",
                 vec![
