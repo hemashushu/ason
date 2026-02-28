@@ -1,17 +1,13 @@
-// Copyright (c) 2024 Hemashushu <hippospark@gmail.com>, All rights reserved.
+// Copyright (c) 2026 Hemashushu <hippospark@gmail.com>, All rights reserved.
 //
 // This Source Code Form is subject to the terms of
-// the Mozilla Public License version 2.0 and additional exceptions,
-// more details in file LICENSE, LICENSE.additional and CONTRIBUTING.
+// the Mozilla Public License version 2.0 and additional exceptions.
+// For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
 use chrono::{DateTime, FixedOffset};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Number {
-    // it is possible for literal to overflow for signed numbers,
-    // such as `-128`, which consists of a negative/minus sign
-    // and the number `128`, the number 128 is out of range for `i8`, so
-    // define the `i8` literal using `u8`.
     I8(i8),
     U8(u8),
     I16(i16),
@@ -31,28 +27,30 @@ pub struct KeyValuePair {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct NameValuePair {
+pub struct NamedListEntry {
     pub name: Box<AsonNode>,
     pub value: Box<AsonNode>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Variant {
-    // variant type name, e.g. the "Option" of "Option::None"
+pub struct Enumeration {
+    // Enumeration type name.
+    // e.g., the "Option" of "Option::None"
     pub type_name: String,
 
-    // variant member name, e.g. the "None" of "Option::None"
-    pub member_name: String,
+    // Variant name.
+    // e.g., the "None" of "Option::None"
+    pub variant_name: String,
 
     pub value: VariantValue,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum VariantValue {
-    Empty,                     // unit variant
-    Value(Box<AsonNode>),      // new type variant
-    Tuple(Vec<AsonNode>),      // tuple variant
-    Object(Vec<KeyValuePair>), // struct variant
+    Empty,                     // Empty value variant
+    Value(Box<AsonNode>),      // Single value variant
+    Tuple(Vec<AsonNode>),      // tuple-like variant
+    Object(Vec<KeyValuePair>), // object-like variant
 }
 
 #[derive(Debug, PartialEq)]
@@ -62,12 +60,13 @@ pub enum AsonNode {
     Char(char),
     String(String),
     DateTime(DateTime<FixedOffset>),
-    Variant(Variant),
-    HexByteData(Vec<u8>),
+
+    Enumeration(Enumeration),
+    HexadecimalByteData(Vec<u8>),
     List(Vec<AsonNode>),
+    NamedList(Vec<NamedListEntry>),
     Tuple(Vec<AsonNode>),
     Object(Vec<KeyValuePair>),
-    Map(Vec<NameValuePair>),
 }
 
 impl KeyValuePair {
@@ -79,39 +78,39 @@ impl KeyValuePair {
     }
 }
 
-impl Variant {
-    pub fn new(type_name: &str, member_name: &str) -> Self {
+impl Enumeration {
+    pub fn new(type_name: &str, variant_name: &str) -> Self {
         Self {
             type_name: type_name.to_owned(),
-            member_name: member_name.to_owned(),
+            variant_name: variant_name.to_owned(),
             value: VariantValue::Empty,
         }
     }
 
-    pub fn with_value(type_name: &str, member_name: &str, value: AsonNode) -> Self {
+    pub fn with_value(type_name: &str, variant_name: &str, value: AsonNode) -> Self {
         Self {
             type_name: type_name.to_owned(),
-            member_name: member_name.to_owned(),
+            variant_name: variant_name.to_owned(),
             value: VariantValue::Value(Box::new(value)),
         }
     }
 
-    pub fn with_tuple(type_name: &str, member_name: &str, values: Vec<AsonNode>) -> Self {
+    pub fn with_tuple_like(type_name: &str, variant_name: &str, values: Vec<AsonNode>) -> Self {
         Self {
             type_name: type_name.to_owned(),
-            member_name: member_name.to_owned(),
+            variant_name: variant_name.to_owned(),
             value: VariantValue::Tuple(values),
         }
     }
 
-    pub fn with_object(
+    pub fn with_object_like(
         type_name: &str,
-        member_name: &str,
+        variant_name: &str,
         key_value_pairs: Vec<KeyValuePair>,
     ) -> Self {
         Self {
             type_name: type_name.to_owned(),
-            member_name: member_name.to_owned(),
+            variant_name: variant_name.to_owned(),
             value: VariantValue::Object(key_value_pairs),
         }
     }

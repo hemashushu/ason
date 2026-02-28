@@ -1,72 +1,70 @@
-Copyright (c) 2024 Hemashushu <hippospark@gmail.com>, All rights reserved.
+Copyright (c) 2025 Hemashushu <hippospark@gmail.com>, All rights reserved.
 
 This software (including source code, documentation, and attachments) is released
-under the Mozilla Public License 2.0, with the following additional terms.
+under the Mozilla Public License 2.0 (MPL-2.0) with the following additional terms.
 
 Additional Terms
 ================
 
-In addition to the terms of the Mozilla Public License 2.0, the following
-additional terms apply to this software:
+In addition to complying with the Mozilla Public License 2.0, the following terms
+apply to this software:
 
-1. You may not remove or modify the license and copyright notices contained
-   in the software (including source code, documentation, and attachments).
-2. You may not rename this software and redistribute it.
-3. You may not simply repackage this software and release it as a new software.
-4. You may not apply for patents, copyrights, trademarks, or other
-   intellectual property rights on this software, either in whole or in part.
-5. You may not claim that this software was developed by you,
-   nor may you claim ownership of the intellectual property rights to this software,
-   nor may you use this software as a result of your research.
-6. While the source code of this software is open, this does not mean that
-   the software is not copyrighted. The author retains all copyrights.
-7. Contributors to this software do not acquire any copyright in this software,
-   either in whole or in part.
-8. The author (copyright holder) of this software shall not be liable for
-   any consequences resulting from your use or inclusion of this software,
-   nor shall the author provide you with any technical support.
-9. Again, this software is shared publicly only, and if you experience
-   unexpected results due to using or including this software,
-   you may not hold the author (copyright holder) liable, and you should
-   immediately cease using or including this software.
-   If you cannot guarantee this, please do not use or include this software
-   in the first place.
+1. The license and copyright notices within this software (including source code,
+   documentation, and attachments) must not be removed or altered.
+2. The name of this software must not be changed and republished.
+3. This software must not be repackaged and released under a different name.
+4. No part or entirety of this software may be used to apply for patents,
+   copyrights, trademarks, or other intellectual property rights.
+5. You must not claim this software as independently developed,
+   nor claim ownership of its intellectual property (in whole or in part),
+   nor present it as a research achievement.
+6. The open-source nature of this software does not imply a waiver of copyright.
+   The author retains all copyrights.
+7. When using or including this software, you must prominently credit the
+   author (copyright holder) and the software name in visible locations
+   (e.g., the "About" page of an application or in the README file).
+8. Contributors to this software do not hold any copyright over the software,
+   in whole or in part.
+9. The author (copyright holder) is not liable for any consequences resulting
+   from the use or inclusion of this software and does not provide any technical support.
+10. To reiterate, this software is provided solely for public sharing.
+   The author (copyright holder) assumes no responsibility for any
+   unintended consequences arising from its use or inclusion.
+   If you cannot accept these terms, do not use or include this software.
 
-The term "you" in the above refers to individuals, teams, companies, and organizations.
+These terms apply to any individual, team, company, or organization.
 
-These additional terms are intended to protect the rights of the original developer
-and to ensure that the software is used in a manner consistent with the
-original developer's intent.
+Most of the above terms align with common practices in open-source software.
+These terms are listed to clearly explain how to properly use open-source software.
+The open-source license and additional terms aim to protect the rights of
+the original developer and ensure the software is used in a manner consistent with
+the developer's intentions.
 
+- - -
 
--------------------------------------------------------------------------
+Hemashushu <hippospark@gmail.com> 版权所有 2025
 
-
-Hemashushu <hippospark@gmail.com> 版权所有 2024
-
-该软件（包括源码、文档以及附件）根据 Mozilla Public License 2.0 许可证发布，并
-附加以下条款。
+本软件（包括源代码、文档及附件）依据 Mozilla Public License 2.0 许可证发布，并附加以下条款。
 
 附加条款
 =======
 
-除了 Mozilla Public License 2.0 的条款之外，该软件还附加以下条款：
+在遵守 Mozilla Public License 2.0 的基础上，本软件附加以下条款：
 
-1. 你不能删除或修改该软件（包括源码、文档以及附件）中的协议和版权声明。
-2. 你不能重新命名该软件并重新发布。
-3. 你不能对该软件进行简单的封装然后以新的软件发布。
-4. 你不能用该软件的整体或部分申请专利、版权及商标等。
-5. 你不能声称该软件是你自主研发的，不能声称拥有该软件的知识产权（无论是部分还是完全），
-   不能将该软件作为你的科研成果。
-6. 该软件的源码是开放的，并不意味着该软件没有版权，作者保留所有版权。
-7. 该软件的参与者（贡献者）不能获得对该软件的全部或者部分版权。
-8. 该软件的作者（版权拥有者）不会对你因使用或包含该软件而导致的结果负有任何责任，
-   也不会向你提供任何技术支持。
-9. 再次强调，该软件仅作公开分享，如果你因为使用或者包含该软件而导致非预料的结果，
-   你不能要求作者（版权拥有者）负有任何责任，你应该立即停止使用或包含该软件。
-   如果你不能保证此点，请一开始就不要使用或包含该软件。
+1. 不得删除或修改本软件（包括源代码、文档及附件）中的协议和版权声明。
+2. 不得更改本软件的名称并重新发布。
+3. 不得对本软件进行简单封装后以新软件名义发布。
+4. 不得使用本软件的全部或部分内容申请专利、版权或商标等知识产权。
+5. 不得声称本软件为自主研发，亦不得声称拥有本软件的知识产权（无论部分或全部），
+   或将本软件作为科研成果。
+6. 本软件的源码开放并不意味着放弃版权，作者保留所有版权。
+7. 使用或包含本软件时，需在显著位置（如应用程序的“关于”页面或 README 文件等）注明本软件的作者（版权拥有者）及软件名称。
+8. 本软件的贡献者不享有本软件的全部或部分版权。
+9. 作者（版权拥有者）对因使用或包含本软件所导致的任何后果不承担责任，亦不提供任何技术支持。
+10. 再次强调，本软件仅供公开分享，若因使用或包含本软件导致意外后果，作者（版权拥有者）不承担任何责任。
+    如无法接受此条款，请勿使用或包含本软件。
 
+上述条款适用于任何个人、团队、企业及组织。
 
-上述中的 “你” 泛指个体，团队，企业以及组织。
-
-这些附加条款旨在保护原始开发者的权利，并确保该软件以符合原始开发者意图的方式使用。
+以上条款大部分为开源软件的通用共识，列出此条款旨在以简明方式说明如何正确使用开源软件。
+开源协议及附加条款旨在保护原始开发者的权益，并确保软件以符合开发者意图的方式使用。

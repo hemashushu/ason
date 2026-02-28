@@ -8,8 +8,8 @@
     group: {
         active: true
         permissions:[
-            {number:11, title: "read"}
-            {number:13, title: "write"}
+            {number: 11, title: "read"}
+            {number: 13, title: "write"}
         ]
     }
 }

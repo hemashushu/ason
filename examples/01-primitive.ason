@@ -1,22 +1,22 @@
 {
-    // integer numbers
+    // Integer numbers
 
     integer: 123
     integer_negative: -123
 
-    // integer number with type names
+    // Integer numbers with type suffixes
 
     byte: 11_i8
-    short: 17_i16
-    int: 23_i32
-    long: 31_i64
+    short: 13_i16
+    int: 17_i32
+    long: 19_i64
 
-    unsigned_byte: 13_u8
-    unsigned_short: 19_u16
-    unsigned_int: 29_u32
+    unsigned_byte: 23_u8
+    unsigned_short: 29_u16
+    unsigned_int: 31_u32
     unsigned_long: 37_u64
 
-    // floating point numbers
+    // Floating-point numbers
 
     floating_point: 3.14
     floating_point_with_exponent: 6.022e23
@@ -24,6 +24,8 @@
 
     single_precision: 3.14_f32
     double_precision: 6.626_f64
+
+    // Hexadecimal integer numbers
 
     hexadecimal_integer: 0xbeef
     hexadecimal_integer_negative: -0xbeef
@@ -38,9 +40,13 @@
     hexadecimal_unsigned_int: 0xffff_ffff_u32
     hexadecimal_unsigned_long: 0xffff_ffff_ffff_ffff_u64
 
+    // Hexadecimal floating point numbers
+
     hexadecimal_floating_point: 0x1.4p3
     hexadecimal_single_precison: 0x1.921fb6p1_f32
     hexadecimal_double_precison: 0x1.5bf0a8b145769p+1_f64
+
+    // Binary numbers
 
     binary_integer: 0b1001
     binary_integer_negative: -0b1001
@@ -48,20 +54,41 @@
     binary_byte: 0b0111_1111_i8
     binary_short: 0b0111_1111_1111_1111_i16
     binary_int: 0b0111_1111_1111_1111_1111_1111_1111_1111_i32
-    binary_long: 0b0111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_i64
+    binary_long: 0b0111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_i64
 
     binary_unsigned_byte: 0b1111_1111_u8
     binary_unsigned_short: 0b1111_1111_1111_1111_u16
     binary_unsigned_int: 0b1111_1111_1111_1111_1111_1111_1111_1111_u32
-    binary_unsigned_long: 0b1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_u64
+    binary_unsigned_long: 0b1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_u64
+
+    // Octal numbers
+
+    octal_integer: 0o755
+    octal_integer_negative: -0o755
+
+    octal_byte: 0o177_i8
+    octal_short: 0o77_777_i16
+    octal_int: 0o17_777_777_777_i32
+    octal_long: 0o777_777_777_777_777_777_777_i64
+
+    octal_unsigned_byte: 0o377_u8
+    octal_unsigned_short: 0o177_777_u16
+    octal_unsigned_int: 0o37_777_777_777_u32
+    octal_unsigned_long: 0o1_777_777_777_777_777_777_777_u64
+
+    // Boolean values
 
     boolean_true: true
     boolean_false: false
+
+    // Datetime values
 
     datatime: d"2023-02-23 10:23:45"
     datatime_with_timezone: d"2023-02-23 10:23:45+08:00"
     datatime_rfc3339: d"2023-02-23T10:23:45+08:00"
     datatime_rfc3339_zero_timezone: d"2023-02-23T10:23:45Z"
+
+    // Characters
 
     char: 'c'
     char_unicode: '文'
@@ -69,6 +96,8 @@
     char_escaped: '\n'
     char_escaped_zero: '\0'
     char_escaped_unicode: '\u{6CB3}'
+
+    // Strings
 
     string: "hello world"
     string_unicode: "中文🍀emoji👋🏻"
@@ -89,48 +118,53 @@
     raw_string_with_hash: r#"hello "programming" world"#
     auto_trimmed_string: """
         heading 1
-          heading 2
-            heading 3
+            heading 2
+                heading 3
         """
 
-    // value starts on a new line
+    // Value starts on a new line
+
     new_line:
         "value1"
 
-    // both the colon and value starts on a new line
+    // Both the colon and value starts on a new line
     new_line_variant
     :
     "value2"
 
-    // whitespaces between the key and value
+    // Whitespaces between the key and value
     space   :   "value3"
 
-    // line comment
+    // Line comment
     line_comment: 101
-    line_comment_in_tail: 103 // trailing comment
+    line_comment_in_tail: 103 // Trailing comment
 
-    block_comment: /* block comment */ 107
+    block_comment: /* Block comment */ 107
 
     /*
-     * multiline block comment
+     * Multiline Block Comment
      */
     multiline_block_comment: 109
 
-    /**
+    /***
         document comment
+        ================
 
-        # heading 1
+        ## heading 2
+        ### heading 3
+
         paragraph
 
+        ```js
+        "fancy code"
         ```
-        code
-        ```
-    **/
+    ***/
     document_comment: 113
 
     inline_comma_1: 211, inline_comma_2: 223, inline_comma_3: 227
+    space_separated_1: 307 space_separated_2: 311 space_separated_3: 313
 
-    tail_comma_1: 229,
-    tail_comma_2: 233,
-    tail_comma_3: 239
+    tail_comma_1: 401,
+    tail_comma_2: 409,
+    tail_comma_3: 419
 }

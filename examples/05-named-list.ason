@@ -1,0 +1,10 @@
+{
+    string_name: [
+        "foo": {version: "1.0"}
+        "bar": {version: "2.0"}
+    ]
+    number_name: [
+        11: ["foo", "bar"]
+        13: ["baz", "qux"]
+    ]
+}

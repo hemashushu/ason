@@ -1,77 +1,94 @@
-// Copyright (c) 2024 Hemashushu <hippospark@gmail.com>, All rights reserved.
+// Copyright (c) 2026 Hemashushu <hippospark@gmail.com>, All rights reserved.
 //
 // This Source Code Form is subject to the terms of
-// the Mozilla Public License version 2.0 and additional exceptions,
-// more details in file LICENSE, LICENSE.additional and CONTRIBUTING.
-
-use std::fmt::Display;
+// the Mozilla Public License version 2.0 and additional exceptions.
+// For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::location::Location;
+use crate::range::Range;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
-    // includes `\n` and `\r\n`
-    NewLine,
-
-    // `,`
-    Comma,
-
-    // `:`
-    Colon,
-
-    // {
-    LeftBrace,
-    // }
-    RightBrace,
-    // [
-    LeftBracket,
-    // ]
-    RightBracket,
-    // (
-    LeftParen,
-    // )
-    RightParen,
-
-    // `+`
-    Plus,
-    // `-`
-    Minus,
-
-    // [a-zA-Z0-9_] and '\u{a0}' - '\u{d7ff}' and '\u{e000}' - '\u{10ffff}'
-    // used for object field/key name
-    Identifier(String),
-
-    // ASON has a few keywords: `true`, `false`, `Inf (Inf_f32, Inf_f64)` and `NaN (NaN_f32, NaN_f64)`,
-    // but for simplicity, `true` and `false` will be converted
-    // directly to `Token::Boolean`, while `NaN` and `Inf` will
-    // be converted to `NumberLiteral::Float`
-    // and `NumberLiternal::Double`.
-    Boolean(bool),
-
-    // includes the variant type name and member name, e.g.
-    // `Option::None`
-    // the "Option" is type name, and "None" is member name.
-    Variant(String, String),
+    Colon,              // `:`
+    OpeningBrace,       // `{`
+    ClosingBrace,       // `}`
+    OpeningBracket,     // `[`
+    ClosingBracket,     // `]`
+    OpeningParenthesis, // `(`
+    ClosingParenthesis, // `)`
 
     Number(NumberToken),
+
+    // ASON only supports certain escaped characters in character and string literals,
+    // which is similar to Rust's character and string literals. The supported escape sequences are:
+    //
+    // - `\\` (backslash)
+    // - `\'` (single quote)
+    // - `\"` (double quote)
+    // - `\t` (tab)
+    // - `\r` (carriage return)
+    // - `\n` (newline)
+    // - `\0` (null character)
+    // - `\u{...}` (Unicode code point, where `...` is a hexadecimal number)
     Char(char),
     String(String),
-    Date(DateTime<FixedOffset>),
-    HexByteData(Vec<u8>),
 
-    Comment(Comment),
+    // ASON has a few keywords:
+    // - `true`
+    // - `false`
+    // - `Inf (Inf_f32, Inf_f64)`
+    // - `NaN (NaN_f32, NaN_f64)`
+    //
+    // `true` and `false` are interpreted to `Token::Boolean`,
+    // `NaN` and `Inf` are interpreted to `Token::NumberToken`.
+    Boolean(bool),
+
+    DateTime(DateTime<FixedOffset>),
+
+    // An identifier is used for object (or struct) field name,
+    // It is a sequence of letters, digits, underscores:
+    // - `[a-zA-Z0-9_]`
+    // - '\u{a0}' - '\u{d7ff}'
+    // - '\u{e000}' - '\u{10ffff}'
+    Identifier(String),
+
+    // An enumeration is consisted of a type name and a variant name, e.g.,
+    // `Option::None`, the "Option" is type name, and "None" is variant name.
+    Enumeration(String, String),
+
+    HexadecimalByteData(Vec<u8>),
+
+    // Sign tokens, used for number literals.
+    // Note that they are removed after normalization.
+    _Plus,  // `+`
+    _Minus, // `-`
 }
 
+// Tokens for number literals.
+//
+// Note that the sign token (minus `-` and plus `+`) is not part of the `NumberToken` in
+// the first stage of lexing. For example, `-128` is tokenized into two tokens:
+//
+// - `Token::Minus`
+// - `Token::Number(NumberToken::I8(128))`
+//
+// Since `128` overflows `i8`, so using `u8` to represent the value part.
+// After normalization, the sign token is merged into the `NumberToken`,
+// so `-128` will be normalized to `Token::Number(NumberToken::I8(128))`.
+// Where `128` is Two's Complement Representation of `-128` in `i8`.
+//
+// Another example, `-3` is tokenized into two tokens:
+// - `Token::Minus`
+// - `Token::Number(NumberToken::I32(3))`
+//
+// After normalization, it will be normalized to `Token::Number(NumberToken::I32(253))`.
+// Where `253` is Two's Complement Representation of `-3` in `i32`.
+//
+// The reason for this design is that it simplifies the lexing process, as we can first tokenize
+// the number literal without worrying about the sign and the valid range.
 #[derive(Debug, PartialEq)]
 pub enum NumberToken {
-    // it is possible for literal to overflow for signed numbers,
-    // such as `-128`, which consists of a negative/minus sign
-    // and the number `128`.
-    // minus token is not part of the number token,
-    // and the number value 128 is out of range for `i8`,
-    // so define the `i8` literal using `u8`.
     I8(u8),
     U8(u8),
     I16(u16),
@@ -85,83 +102,13 @@ pub enum NumberToken {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Comment {
-    // `//...`
-    // note that the trailing '\n' or '\r\n' does not belong to line comment
-    Line(String),
-
-    // `/*...*/`
-    Block(String),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum NumberType {
-    I8,
-    I16,
-    I32,
-    I64,
-    U8,
-    U16,
-    U32,
-    U64,
-    F32,
-    F64,
-}
-
-impl NumberType {
-    pub fn from_str(s: &str) -> Result<Self, String> {
-        let t = match s {
-            "i8" => NumberType::I8,
-            "i16" => NumberType::I16,
-            "i32" => NumberType::I32,
-            "i64" => NumberType::I64,
-            "u8" => NumberType::U8,
-            "u16" => NumberType::U16,
-            "u32" => NumberType::U32,
-            "u64" => NumberType::U64,
-            "f32" => NumberType::F32,
-            "f64" => NumberType::F64,
-            _ => {
-                return Err(format!("Invalid number type \"{}\".", s));
-            }
-        };
-
-        Ok(t)
-    }
-}
-
-impl Display for NumberType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NumberType::I8 => write!(f, "i8"),
-            NumberType::I16 => write!(f, "i16"),
-            NumberType::I32 => write!(f, "i32"),
-            NumberType::I64 => write!(f, "i64"),
-            NumberType::U8 => write!(f, "u8"),
-            NumberType::U16 => write!(f, "u16"),
-            NumberType::U32 => write!(f, "u32"),
-            NumberType::U64 => write!(f, "u64"),
-            NumberType::F32 => write!(f, "f32"),
-            NumberType::F64 => write!(f, "f64"),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
 pub struct TokenWithRange {
     pub token: Token,
-    pub range: Location,
+    pub range: Range,
 }
 
 impl TokenWithRange {
-    pub fn new(token: Token, range: Location) -> Self {
+    pub fn new(token: Token, range: Range) -> Self {
         Self { token, range }
-    }
-
-    pub fn from_position_and_length(token: Token, position: &Location, length: usize) -> Self {
-        Self {
-            token,
-            range: Location::from_position_and_length(position, length),
-        }
     }
 }

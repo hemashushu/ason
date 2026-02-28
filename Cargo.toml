@@ -1,27 +1,18 @@
 [package]
 name = "ason"
-version = "1.4.0"
-edition = "2021"
+version = "2.0.0"
+edition = "2024"
 
 license = "MPL-2.0"
-description = "ASON is a data format that evolved from JSON, introducing strong data typing and support for variant types."
-homepage = "https://hemashushu.github.io/works/ason"
-documentation = "https://hemashushu.github.io/works/ason"
+description = "ASON is a data format that evolved from JSON, supports strong data types."
+homepage = "https://github.com/hemashushu/ason"
 repository = "https://github.com/hemashushu/ason"
-readme = "README.md"
-keywords = ["ason", "parser", "json", "serde", "xiaoxuan"]
+keywords = ["ason", "serde"]
 categories = ["encoding", "parser-implementations"]
 
 [dependencies]
-serde = { version = "1.0.216", features = ["derive"] }
-serde_bytes = "0.11"
-chrono = { version = "0.4.39", features = ["serde"] }
-hexfloat2 = "0.1.3"
-
-# clap is more common, but the size is larger
-# argh = "0.1.12"
+chrono = "0.4.43"
+hexfloat2 = "0.2.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
-
-[features]
