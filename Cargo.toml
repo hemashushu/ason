@@ -4,14 +4,14 @@ version = "2.0.0"
 edition = "2024"
 
 license = "MPL-2.0"
-description = "ASON is a data format that evolved from JSON, supports strong data types."
+description = "ASON is a data serialization format that evolved from JSON, featuring strong numeric typing and native support for enumeration types."
 homepage = "https://github.com/hemashushu/ason"
 repository = "https://github.com/hemashushu/ason"
 keywords = ["ason", "serde"]
 categories = ["encoding", "parser-implementations"]
 
 [dependencies]
-chrono = "0.4.43"
+chrono = "0.4.44"
 hexfloat2 = "0.2.0"
 
 [dev-dependencies]
