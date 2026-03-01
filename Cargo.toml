@@ -8,7 +8,7 @@ description = "ASON is a data serialization format that evolved from JSON, featu
 homepage = "https://github.com/hemashushu/ason"
 repository = "https://github.com/hemashushu/ason"
 keywords = ["ason", "serde"]
-categories = ["serde", "encoding", "parser-implementations"]
+categories = ["encoding", "parser-implementations"]
 
 [dependencies]
 chrono = "0.4.44"
