@@ -645,7 +645,7 @@ An Object is a collection of key-value pairs, where the key is an identifier and
 }
 ```
 
-The keys are _identifiers_ which are similar to strings but without quotation marks (`"`). An identifier must start with a letter (a-z, A-Z) or an underscore (`_`), followed by any combination of letters, digits (0-9), and underscores. For example, `name`, `version`, `_edition`, `foo_bar123` are all valid identifiers.
+The keys are identifiers which are similar to strings but without quotation marks (`"`). An identifier must start with a letter (a-z, A-Z) or an underscore (`_`), followed by any combination of letters, digits (0-9), and underscores. For example, `name`, `version`, `_edition`, `foo_bar123` are all valid identifiers.
 
 Key-value pairs in an Object can be separated by commas, whitespace, or line breaks, the following Objects are all identical:
 
@@ -695,7 +695,7 @@ The values within an Object can be any type, including primitive values and comp
 
 #### 5.2.4 Named Lists
 
-Named Lists are special Lists that each value is associated with a name, we call such elements "name-value pairs". The following is an example of a Named List which consists of string-string pairs:
+Named Lists are special Lists that each value is associated with a name, we call such elements name-value pairs. The following is an example of a Named List which consists of string-string pairs:
 
 ```json5
 [
@@ -705,13 +705,15 @@ Named Lists are special Lists that each value is associated with a name, we call
 ]
 ```
 
-The names are typically strings or numbers, other types are also allowed. For example, the following is a Named List that consists of string-integer pairs:
+The names are typically strings or numbers, other types are also allowed. For example, the following is a Named List that consists of integer-string pairs:
 
 ```json5
 [
-    "red": 0xff0000
-    "green": 0x00ff00
-    "blue": 0x0000ff
+    5: "Perfect"
+    4: "Good"
+    3: "Fair"
+    2: "Poor"
+    1: "Terrible"
 ]
 ```
 
@@ -1052,10 +1054,10 @@ For example, the following code demonstrates a vector of tuples, where each tupl
 
 ```rust
 let orders = vec![
-    (11, String::from("ordered"),
-    (13, String::from("shipped"),
-    (17, String::from("delivered"),
-    (19, String::from("cancelled")
+    (11, String::from("ordered")),
+    (13, String::from("shipped")),
+    (17, String::from("delivered")),
+    (19, String::from("cancelled"))
 ]
 ```
 
