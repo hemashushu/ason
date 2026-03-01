@@ -7,7 +7,7 @@
 use std::io::Read;
 
 use crate::{
-    ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Enumeration},
+    ast::{AsonNode, Enumeration, KeyValuePair, NamedListEntry, Number},
     char_with_position::CharsWithPositionIterator,
     error::AsonError,
     lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
@@ -25,7 +25,10 @@ pub fn parse_from_str(s: &str) -> Result<AsonNode, AsonError> {
     parse_from_char_iterator(chars)
 }
 
-pub fn parse_from_reader(reader: Box<dyn Read>) -> Result<AsonNode, AsonError> {
+pub fn parse_from_reader<R>(reader: R) -> Result<AsonNode, AsonError>
+where
+    R: Read,
+{
     let char_iter = UTF8CharIterator::new(reader);
     parse_from_char_iterator(char_iter)
 }
@@ -109,6 +112,9 @@ where
         }
     }
 
+    // Peek the next token and check if it equals to the expected token,
+    // return false if not equals or no more token,
+    // error if lexing error occurs
     fn peek_token_and_equals(
         &self,
         offset: usize,
@@ -119,7 +125,9 @@ where
             Some(token) if token == expected_token))
     }
 
-    fn consume_token_and_expect(
+    // Consume the next token and assert it equals to the expected token,
+    // error if not equal or no more token
+    fn consume_token_and_assert(
         &mut self,
         expected_token: &Token,
         token_description: &str,
@@ -142,24 +150,24 @@ where
         }
     }
 
-    // ')'
+    // Consume ')', error if the next token is not ')' or no more token
     fn consume_closing_parenthesis(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_expect(&Token::ClosingParenthesis, "closing parenthesis")
+        self.consume_token_and_assert(&Token::ClosingParenthesis, "closing parenthesis")
     }
 
-    // ']'
+    // Consume ']', error if the next token is not ']' or no more token
     fn consume_closing_bracket(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_expect(&Token::ClosingBracket, "closing bracket")
+        self.consume_token_and_assert(&Token::ClosingBracket, "closing bracket")
     }
 
-    // '}'
+    // Consume '}', error if the next token is not '}' or no more token
     fn consume_closing_brace(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_expect(&Token::ClosingBrace, "closing brace")
+        self.consume_token_and_assert(&Token::ClosingBrace, "closing brace")
     }
 
-    // consume ':'
+    // Consume ':', error if the next token is not ':' or no more token
     fn consume_colon(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_expect(&Token::Colon, "colon")
+        self.consume_token_and_assert(&Token::Colon, "colon")
     }
 }
 
@@ -208,7 +216,10 @@ where
                             }
                             _ => {
                                 // unit variant (that is, without value)
-                                let v = AsonNode::Enumeration(Enumeration::new(type_name, variant_name));
+                                let v = AsonNode::Enumeration(Enumeration::new(
+                                    type_name,
+                                    variant_name,
+                                ));
                                 self.next_token()?;
                                 v
                             }
@@ -500,7 +511,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        ast::{KeyValuePair, NamedListEntry, Number, Enumeration},
+        ast::{Enumeration, KeyValuePair, NamedListEntry, Number},
         error::AsonError,
         parser::parse_from_str,
         position::Position,
@@ -682,7 +693,9 @@ mod tests {
                         },
                         KeyValuePair {
                             key: "street".to_owned(),
-                            value: Box::new(AsonNode::Enumeration(Enumeration::new("Option", "None"))),
+                            value: Box::new(AsonNode::Enumeration(Enumeration::new(
+                                "Option", "None"
+                            ))),
                         },
                     ])),
                 },

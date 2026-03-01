@@ -140,7 +140,11 @@ While ASON is designed to resemble JSON, making it easy for JSON users to learn 
 
 ## 4 Library and APIs
 
-The Rust [ason](https://github.com/hemashushu/ason) library provides AST (Abstract Syntax Tree) and Token level ASON access, and [serde_ason](https://github.com/hemashushu/serde_ason) provides [serde](https://github.com/serde-rs/serde) based for serialization and deserialization.
+The Rust [ason](https://github.com/hemashushu/ason) library provides three set APIs:
+
+1. [Serde](https://github.com/serde-rs/serde) based APIs for serialization and deserialization.
+2. AST (Abstract Syntax Tree) based APIs for parsing and writing ASON documents.
+3. Token stream reader and writer APIs for low-level access to ASON documents.
 
 In general, it is recommended to use the serde API since it is simple enough to meet most needs.
 
@@ -153,13 +157,13 @@ Consider the following ASON document:
     name: "foo"
     version: "0.1.0"
     dependencies: [
-        "random@1.0.1"
-        "regex@2.0.0"
+        "random"
+        "regex"
     ]
 }
 ```
 
-This document consists of an object and a list: the object with `name`, `version` and `dependencies` fields, and the list with string as elements. We can create a Rust struct corresponding to these data:
+This document consists of an object and a list. The object has `name`, `version` and `dependencies` fields, and the list has strings as elements. We can create a Rust struct corresponding to this document:
 
 ```rust
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -170,28 +174,37 @@ struct Package {
 }
 ```
 
-The struct needs to be annotated with a `derive` attribute, in which `Serialize` and `Deserialize` are traits provided by the _serde_ serialization framework.
+The struct needs to be annotated with `Serialize` and `Deserialize` traits (which are provided by the _serde_ serialization framework) to enable serialization and deserialization.
 
-The following code shows how to use the serde API `ason::serde::from_str` for deserializing the ASON document into a Rust struct instance:
+The following code demonstrates how to use the function `ason::de::de_from_str` to deserialize the ASON document string into a `Package` struct instance:
 
 ```rust
-let text = "..."; // The above ASON document
-let package = from_str::<Package>(text).unwrap(); // Now you get a `Package` struct instance
+// The above ASON document
+let text = "...";
+
+// Deserialize the ASON document string into a `Package` struct.
+let package: Package = ason::de::de_from_str(text).unwrap();
+
+// Verify the deserialized `Package` struct.
+assert_eq!(
+    package,
+    Package {
+        name: String::from("foo"),
+        version: String::from("0.1.0"),
+        dependencies: vec![
+            String::from("random"),
+            String::from("regex")
+        ],
+    }
+);
 ```
 
-You can serialize a Rust struct instance to string with `ason::serde::to_string` function:
+You can serialize the `Package` struct instance back into an ASON document string using the `ason::ser::ser_to_string` function:
 
 ```rust
-let package = Package{
-    name: String::new("foo"),
-    version: String::new("0.1.0"),
-    dependencies: vec![
-        String::new("random@1.0.1"),
-        String::new("regex@2.0.0"),
-    ],
-};
-let text = to_string(&package);
-// The `text` should be resemble the above ASON document
+// Serialize the `Package` struct back into an ASON document string.
+let serialized_text = ason::ser::ser_to_string(&package).unwrap();
+assert_eq!(serialized_text, text);
 ```
 
 ### 4.2 Parser and Writer
@@ -199,10 +212,13 @@ let text = to_string(&package);
 You can parse the ASON document into AST object using the `ason::parser::parse_from_str` function:
 
 ```rust
-let text = "..."; // The above ASON document
-let node = parse_from_str(text).unwrap(); // Now you get an AST object of type `AsonNode`
+// The above ASON document
+let text = "...";
 
-// Let's verify the structure of the AST object
+// Convert the ASON document string to an AST node.
+let node = ason::parser::parse_from_str(text).unwrap();
+
+// Verify the AST node structure.
 assert_eq!(
     node,
     AsonNode::Object(vec![
@@ -217,8 +233,8 @@ assert_eq!(
         KeyValuePair {
             key: String::from("dependencies"),
             value: Box::new(AsonNode::List(vec![
-                AsonNode::String(String::from("random@1.0.1")),
-                AsonNode::String(String::from("regex@2.0.0"))
+                AsonNode::String(String::from("random")),
+                AsonNode::String(String::from("regex"))
             ]))
         }
     ])
@@ -228,8 +244,9 @@ assert_eq!(
 You can also turn the AST object into a string using the `ason::writer::write_to_string` function:
 
 ```rust
-let text = write_to_string(&node);
-// The `text` should be resemble the above ASON document
+// Convert the AST node back to an ASON document string.
+let document = ason::writer::write_to_string(&node);
+assert_eq!(document, text);
 ```
 
 Since AST object lacks some information such as comments, whitespace, the original string format (e.g., multi-line string, raw string, etc.), and the original numeric types (e.g., hexadecimal, octal, binary), so the output text may not be exactly the same as the input text, do not use the writer for formatting ASON documents.
@@ -249,12 +266,17 @@ Consider the following ASON document:
 The token stream reader can be used to read the document token by token:
 
 ```rust
-let text = "..."; // The above ASON document
-let mut reader = stream_from_str(text);
+// The above ASON document
+let text = "...";
 
-// The first token should be the opening brace `{`.
-// `reader.next()` returns `Option<Result<Token, AsonError>>`,
-// so we need to unwrap the `Option` first.
+// Create a token stream reader from the ASON document string.
+let mut reader = ason::token_stream_reader::stream_from_str(text);
+
+// Function `reader.next()` returns `Option<Result<Token, AsonError>>`,
+// where `Option::None` indicates the end of the stream,
+// `Some(Err)` indicates a lexing error, and `Some(Ok)` contains the next token.
+
+// The first token should be the opening curly brace `{`.
 let first_result = reader.next().unwrap();
 assert!(first_result.is_ok());
 
@@ -276,7 +298,7 @@ assert_eq!(
     Token::Number(NumberToken::I32(123))
 );
 
-// The last token should be the closing brace `}`.
+// The last token should be the closing curly brace `}`.
 assert_eq!(reader.next().unwrap().unwrap(), Token::ClosingBrace);
 
 // There should be no more tokens.
@@ -288,24 +310,23 @@ Token stream reader does not verify the syntax of the document while it checks t
 There is also a token stream writer for writing tokens into a stream, which is typically used for generating ASON documents incrementally.
 
 ```rust
-let mut output = Vec::new(); // Or other types of output stream
+// Create an output stream (can be a file, network stream, or in-memory buffer).
+// Here we use `Vec<u8>` for testing.
+let mut output = Vec::new();
 
-let mut writer = TokenStreamWriter::new(&mut output);
-writer.print_token(&Token::OpeningBrace)?;
+// Create a token stream writer and write some tokens to the output stream.
+let mut writer = ason::token_stream_writer::TokenStreamWriter::new(&mut output);
+
+writer.print_opening_brace()?;
 writer.print_token(&Token::Identifier("id".to_owned()))?;
-writer.print_token(&Token::Colon)?;
+writer.print_colon()?;
 writer.print_space()?;
 writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-writer.print_space()?;
-writer.print_token(&Token::Identifier("name".to_owned()))?;
-writer.print_token(&Token::Colon)?;
-writer.print_space()?;
-writer.print_token(&Token::String("Alice".to_owned()))?;
-writer.print_token(&Token::ClosingBrace)?;
+writer.print_closing_brace()?;
 
 // Verify the output
-let text = String::from_utf8(output).unwrap();
-assert_eq!(text, "\n{    id: 123 name: \"Alice\"\n}");
+let document = String::from_utf8(output).unwrap();
+assert_eq!(document, text);
 ```
 
 Similar to the token stream reader, the token stream writer does not verify the token sequence, it can write any string (including comments and whitespace) as you want, it is just a thin wrapper around the output stream.

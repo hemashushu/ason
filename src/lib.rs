@@ -5,6 +5,8 @@
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
 mod char_with_position;
+mod error;
+mod error_printer;
 mod lexer;
 mod normalizer;
 mod peekable_iterator;
@@ -13,9 +15,9 @@ mod range;
 mod utf8_char_iterator;
 
 pub mod ast;
-pub mod error;
-pub mod error_printer;
+pub mod de;
 pub mod parser;
+pub mod ser;
 pub mod token;
 pub mod token_stream_reader;
 pub mod token_stream_writer;

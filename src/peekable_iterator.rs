@@ -11,7 +11,7 @@ pub const ROUND_QUEUE_LENGTH: usize = 8;
 pub struct PeekableIterator<T, U>
 where
     T: PartialEq,
-    U: Iterator<Item = T> //  + Sized,
+    U: Iterator<Item = T>,
 {
     upstream: U,
     buffer: RoundQueue<T>,
@@ -21,7 +21,7 @@ where
 impl<T, U> PeekableIterator<T, U>
 where
     T: PartialEq,
-    U: Iterator<Item = T> // + Sized,
+    U: Iterator<Item = T>,
 {
     /// Creates a new PeekableIter with the specified buffer size.
     /// The buffer is pre-filled with elements from the upstream iterator.
@@ -60,7 +60,7 @@ where
 impl<T, U> Iterator for PeekableIterator<T, U>
 where
     T: PartialEq,
-    U: Iterator<Item = T> // + Sized,
+    U: Iterator<Item = T>,
 {
     type Item = T;
 

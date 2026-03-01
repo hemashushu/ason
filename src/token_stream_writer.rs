@@ -42,33 +42,65 @@ where
         }
     }
 
+    pub fn print_opening_brace(&mut self) -> Result<()> {
+        self.print_str("{")?;
+        self.increase_indent();
+        self.print_newline()?;
+        Ok(())
+    }
+
+    pub fn print_closing_brace(&mut self) -> Result<()> {
+        self.decrease_indent();
+        self.print_newline()?;
+        self.print_str("}")?;
+        Ok(())
+    }
+
+    pub fn print_opening_bracket(&mut self) -> Result<()> {
+        self.print_str("[")?;
+        self.increase_indent();
+        self.print_newline()?;
+        Ok(())
+    }
+
+    pub fn print_closing_bracket(&mut self) -> Result<()> {
+        self.decrease_indent();
+        self.print_newline()?;
+        self.print_str("]")?;
+        Ok(())
+    }
+
+    pub fn print_opening_parenthesis(&mut self) -> Result<()> {
+        self.print_str("(")
+    }
+
+    pub fn print_closing_parenthesis(&mut self) -> Result<()> {
+        self.print_str(")")
+    }
+
+    pub fn print_colon(&mut self) -> Result<()> {
+        self.print_str(":")
+    }
+
     pub fn print_token(&mut self, token: &Token) -> Result<()> {
         match token {
             Token::OpeningBrace => {
-                self.print_str("{")?;
-                self.increase_indent();
-                self.print_newline()?;
+                self.print_opening_brace()?;
             }
             Token::ClosingBrace => {
-                self.decrease_indent();
-                self.print_newline()?;
-                self.print_str("}")?;
+                self.print_closing_brace()?;
             }
             Token::OpeningBracket => {
-                self.print_str("[")?;
-                self.increase_indent();
-                self.print_newline()?;
+                self.print_opening_bracket()?;
             }
             Token::ClosingBracket => {
-                self.decrease_indent();
-                self.print_newline()?;
-                self.print_str("]")?;
+                self.print_closing_bracket()?;
             }
             Token::OpeningParenthesis => {
-                self.print_str("(")?;
+                self.print_opening_parenthesis()?;
             }
             Token::ClosingParenthesis => {
-                self.print_str(")")?;
+                self.print_closing_parenthesis()?;
             }
             Token::Number(number_token) => {
                 self.print_number(number_token)?;
@@ -89,7 +121,7 @@ where
                 self.print_str(ident)?;
             }
             Token::Colon => {
-                self.print_str(":")?;
+                self.print_colon()?;
             }
             Token::Enumeration(type_name, member_name) => {
                 self.print_str(type_name)?;
@@ -115,13 +147,11 @@ where
     }
 
     pub fn print_space(&mut self) -> Result<()> {
-        self.print_str(" ")?;
-        Ok(())
+        self.print_str(" ")
     }
 
     fn print_str(&mut self, s: &str) -> Result<()> {
-        self.upstream.write_all(s.as_bytes())?;
-        Ok(())
+        self.upstream.write_all(s.as_bytes())
     }
 
     fn increase_indent(&mut self) {
@@ -501,23 +531,20 @@ mod tests {
     }
 
     #[test]
-    fn test_print_list() {
+    fn test_print_list() -> Result<()> {
         // test print list with one element, e.g., [1]
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningBracket)?;
-            print_tokens_with_space_separated_to_string(
-                &mut writer,
-                &[Token::Number(NumberToken::I32(1))],
-            );
-            writer.print_token(&Token::ClosingBracket)?;
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_bracket()?; // Equivalent to `writer.print_token(&Token::OpeningBracket)?;`
+        print_tokens_with_space_separated_to_string(
+            &mut writer,
+            &[Token::Number(NumberToken::I32(1))],
+        );
+        writer.print_closing_bracket()?; // Equivalent to `writer.print_token(&Token::ClosingBracket)?;`
 
-            Ok(String::from_utf8(output).unwrap())
-        };
-
+        let text = String::from_utf8(output).unwrap();
         assert_eq!(
-            t().unwrap(),
+            text,
             "\
 [
     1
@@ -525,25 +552,22 @@ mod tests {
         );
 
         // test print list with multiple elements, e.g., [1, 2, 3]
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningBracket)?;
-            print_tokens_with_space_separated_to_string(
-                &mut writer,
-                &[
-                    Token::Number(NumberToken::I32(1)),
-                    Token::Number(NumberToken::I32(2)),
-                    Token::Number(NumberToken::I32(3)),
-                ],
-            );
-            writer.print_token(&Token::ClosingBracket)?;
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_bracket()?;
+        print_tokens_with_space_separated_to_string(
+            &mut writer,
+            &[
+                Token::Number(NumberToken::I32(1)),
+                Token::Number(NumberToken::I32(2)),
+                Token::Number(NumberToken::I32(3)),
+            ],
+        );
+        writer.print_closing_bracket()?;
 
-            Ok(String::from_utf8(output).unwrap())
-        };
-
+        let text = String::from_utf8(output).unwrap();
         assert_eq!(
-            t().unwrap(),
+            text,
             "\
 [
     1 2 3
@@ -551,36 +575,32 @@ mod tests {
         );
 
         // test print empty list, e.g., []
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningBracket)?;
-            writer.print_token(&Token::ClosingBracket)?;
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_bracket()?;
+        writer.print_closing_bracket()?;
 
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text, "[\n    \n]");
 
-        assert_eq!(t().unwrap(), "[\n    \n]");
+        Ok(())
     }
 
     #[test]
-    fn test_print_named_list() {
+    fn test_print_named_list() -> Result<()> {
         // test print named list with one item, e.g., `["foo": 123]`
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningBracket)?;
-            writer.print_token(&Token::String("foo".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-            writer.print_token(&Token::ClosingBracket)?;
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_bracket()?;
+        writer.print_token(&Token::String("foo".to_owned()))?;
+        writer.print_colon()?; // Equivalent to `writer.print_token(&Token::Colon)?;`
+        writer.print_space()?;
+        writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+        writer.print_closing_bracket()?;
 
-            Ok(String::from_utf8(output).unwrap())
-        };
-
+        let text = String::from_utf8(output).unwrap();
         assert_eq!(
-            t().unwrap(),
+            text,
             "\
 [
     \"foo\": 123
@@ -588,73 +608,71 @@ mod tests {
         );
 
         // test print named list with multiple items, e.g., ["foo": 123, "bar": "Alice"]
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningBracket)?;
-            writer.print_token(&Token::String("foo".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-            writer.print_space()?;
-            writer.print_token(&Token::String("bar".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::String("Alice".to_owned()))?;
-            writer.print_token(&Token::ClosingBracket)?;
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_bracket()?;
+        writer.print_token(&Token::String("foo".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+        writer.print_space()?;
+        writer.print_token(&Token::String("bar".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::String("Alice".to_owned()))?;
+        writer.print_closing_bracket()?;
 
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let text = String::from_utf8(output).unwrap();
 
         assert_eq!(
-            t().unwrap(),
+            text,
             "\
 [
     \"foo\": 123 \"bar\": \"Alice\"
 ]"
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_print_tuple() {
+    fn test_print_tuple() -> Result<()> {
         // test print tuple with multiple elements, e.g., (1, "Alice", true)
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningParenthesis)?;
-            print_tokens_with_space_separated_to_string(
-                &mut writer,
-                &[
-                    Token::Number(NumberToken::I32(1)),
-                    Token::String("Alice".to_owned()),
-                    Token::Boolean(true),
-                ],
-            );
-            writer.print_token(&Token::ClosingParenthesis)?;
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_parenthesis()?;
+        print_tokens_with_space_separated_to_string(
+            &mut writer,
+            &[
+                Token::Number(NumberToken::I32(1)),
+                Token::String("Alice".to_owned()),
+                Token::Boolean(true),
+            ],
+        );
+        writer.print_closing_parenthesis()?;
 
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text, "(1 \"Alice\" true)");
 
-        assert_eq!(t().unwrap(), "(1 \"Alice\" true)");
+        Ok(())
     }
 
     #[test]
-    fn test_print_object() {
+    fn test_print_object() -> Result<()> {
         // test print object with single field, e.g., {id: 123}
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningBrace)?;
-            writer.print_token(&Token::Identifier("id".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-            writer.print_token(&Token::ClosingBrace)?;
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_brace()?;
+        writer.print_token(&Token::Identifier("id".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+        writer.print_closing_brace()?;
+
+        let text = String::from_utf8(output).unwrap();
 
         assert_eq!(
-            t().unwrap(),
+            text,
             "\
 {
     id: 123
@@ -662,26 +680,24 @@ mod tests {
         );
 
         // test print object with multiple fields, e.g., {id: 123 name: "Alice"}
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningBrace)?;
-            writer.print_token(&Token::Identifier("id".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-            writer.print_space()?;
-            writer.print_token(&Token::Identifier("name".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::String("Alice".to_owned()))?;
-            writer.print_token(&Token::ClosingBrace)?;
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_brace()?;
+        writer.print_token(&Token::Identifier("id".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+        writer.print_space()?;
+        writer.print_token(&Token::Identifier("name".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::String("Alice".to_owned()))?;
+        writer.print_closing_brace()?;
 
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let text = String::from_utf8(output).unwrap();
 
         assert_eq!(
-            t().unwrap(),
+            text,
             "\
 {
     id: 123 name: \"Alice\"
@@ -689,35 +705,34 @@ mod tests {
         );
 
         // test print nested object
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningBrace)?;
-            writer.print_token(&Token::Identifier("id".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-            writer.print_space()?;
-            writer.print_token(&Token::Identifier("address".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::OpeningBrace)?;
-            writer.print_token(&Token::Identifier("city".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::String("New York".to_owned()))?;
-            writer.print_space()?;
-            writer.print_token(&Token::Identifier("zip".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::String("10001".to_owned()))?;
-            writer.print_token(&Token::ClosingBrace)?;
-            writer.print_token(&Token::ClosingBrace)?;
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_brace()?;
+        writer.print_token(&Token::Identifier("id".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+        writer.print_space()?;
+        writer.print_token(&Token::Identifier("address".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_opening_brace()?;
+        writer.print_token(&Token::Identifier("city".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::String("New York".to_owned()))?;
+        writer.print_space()?;
+        writer.print_token(&Token::Identifier("zip".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::String("10001".to_owned()))?;
+        writer.print_closing_brace()?;
+        writer.print_closing_brace()?;
+
+        let text = String::from_utf8(output).unwrap();
 
         assert_eq!(
-            t().unwrap(),
+            text,
             "\
 {
     id: 123 address: {
@@ -727,33 +742,32 @@ mod tests {
         );
 
         // test print object with list value, e.g., `{ id: 123 tags: ["tag1", "tag2", "tag3"] }`
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::OpeningBrace)?;
-            writer.print_token(&Token::Identifier("id".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-            writer.print_space()?;
-            writer.print_token(&Token::Identifier("tags".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::OpeningBracket)?;
-            print_tokens_with_space_separated_to_string(
-                &mut writer,
-                &[
-                    Token::String("tag1".to_owned()),
-                    Token::String("tag2".to_owned()),
-                    Token::String("tag3".to_owned()),
-                ],
-            );
-            writer.print_token(&Token::ClosingBracket)?;
-            writer.print_token(&Token::ClosingBrace)?;
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_opening_brace()?;
+        writer.print_token(&Token::Identifier("id".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+        writer.print_space()?;
+        writer.print_token(&Token::Identifier("tags".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_opening_bracket()?;
+        print_tokens_with_space_separated_to_string(
+            &mut writer,
+            &[
+                Token::String("tag1".to_owned()),
+                Token::String("tag2".to_owned()),
+                Token::String("tag3".to_owned()),
+            ],
+        );
+        writer.print_closing_bracket()?;
+        writer.print_closing_brace()?;
+        let text = String::from_utf8(output).unwrap();
+
         assert_eq!(
-            t().unwrap(),
+            text,
             "\
 {
     id: 123 tags: [
@@ -761,6 +775,8 @@ mod tests {
     ]
 }"
         );
+
+        Ok(())
     }
 
     #[test]
@@ -776,127 +792,133 @@ mod tests {
     }
 
     #[test]
-    fn test_print_variant_with_single_value() {
+    fn test_print_variant_with_single_value() -> Result<()> {
         // test print variant with single integer value, e.g., `Option::Some(123)`
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Enumeration("Option".to_owned(), "Some".to_owned()))?;
-            writer.print_token(&Token::OpeningParenthesis)?;
-            writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-            writer.print_token(&Token::ClosingParenthesis)?;
-            Ok(String::from_utf8(output).unwrap())
-        };
-        assert_eq!(t().unwrap(), "Option::Some(123)");
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_token(&Token::Enumeration("Option".to_owned(), "Some".to_owned()))?;
+        writer.print_opening_parenthesis()?;
+        writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+        writer.print_closing_parenthesis()?;
+
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text, "Option::Some(123)");
 
         // test print variant with a string value, e.g., `Result::Err("error message")`
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Enumeration("Result".to_owned(), "Err".to_owned()))?;
-            writer.print_token(&Token::OpeningParenthesis)?;
-            writer.print_token(&Token::String("Error message".to_owned()))?;
-            writer.print_token(&Token::ClosingParenthesis)?;
-            Ok(String::from_utf8(output).unwrap())
-        };
-        assert_eq!(t().unwrap(), "Result::Err(\"Error message\")");
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_token(&Token::Enumeration("Result".to_owned(), "Err".to_owned()))?;
+        writer.print_opening_parenthesis()?;
+        writer.print_token(&Token::String("Error message".to_owned()))?;
+        writer.print_closing_parenthesis()?;
+
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text, "Result::Err(\"Error message\")");
 
         // test print variant with list value, e.g., `Enumeration::List([1, 2, 3])`
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Enumeration("Enumeration".to_owned(), "List".to_owned()))?;
-            writer.print_token(&Token::OpeningParenthesis)?;
-            writer.print_token(&Token::OpeningBracket)?;
-            print_tokens_with_space_separated_to_string(
-                &mut writer,
-                &[
-                    Token::Number(NumberToken::I32(1)),
-                    Token::Number(NumberToken::I32(2)),
-                    Token::Number(NumberToken::I32(3)),
-                ],
-            );
-            writer.print_token(&Token::ClosingBracket)?;
-            writer.print_token(&Token::ClosingParenthesis)?;
-            Ok(String::from_utf8(output).unwrap())
-        };
-        assert_eq!(t().unwrap(), "Enumeration::List([\n    1 2 3\n])");
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_token(&Token::Enumeration(
+            "Enumeration".to_owned(),
+            "List".to_owned(),
+        ))?;
+        writer.print_opening_parenthesis()?;
+        writer.print_opening_bracket()?;
+        print_tokens_with_space_separated_to_string(
+            &mut writer,
+            &[
+                Token::Number(NumberToken::I32(1)),
+                Token::Number(NumberToken::I32(2)),
+                Token::Number(NumberToken::I32(3)),
+            ],
+        );
+        writer.print_closing_bracket()?;
+        writer.print_closing_parenthesis()?;
+
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text, "Enumeration::List([\n    1 2 3\n])");
 
         // test print variant with object value, e.g., `Enumeration::Object{id: 123 name: "Alice"}`
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Enumeration("Enumeration".to_owned(), "Object".to_owned()))?;
-            writer.print_token(&Token::OpeningParenthesis)?;
-            writer.print_token(&Token::OpeningBrace)?;
-            writer.print_token(&Token::Identifier("id".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-            writer.print_space()?;
-            writer.print_token(&Token::Identifier("name".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::String("Alice".to_owned()))?;
-            writer.print_token(&Token::ClosingBrace)?;
-            writer.print_token(&Token::ClosingParenthesis)?;
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_token(&Token::Enumeration(
+            "Enumeration".to_owned(),
+            "Object".to_owned(),
+        ))?;
+        writer.print_opening_parenthesis()?;
+        writer.print_opening_brace()?;
+        writer.print_token(&Token::Identifier("id".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+        writer.print_space()?;
+        writer.print_token(&Token::Identifier("name".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::String("Alice".to_owned()))?;
+        writer.print_closing_brace()?;
+        writer.print_closing_parenthesis()?;
+
+        let text = String::from_utf8(output).unwrap();
         assert_eq!(
-            t().unwrap(),
+            text,
             "Enumeration::Object({\n    id: 123 name: \"Alice\"\n})"
         );
+
+        Ok(())
     }
 
     #[test]
-    fn test_print_tuple_like_variant() {
+    fn test_print_tuple_like_variant() -> Result<()> {
         // test print tuple-like variant, e.g., `Enumeration::Tuple(1, "Alice", true)`
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Enumeration("Enumeration".to_owned(), "Tuple".to_owned()))?;
-            writer.print_token(&Token::OpeningParenthesis)?;
-            print_tokens_with_space_separated_to_string(
-                &mut writer,
-                &[
-                    Token::Number(NumberToken::I32(1)),
-                    Token::String("Alice".to_owned()),
-                    Token::Boolean(true),
-                ],
-            );
-            writer.print_token(&Token::ClosingParenthesis)?;
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_token(&Token::Enumeration(
+            "Enumeration".to_owned(),
+            "Tuple".to_owned(),
+        ))?;
+        writer.print_opening_parenthesis()?;
+        print_tokens_with_space_separated_to_string(
+            &mut writer,
+            &[
+                Token::Number(NumberToken::I32(1)),
+                Token::String("Alice".to_owned()),
+                Token::Boolean(true),
+            ],
+        );
+        writer.print_closing_parenthesis()?;
 
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text, "Enumeration::Tuple(1 \"Alice\" true)");
 
-        assert_eq!(t().unwrap(), "Enumeration::Tuple(1 \"Alice\" true)");
+        Ok(())
     }
 
     #[test]
-    fn test_print_object_like_variant() {
+    fn test_print_object_like_variant() -> Result<()> {
         // test print object-like variant, e.g., `Enumeration::Object{id: 123, name: "Alice"}`
-        let t = || -> Result<String> {
-            let mut output = Vec::new();
-            let mut writer = TokenStreamWriter::new(&mut output);
-            writer.print_token(&Token::Enumeration("Enumeration".to_owned(), "Object".to_owned()))?;
-            writer.print_token(&Token::OpeningBrace)?;
-            writer.print_token(&Token::Identifier("id".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-            writer.print_space()?;
-            writer.print_token(&Token::Identifier("name".to_owned()))?;
-            writer.print_token(&Token::Colon)?;
-            writer.print_space()?;
-            writer.print_token(&Token::String("Alice".to_owned()))?;
-            writer.print_token(&Token::ClosingBrace)?;
+        let mut output = Vec::new();
+        let mut writer = TokenStreamWriter::new(&mut output);
+        writer.print_token(&Token::Enumeration(
+            "Enumeration".to_owned(),
+            "Object".to_owned(),
+        ))?;
+        writer.print_opening_brace()?;
+        writer.print_token(&Token::Identifier("id".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::Number(NumberToken::I32(123)))?;
+        writer.print_space()?;
+        writer.print_token(&Token::Identifier("name".to_owned()))?;
+        writer.print_colon()?;
+        writer.print_space()?;
+        writer.print_token(&Token::String("Alice".to_owned()))?;
+        writer.print_closing_brace()?;
 
-            Ok(String::from_utf8(output).unwrap())
-        };
+        let text = String::from_utf8(output).unwrap();
 
-        assert_eq!(
-            t().unwrap(),
-            "Enumeration::Object{\n    id: 123 name: \"Alice\"\n}"
-        );
+        assert_eq!(text, "Enumeration::Object{\n    id: 123 name: \"Alice\"\n}");
+
+        Ok(())
     }
 }

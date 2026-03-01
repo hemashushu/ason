@@ -15,7 +15,7 @@
 //! Note that the `Token::_Plus` and `Token::_Minus` tokens wouldn't be returned because
 //! they are normalized into signed numbers by NormalizeSignedNumberIter.
 
-use std::io::Read;
+use std::{io::Read, str::Chars};
 
 use crate::{
     char_with_position::CharsWithPositionIterator,
@@ -27,33 +27,10 @@ use crate::{
     utf8_char_iterator::UTF8CharIterator,
 };
 
-pub struct TokenStreamReader<T>
-where
-    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
-{
-    upstream: T,
-}
-
-impl<T> TokenStreamReader<T>
-where
-    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
-{
-    pub fn new(upstream: T) -> Self {
-        Self { upstream }
-    }
-}
-
-impl<T> Iterator for TokenStreamReader<T>
-where
-    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
-{
-    type Item = Result<Token, AsonError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.upstream
-            .next()
-            .map(|result| result.map(|token_with_range| token_with_range.token))
-    }
+pub fn stream_from_str<'a>(
+    s: &'a str,
+) -> TokenStreamReader<NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<Chars<'a>>>>> {
+    stream_from_char_iterator(s.chars())
 }
 
 pub fn stream_from_reader<R>(
@@ -88,25 +65,43 @@ where
     TokenStreamReader::new(normalizer_iter)
 }
 
+pub struct TokenStreamReader<T>
+where
+    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
+{
+    upstream: T,
+}
+
+impl<T> TokenStreamReader<T>
+where
+    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
+{
+    pub fn new(upstream: T) -> Self {
+        Self { upstream }
+    }
+}
+
+impl<T> Iterator for TokenStreamReader<T>
+where
+    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
+{
+    type Item = Result<Token, AsonError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.upstream
+            .next()
+            .map(|result| result.map(|token_with_range| token_with_range.token))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::{io::Cursor, str::Chars};
+    use std::io::Cursor;
 
     use crate::{
-        char_with_position::CharsWithPositionIterator,
-        lexer::Lexer,
-        normalizer::NormalizeSignedNumberIter,
         token::{NumberToken, Token},
-        token_stream_reader::{TokenStreamReader, stream_from_char_iterator, stream_from_reader},
+        token_stream_reader::{stream_from_reader, stream_from_str},
     };
-
-    /// Helper function to create a token stream reader from a string literal.
-    fn stream_from_str(
-        s: &str,
-    ) -> TokenStreamReader<NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<Chars<'_>>>>>
-    {
-        stream_from_char_iterator(s.chars())
-    }
 
     #[test]
     fn test_stream_from_str() {

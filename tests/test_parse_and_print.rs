@@ -4,9 +4,54 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use ason::{parser::parse_from_str, writer::write_to_string};
+use ason::{
+    ast::{AsonNode, KeyValuePair},
+    parser::parse_from_str,
+    writer::write_to_string,
+};
 use pretty_assertions::assert_eq;
 use std::path::PathBuf;
+
+#[test]
+fn test_parse_and_print() {
+    let text = r#"{
+    name: "foo"
+    version: "0.1.0"
+    dependencies: [
+        "random"
+        "regex"
+    ]
+}"#;
+
+    // Convert the ASON document string to an AST node.
+    let node = ason::parser::parse_from_str(text).unwrap();
+
+    // Verify the AST node structure.
+    assert_eq!(
+        node,
+        AsonNode::Object(vec![
+            KeyValuePair {
+                key: String::from("name"),
+                value: Box::new(AsonNode::String(String::from("foo")))
+            },
+            KeyValuePair {
+                key: String::from("version"),
+                value: Box::new(AsonNode::String(String::from("0.1.0")))
+            },
+            KeyValuePair {
+                key: String::from("dependencies"),
+                value: Box::new(AsonNode::List(vec![
+                    AsonNode::String(String::from("random")),
+                    AsonNode::String(String::from("regex"))
+                ]))
+            }
+        ])
+    );
+
+    // Convert the AST node back to an ASON document string.
+    let document = ason::writer::write_to_string(&node);
+    assert_eq!(document, text);
+}
 
 /// Helpers to get the path to the examples directory.
 fn get_examples_file_directory() -> PathBuf {

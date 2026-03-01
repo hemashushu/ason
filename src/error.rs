@@ -49,3 +49,15 @@ impl Display for AsonError {
 }
 
 impl std::error::Error for AsonError {}
+
+impl serde::de::Error for AsonError {
+    fn custom<T: Display>(msg: T) -> Self {
+        AsonError::Message(msg.to_string())
+    }
+}
+
+impl serde::ser::Error for AsonError {
+    fn custom<T: Display>(msg: T) -> Self {
+        AsonError::Message(msg.to_string())
+    }
+}

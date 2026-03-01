@@ -8,10 +8,17 @@ use std::io::{Result, Write};
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Enumeration, VariantValue};
+use crate::ast::{AsonNode, Enumeration, KeyValuePair, NamedListEntry, Number, VariantValue};
 
 pub const DEFAULT_INDENT_CHARS: &str = "    ";
 pub const DEFAULT_NEWLINE_CHARS: &str = "\n";
+
+pub fn write_to_string(node: &AsonNode) -> String {
+    let mut buf: Vec<u8> = vec![];
+    let mut writer = Writer::new(&mut buf);
+    writer.print_node(node).unwrap();
+    String::from_utf8(buf).unwrap()
+}
 
 pub struct Writer<T>
 where
@@ -41,8 +48,7 @@ where
     }
 
     fn print_space(&mut self) -> Result<()> {
-        self.print_str(" ")?;
-        Ok(())
+        self.print_str(" ")
     }
 
     fn print_opening_brace(&mut self) -> Result<()> {
@@ -74,18 +80,15 @@ where
     }
 
     fn print_opening_parenthesis(&mut self) -> Result<()> {
-        self.print_str("(")?;
-        Ok(())
+        self.print_str("(")
     }
 
     fn print_closing_parenthesis(&mut self) -> Result<()> {
-        self.print_str(")")?;
-        Ok(())
+        self.print_str(")")
     }
 
     fn print_str(&mut self, s: &str) -> Result<()> {
-        self.upstream.write_all(s.as_bytes())?;
-        Ok(())
+        self.upstream.write_all(s.as_bytes())
     }
 
     fn increase_indent(&mut self) {
@@ -159,8 +162,7 @@ where
             }
         };
 
-        self.print_str(&str)?;
-        Ok(())
+        self.print_str(&str)
     }
 
     fn print_char(&mut self, c: &char) -> Result<()> {
@@ -187,8 +189,7 @@ where
             _ => c.to_string(),
         };
 
-        self.print_str(&format!("'{}'", str))?;
-        Ok(())
+        self.print_str(&format!("'{}'", str))
     }
 
     fn print_string(&mut self, s: &str) -> Result<()> {
@@ -208,18 +209,15 @@ where
             .collect::<Vec<String>>()
             .join("");
 
-        self.print_str(&format!("\"{}\"", str))?;
-        Ok(())
+        self.print_str(&format!("\"{}\"", str))
     }
 
     fn print_boolean(&mut self, v: &bool) -> Result<()> {
-        self.print_str(if *v { "true" } else { "false" })?;
-        Ok(())
+        self.print_str(if *v { "true" } else { "false" })
     }
 
     fn print_datetime(&mut self, v: &DateTime<FixedOffset>) -> Result<()> {
-        self.print_str(&format!("d\"{}\"", v.to_rfc3339()))?;
-        Ok(())
+        self.print_str(&format!("d\"{}\"", v.to_rfc3339()))
     }
 
     /// Format the byte array as a hexadecimal string with the following format:
@@ -236,6 +234,7 @@ where
     /// ^^^^__ indent
     /// ```
     ///
+    /// This format is designed to be human-readable and easy to parse.
     fn print_hexadecimal_byte_data(&mut self, data: &[u8]) -> Result<()> {
         let leading_space_chars = DEFAULT_INDENT_CHARS.repeat(self.indent_level);
         let line_separator = format!("\n{}", leading_space_chars);
@@ -263,8 +262,7 @@ where
             .collect::<Vec<String>>()
             .join(&line_separator);
 
-        self.print_str(&format!("h\"{}\"", str))?;
-        Ok(())
+        self.print_str(&format!("h\"{}\"", str))
     }
 
     fn print_list(&mut self, items: &[AsonNode]) -> Result<()> {
@@ -369,13 +367,6 @@ where
     }
 }
 
-pub fn write_to_string(node: &AsonNode) -> String {
-    let mut buf: Vec<u8> = vec![];
-    let mut writer = Writer::new(&mut buf);
-    writer.print_node(node).unwrap();
-    String::from_utf8(buf).unwrap()
-}
-
 #[cfg(test)]
 mod tests {
     use chrono::DateTime;
@@ -383,7 +374,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        ast::{AsonNode, KeyValuePair, NamedListEntry, Number, Enumeration},
+        ast::{AsonNode, Enumeration, KeyValuePair, NamedListEntry, Number},
         writer::write_to_string,
     };
 
