@@ -17,6 +17,9 @@ use crate::{
     token::{NumberToken, Token, TokenWithRange},
 };
 
+// Buffer length for peekable iterator in lexer, it should be at least 3,
+// because some tokens need to peek 3 characters,
+// e.g., raw string with hash symbol `r#"..."#`.
 pub const PEEK_BUFFER_LENGTH_LEX: usize = 3;
 
 pub struct Lexer<T>
@@ -73,6 +76,10 @@ where
         }
     }
 
+    /// Checks if the character at the given offset matches the expected character.
+    /// It is a convenient method for checking the next few characters without consuming them.
+    /// Returns `true` if the character at the given offset matches the expected character,
+    /// otherwise returns `false`.
     fn peek_char_and_equals(&self, offset: usize, expected_char: char) -> bool {
         matches!(
             self.upstream.peek(offset),
@@ -134,20 +141,24 @@ where
 
             match current_char {
                 '/' if self.peek_char_and_equals(1, '/') => {
-                    // line comment
+                    // Line comment
                     self.lex_line_comment()
                 }
                 '/' if self.peek_char_and_equals(1, '*') => {
-                    // block comment
+                    // Block comment
                     if let Err(e) = self.lex_block_comment() {
                         break Err(e);
                     }
                 }
                 ',' => {
-                    self.next_char(); // Consume ','
+                    // Comma is used to separate elements in array and object,
+                    // it is identical to space.
+                    // Consume ','
+                    self.next_char();
                 }
                 ' ' | '\t' => {
-                    self.next_char(); // Consume space or tab
+                    // Consume space or tab
+                    self.next_char();
                 }
                 '\r' if self.peek_char_and_equals(1, '\n') => {
                     // Windows style new line `\r\n`
@@ -231,57 +242,57 @@ where
                     ));
                 }
                 '0' if matches!(self.peek_char(1), Some('x' | 'X')) => {
-                    // hexadecimal number
+                    // Hexadecimal number
                     break self.lex_hexadecimal_number();
                 }
                 '0' if matches!(self.peek_char(1), Some('b' | 'B')) => {
-                    // binary number
+                    // Binary number
                     break self.lex_binary_number();
                 }
                 '0' if matches!(self.peek_char(1), Some('o' | 'O')) => {
-                    // octal number
+                    // Octal number
                     break self.lex_octal_number();
                 }
                 '0' if matches!(self.peek_char(1), Some('.')) => {
-                    // decimal number
+                    // Decimal number
                     break self.lex_decimal_number();
                 }
                 '0'..='9' => {
-                    // decimal number
+                    // Decimal number
                     break self.lex_decimal_number();
                 }
                 'h' if self.peek_char_and_equals(1, '"') => {
-                    // hex byte data element
+                    // Hex byte data element
                     break self.lex_hexadecimal_byte_data();
                 }
                 'd' if self.peek_char_and_equals(1, '"') => {
-                    // date
+                    // Date
                     break self.lex_datetime();
                 }
                 'r' if self.peek_char_and_equals(1, '"') => {
-                    // raw string
+                    // Raw string
                     break self.lex_raw_string();
                 }
                 'r' if self.peek_char_and_equals(1, '#') && self.peek_char_and_equals(2, '"') => {
-                    // raw string with hash symbol
+                    // Raw string with hash symbol
                     break self.lex_raw_string_with_hash_symbol();
                 }
                 '"' => {
-                    // string
+                    // String
                     if self.peek_char_and_equals(1, '"') && self.peek_char_and_equals(2, '"') {
-                        // auto-trimmed string
+                        // Auto-trimmed string
                         break self.lex_auto_trimmed_string();
                     } else {
-                        // normal string
+                        // Regular string
                         break self.lex_string();
                     }
                 }
                 '\'' => {
-                    // char
+                    // Char
                     break self.lex_char();
                 }
                 'a'..='z' | 'A'..='Z' | '_' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{10ffff}' => {
-                    // identifier
+                    // Identifier
                     break self.lex_identifier();
                 }
                 current_char => {
@@ -337,26 +348,26 @@ where
                     // for complete CJK chars, check out Unicode standard
                     // Ch. 18.1 Han CJK Unified Ideographs
                     //
-                    // summary:
-                    // Block Position Comment
-                    // CJK Unified Ideographs 4E00–9FFF Common
-                    // CJK Unified Ideographs Extension A 3400–4DBF Rare
-                    // CJK Unified Ideographs Extension B 20000–2A6DF Rare, historic
-                    // CJK Unified Ideographs Extension C 2A700–2B73F Rare, historic
-                    // CJK Unified Ideographs Extension D 2B740–2B81F Uncommon, some in current use
-                    // CJK Unified Ideographs Extension E 2B820–2CEAF Rare, historic
-                    // CJK Unified Ideographs Extension F 2CEB0–2EBEF Rare, historic
-                    // CJK Unified Ideographs Extension G 30000–3134F Rare, historic
-                    // CJK Unified Ideographs Extension H 31350–323AF Rare, historic
-                    // CJK Compatibility Ideographs F900–FAFF Duplicates, unifiable variants, corporate characters
-                    // CJK Compatibility Ideographs Supplement 2F800–2FA1F Unifiable variants
+                    // | Block                                   | LocRange    | Comment |
+                    // |-----------------------------------------|-------------|---------|
+                    // | CJK Unified Ideographs                  | 4E00–9FFF   | Common                         |
+                    // | CJK Unified Ideographs Extension A      | 3400–4DBF   | Rare                           |
+                    // | CJK Unified Ideographs Extension B      | 20000–2A6DF | Rare, historic                 |
+                    // | CJK Unified Ideographs Extension C      | 2A700–2B73F | Rare, historic                 |
+                    // | CJK Unified Ideographs Extension D      | 2B740–2B81F | Uncommon, some in current use  |
+                    // | CJK Unified Ideographs Extension E      | 2B820–2CEAF | Rare, historic                 |
+                    // | CJK Unified Ideographs Extension F      | 2CEB0–2EBEF | Rare, historic                 |
+                    // | CJK Unified Ideographs Extension G      | 30000–3134F | Rare, historic                 |
+                    // | CJK Unified Ideographs Extension H      | 31350–323AF | Rare, historic                 |
+                    // | CJK Compatibility Ideographs            | F900–FAFF   | Duplicates, unifiable variants, corporate characters |
+                    // | CJK Compatibility Ideographs Supplement | 2F800–2FA1F | Unifiable variants             |
                     //
-                    // https://www.unicode.org/versions/Unicode15.0.0/ch18.pdf
-                    // https://en.wikipedia.org/wiki/CJK_Unified_Ideographs
-                    // https://www.unicode.org/versions/Unicode15.0.0/
+                    // see also:
                     //
-                    // see also
-                    // https://www.unicode.org/reports/tr31/tr31-37.html
+                    // - https://www.unicode.org/versions/Unicode15.0.0/ch18.pdf
+                    // - https://en.wikipedia.org/wiki/CJK_Unified_Ideographs
+                    // - https://www.unicode.org/versions/Unicode15.0.0/
+                    // - https://www.unicode.org/reports/tr31/tr31-37.html
 
                     identifier_buffer.push(*current_char);
                     self.next_char(); // consume char
@@ -439,19 +450,21 @@ where
                     self.next_char(); // consume '_'
                 }
                 '.' if !found_point => {
-                    found_point = true;
-
+                    // Examples of decimal floating-point numbers with '.':
                     // 3.14
                     // 271.828
+
+                    found_point = true;
                     number_buffer.push(*current_char);
                     self.next_char(); // consume '.'
                 }
                 'e' | 'E' if !found_e => {
-                    found_e = true;
-
+                    // Examples of decimal floating-point numbers with 'e':
                     // 123e45
                     // 123e+45
                     // 123e-45
+
+                    found_e = true;
                     if self.peek_char_and_equals(1, '-') {
                         number_buffer.push_str("e-");
                         self.next_char(); // consume 'e'
@@ -474,7 +487,6 @@ where
                     break;
                 }
                 ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
-                    // | '\'' | '"' => {
                     // terminator chars
                     break;
                 }
@@ -632,11 +644,6 @@ where
         // T = terminator chars || EOF
         // ```
 
-        self.push_peek_position_into_stack();
-
-        self.next_char(); // consume '0'
-        self.next_char(); // consume 'x'
-
         let mut number_buffer = String::new();
 
         // Number type suffix, e.g.,
@@ -650,6 +657,11 @@ where
         // A flag to indicate whether 'p' is found.
         // The presence of 'p' indicates a hexadecimal floating-point number.
         let mut found_p: bool = false;
+
+        self.push_peek_position_into_stack();
+
+        self.next_char(); // consume '0'
+        self.next_char(); // consume 'x'
 
         while let Some(current_char) = self.peek_char(0) {
             match current_char {
@@ -672,19 +684,21 @@ where
                     self.next_char(); // consume '_'
                 }
                 '.' if !found_point && !found_p => {
-                    found_point = true;
-
+                    // Examples of hexadecimal floating-point numbers with '.':
                     // 0x1.9
                     // 0x12.bc
+
+                    found_point = true;
                     number_buffer.push(*current_char);
                     self.next_char(); // consume '.'
                 }
                 'p' | 'P' if !found_p => {
-                    found_p = true;
-
+                    // Examples of hexadecimal floating-point numbers with 'p':
                     // 0x0.123p45
                     // 0x0.123p+45
                     // 0x0.123p-45
+
+                    found_p = true;
                     if self.peek_char_and_equals(1, '-') {
                         number_buffer.push_str("p-");
                         self.next_char(); // consume 'p'
@@ -863,13 +877,13 @@ where
         // T = terminator chars || EOF
         // ```
 
+        let mut number_buffer = String::new();
+        let mut number_type_opt: Option<NumberType> = None;
+
         self.push_peek_position_into_stack();
 
         self.next_char(); // consume '0'
         self.next_char(); // consume 'b'
-
-        let mut number_buffer = String::new();
-        let mut number_type_opt: Option<NumberType> = None;
 
         while let Some(current_char) = self.peek_char(0) {
             match current_char {
@@ -956,13 +970,14 @@ where
         // T = terminator chars || EOF
         // ```
 
+        let mut number_buffer = String::new();
+        let mut number_type_opt: Option<NumberType> = None;
+
+        // Save the start position of the octal number (i.e. the first '0')
         self.push_peek_position_into_stack();
 
         self.next_char(); // consume '0'
         self.next_char(); // consume 'o'
-
-        let mut number_buffer = String::new();
-        let mut number_type_opt: Option<NumberType> = None;
 
         while let Some(current_char) = self.peek_char(0) {
             match current_char {
@@ -1277,9 +1292,10 @@ where
         // |_______// current char, validated
         // ```
 
+        // Save the start position of the string literal (i.e. the first '"')
         self.push_peek_position_into_stack();
 
-        self.next_char(); // consume '"'
+        self.next_char(); // Consumes '"'
 
         let mut string_buffer = String::new();
 

@@ -18,7 +18,11 @@ use crate::{
     utf8_char_iterator::UTF8CharIterator,
 };
 
-pub const PEEK_BUFFER_LENGTH_PARSE: usize = 3;
+// Buffer length for peekable iterator used in parser.
+// We need to peek at most 2 tokens in the following cases:
+// - To distinguish tuple-like variant and object-like variant,
+//   e.g., `Enum::Variant(...)` and `Enum::Variant{...}`.
+pub const PEEK_BUFFER_LENGTH_PARSE: usize = 2;
 
 pub fn parse_from_str(s: &str) -> Result<AsonNode, AsonError> {
     let chars = s.chars();
@@ -114,7 +118,7 @@ where
 
     // Peek the next token and check if it equals to the expected token,
     // return false if not equals or no more token,
-    // error if lexing error occurs
+    // error if lexing error occurs during peeking.
     fn peek_token_and_equals(
         &self,
         offset: usize,
