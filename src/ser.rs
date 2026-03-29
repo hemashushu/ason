@@ -38,7 +38,6 @@ where
     upstream: &'a mut W,
     indent_level: usize,
     is_first_element: bool,
-    // newline_separator: bool,
 }
 
 impl<'a, W> Serializer<'a, W>
@@ -50,7 +49,6 @@ where
             upstream,
             indent_level: 0,
             is_first_element: false,
-            // newline_separator: false,
         }
     }
 
@@ -377,7 +375,6 @@ where
         // `[...]`
         self.print_opening_bracket()?;
         self.is_first_element = true;
-        // self.newline_separator = true;
         Ok(self)
     }
 
@@ -391,7 +388,6 @@ where
         // `(...)`
         self.print_opening_parenthesis()?;
         self.is_first_element = true;
-        // self.newline_separator = false;
         Ok(self)
     }
 
@@ -422,7 +418,6 @@ where
         self.print_str(&format!("{}::{}", name, variant))?;
         self.print_opening_parenthesis()?;
         self.is_first_element = true;
-        // self.newline_separator = false;
         Ok(self)
     }
 
@@ -430,7 +425,6 @@ where
         // `[key: value, ...]`
         self.print_opening_bracket()?;
         self.is_first_element = true;
-        // self.newline_separator = true;
         Ok(self)
     }
 
@@ -442,7 +436,6 @@ where
         // `{key: value, ...}`
         self.print_opening_brace()?;
         self.is_first_element = true;
-        // self.newline_separator = true;
         Ok(self)
     }
 
@@ -462,7 +455,6 @@ where
         self.print_str(&format!("{}::{}", name, variant))?;
         self.print_opening_brace()?;
         self.is_first_element = true;
-        // self.newline_separator = true;
         Ok(self)
     }
 }

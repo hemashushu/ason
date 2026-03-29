@@ -1,6 +1,6 @@
 [package]
 name = "ason"
-version = "2.0.1"
+version = "2.0.2"
 edition = "2024"
 
 license = "MPL-2.0"
@@ -8,7 +8,7 @@ description = "ASON is a data serialization format that evolved from JSON, featu
 homepage = "https://github.com/hemashushu/ason"
 repository = "https://github.com/hemashushu/ason"
 keywords = ["ason", "serde"]
-categories = ["encoding", "parser-implementations"]
+categories = ["encoding", "parsing"]
 
 [dependencies]
 chrono = "0.4.44"

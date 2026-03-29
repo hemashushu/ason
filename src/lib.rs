@@ -19,6 +19,6 @@ pub mod de;
 pub mod parser;
 pub mod ser;
 pub mod token;
-pub mod token_stream_reader;
-pub mod token_stream_writer;
+pub mod token_reader;
+pub mod token_writer;
 pub mod writer;

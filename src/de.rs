@@ -63,14 +63,16 @@ where
 
     let value = T::deserialize(&mut deserializer)?;
 
-    // Check extraneous tokens
-    match deserializer.next_token()? {
-        Some(_) => Err(AsonError::MessageWithRange(
-            "Extraneous token found after document end.".to_owned(),
-            deserializer.last_range,
-        )),
-        None => Ok(value),
-    }
+    // // Check extraneous tokens
+    // match deserializer.next_token()? {
+    //     Some(_) => Err(AsonError::MessageWithRange(
+    //         "Extraneous token found after document end.".to_owned(),
+    //         deserializer.last_range,
+    //     )),
+    //     None => Ok(value),
+    // }
+
+    Ok(value)
 }
 
 type UpstreamIterator<'a> =
@@ -708,14 +710,12 @@ impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
 // List/Vector Accessor
 struct ArrayAccessor<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
-    // is_first_element: bool,
 }
 
 impl<'a, 'de> ArrayAccessor<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
         Self {
             de,
-            // is_first_element: true,
         }
     }
 }
@@ -744,14 +744,12 @@ impl<'de> SeqAccess<'de> for ArrayAccessor<'_, 'de> {
 
 struct TupleAccessor<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
-    // is_first_element: bool,
 }
 
 impl<'a, 'de> TupleAccessor<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
         Self {
             de,
-            // is_first_element: true,
         }
     }
 }
@@ -780,14 +778,12 @@ impl<'de> SeqAccess<'de> for TupleAccessor<'_, 'de> {
 // Map/Named List Accessor
 struct MapAccessor<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
-    // is_first_element: bool,
 }
 
 impl<'a, 'de> MapAccessor<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
         Self {
             de,
-            // is_first_element: true,
         }
     }
 }
@@ -826,14 +822,12 @@ impl<'de> MapAccess<'de> for MapAccessor<'_, 'de> {
 
 struct ObjectAccessor<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
-    // is_first_element: bool,
 }
 
 impl<'a, 'de> ObjectAccessor<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
         Self {
             de,
-            // is_first_element: true,
         }
     }
 }

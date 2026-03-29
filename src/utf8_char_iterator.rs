@@ -10,7 +10,7 @@ pub struct UTF8CharIterator<T>
 where
     T: Read,
 {
-    bufreader: BufReader<T>, // &'a mut R>,
+    bufreader: BufReader<T>,
 }
 
 impl<T> UTF8CharIterator<T>
@@ -108,7 +108,7 @@ where
         let mut buf = [0_u8; 2];
         let len = self.bufreader.read(&mut buf).unwrap_or(0);
         if len < 2 {
-            // "Incomplete UTF-8 character steam.",
+            // Incomplete UTF-8 character steam.
             None
         } else {
             Some(buf)
@@ -121,7 +121,7 @@ where
         let len = self.bufreader.read(&mut buf).unwrap_or(0);
 
         if len < 3 {
-            // "Incomplete UTF-8 character steam.",
+            // Incomplete UTF-8 character steam.
             None
         } else {
             Some(buf)

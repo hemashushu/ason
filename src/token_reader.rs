@@ -4,16 +4,17 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-//! Function `reader.next()` returns `Option<Result<Token, AsonError>>`.
+//! Calling `reader.next()` returns `Option<Result<Token, AsonError>>`.
 //!
-//! Returning `Option::None` indicates the end of the stream,
-//! while `Some(Err)` indicates a lexing error, and `Some(Ok)` contains the next token.
+//! `None` means the token stream has ended.
+//! `Some(Err(..))` reports a lexing error.
+//! `Some(Ok(..))` yields the next token.
 //!
-//! This reader does not perform any parsing or validation of the token stream,
-//! it simply reads and returns tokens as they are lexed and normalized.
+//! This reader does not parse or validate token sequences.
+//! It only returns tokens produced by the lexer after normalization.
 //!
-//! Note that the `Token::_Plus` and `Token::_Minus` tokens wouldn't be returned because
-//! they are normalized into signed numbers by NormalizeSignedNumberIter.
+//! `Token::_Plus` and `Token::_Minus` are not emitted because
+//! `NormalizeSignedNumberIter` folds them into signed numeric tokens.
 
 use std::{io::Read, str::Chars};
 
@@ -27,27 +28,25 @@ use crate::{
     utf8_char_iterator::UTF8CharIterator,
 };
 
-pub fn stream_from_str<'a>(
+pub fn reader_from_str<'a>(
     s: &'a str,
-) -> TokenStreamReader<NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<Chars<'a>>>>> {
-    stream_from_char_iterator(s.chars())
+) -> TokenReader<NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<Chars<'a>>>>> {
+    reader_from_char_iterator(s.chars())
 }
 
-pub fn stream_from_reader<R>(
+pub fn reader_from_reader<R>(
     reader: R,
-) -> TokenStreamReader<
-    NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<UTF8CharIterator<R>>>>,
->
+) -> TokenReader<NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<UTF8CharIterator<R>>>>>
 where
     R: Read,
 {
     let char_iter = UTF8CharIterator::new(reader);
-    stream_from_char_iterator(char_iter)
+    reader_from_char_iterator(char_iter)
 }
 
-pub fn stream_from_char_iterator<I>(
+pub fn reader_from_char_iterator<I>(
     char_iterator: I,
-) -> TokenStreamReader<NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<I>>>>
+) -> TokenReader<NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<I>>>>
 where
     I: Iterator<Item = char>,
 {
@@ -62,17 +61,17 @@ where
     let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
     let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
 
-    TokenStreamReader::new(normalizer_iter)
+    TokenReader::new(normalizer_iter)
 }
 
-pub struct TokenStreamReader<T>
+pub struct TokenReader<T>
 where
     T: Iterator<Item = Result<TokenWithRange, AsonError>>,
 {
     upstream: T,
 }
 
-impl<T> TokenStreamReader<T>
+impl<T> TokenReader<T>
 where
     T: Iterator<Item = Result<TokenWithRange, AsonError>>,
 {
@@ -81,7 +80,7 @@ where
     }
 }
 
-impl<T> Iterator for TokenStreamReader<T>
+impl<T> Iterator for TokenReader<T>
 where
     T: Iterator<Item = Result<TokenWithRange, AsonError>>,
 {
@@ -100,13 +99,13 @@ mod tests {
 
     use crate::{
         token::{NumberToken, Token},
-        token_stream_reader::{stream_from_reader, stream_from_str},
+        token_reader::{reader_from_reader, reader_from_str},
     };
 
     #[test]
-    fn test_stream_from_str() {
+    fn test_read_from_str() {
         let str = "{id:123}";
-        let mut reader = stream_from_str(str);
+        let mut reader = reader_from_str(str);
 
         let first_result = reader.next().unwrap();
         assert!(first_result.is_ok());
@@ -128,12 +127,12 @@ mod tests {
     }
 
     #[test]
-    fn test_stream_from_reader() {
+    fn test_read_from_reader() {
         let str = "123";
         let reader = Cursor::new(str);
-        let mut token_stream_reader = stream_from_reader(reader);
+        let mut token_reader = reader_from_reader(reader);
 
-        let first_result = token_stream_reader.next().unwrap();
+        let first_result = token_reader.next().unwrap();
         assert!(first_result.is_ok());
 
         let first_token = first_result.unwrap();

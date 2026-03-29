@@ -4,15 +4,16 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-//! Function `print_token()` in this module is used to print a token to the upstream writer,
-//! which can be a file, a string buffer, or any other type that implements the `Write` trait.
+//! The `print_token()` function in this module writes a token to an upstream writer,
+//! such as a file, a string buffer, or any other type that implements `Write`.
 //!
-//! This writer does not perform any validation of the token stream, it simply formats and
-//! writes tokens as they are provided.
+//! This writer does not validate the token stream.
+//! It only formats and writes the tokens it receives.
 //!
-//! Note that do not print `Token::_Plus` and `Token::_Minus` tokens directly because they are
-//! not part of the normalized token stream, use the `Token::Number(NumberToken::I32(-123_i32 as u32))` instead
-//! if you want to print a negative number.
+//! Do not print `Token::_Plus` or `Token::_Minus` directly.
+//! Those tokens are not part of the normalized token stream.
+//! To print a negative number, use a signed numeric token such as
+//! `Token::Number(NumberToken::I32(-123_i32 as u32))`.
 
 use std::io::{Result, Write};
 
@@ -23,7 +24,7 @@ use crate::token::{NumberToken, Token};
 pub const DEFAULT_INDENT_CHARS: &str = "    ";
 pub const DEFAULT_NEWLINE_CHARS: &str = "\n";
 
-pub struct TokenStreamWriter<T>
+pub struct TokenWriter<T>
 where
     T: Write,
 {
@@ -31,7 +32,7 @@ where
     indent_level: usize,
 }
 
-impl<T> TokenStreamWriter<T>
+impl<T> TokenWriter<T>
 where
     T: Write,
 {
@@ -338,19 +339,19 @@ mod tests {
 
     use crate::{
         token::{NumberToken, Token},
-        token_stream_writer::TokenStreamWriter,
+        token_writer::TokenWriter,
     };
 
     /// Helper function to create a token stream writer that writes to a string.
     fn print_token_to_string(token: &Token) -> String {
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_token(token).unwrap();
         String::from_utf8(output).unwrap()
     }
 
     fn print_tokens_with_space_separated_to_string<W: Write>(
-        writer: &mut TokenStreamWriter<W>,
+        writer: &mut TokenWriter<W>,
         tokens: &[Token],
     ) {
         for (index, token) in tokens.iter().enumerate() {
@@ -534,7 +535,7 @@ mod tests {
     fn test_print_list() -> Result<()> {
         // test print list with one element, e.g., [1]
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_bracket()?; // Equivalent to `writer.print_token(&Token::OpeningBracket)?;`
         print_tokens_with_space_separated_to_string(
             &mut writer,
@@ -553,7 +554,7 @@ mod tests {
 
         // test print list with multiple elements, e.g., [1, 2, 3]
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_bracket()?;
         print_tokens_with_space_separated_to_string(
             &mut writer,
@@ -576,7 +577,7 @@ mod tests {
 
         // test print empty list, e.g., []
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_bracket()?;
         writer.print_closing_bracket()?;
 
@@ -590,7 +591,7 @@ mod tests {
     fn test_print_named_list() -> Result<()> {
         // test print named list with one item, e.g., `["foo": 123]`
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_bracket()?;
         writer.print_token(&Token::String("foo".to_owned()))?;
         writer.print_colon()?; // Equivalent to `writer.print_token(&Token::Colon)?;`
@@ -609,7 +610,7 @@ mod tests {
 
         // test print named list with multiple items, e.g., ["foo": 123, "bar": "Alice"]
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_bracket()?;
         writer.print_token(&Token::String("foo".to_owned()))?;
         writer.print_colon()?;
@@ -639,7 +640,7 @@ mod tests {
     fn test_print_tuple() -> Result<()> {
         // test print tuple with multiple elements, e.g., (1, "Alice", true)
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_parenthesis()?;
         print_tokens_with_space_separated_to_string(
             &mut writer,
@@ -661,7 +662,7 @@ mod tests {
     fn test_print_object() -> Result<()> {
         // test print object with single field, e.g., {id: 123}
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_brace()?;
         writer.print_token(&Token::Identifier("id".to_owned()))?;
         writer.print_colon()?;
@@ -681,7 +682,7 @@ mod tests {
 
         // test print object with multiple fields, e.g., {id: 123 name: "Alice"}
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_brace()?;
         writer.print_token(&Token::Identifier("id".to_owned()))?;
         writer.print_colon()?;
@@ -706,7 +707,7 @@ mod tests {
 
         // test print nested object
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_brace()?;
         writer.print_token(&Token::Identifier("id".to_owned()))?;
         writer.print_colon()?;
@@ -743,7 +744,7 @@ mod tests {
 
         // test print object with list value, e.g., `{ id: 123 tags: ["tag1", "tag2", "tag3"] }`
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_opening_brace()?;
         writer.print_token(&Token::Identifier("id".to_owned()))?;
         writer.print_colon()?;
@@ -795,7 +796,7 @@ mod tests {
     fn test_print_variant_with_single_value() -> Result<()> {
         // test print variant with single integer value, e.g., `Option::Some(123)`
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_token(&Token::Enumeration("Option".to_owned(), "Some".to_owned()))?;
         writer.print_opening_parenthesis()?;
         writer.print_token(&Token::Number(NumberToken::I32(123)))?;
@@ -806,7 +807,7 @@ mod tests {
 
         // test print variant with a string value, e.g., `Result::Err("error message")`
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_token(&Token::Enumeration("Result".to_owned(), "Err".to_owned()))?;
         writer.print_opening_parenthesis()?;
         writer.print_token(&Token::String("Error message".to_owned()))?;
@@ -817,7 +818,7 @@ mod tests {
 
         // test print variant with list value, e.g., `Enumeration::List([1, 2, 3])`
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_token(&Token::Enumeration(
             "Enumeration".to_owned(),
             "List".to_owned(),
@@ -840,7 +841,7 @@ mod tests {
 
         // test print variant with object value, e.g., `Enumeration::Object{id: 123 name: "Alice"}`
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_token(&Token::Enumeration(
             "Enumeration".to_owned(),
             "Object".to_owned(),
@@ -872,7 +873,7 @@ mod tests {
     fn test_print_tuple_like_variant() -> Result<()> {
         // test print tuple-like variant, e.g., `Enumeration::Tuple(1, "Alice", true)`
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_token(&Token::Enumeration(
             "Enumeration".to_owned(),
             "Tuple".to_owned(),
@@ -898,7 +899,7 @@ mod tests {
     fn test_print_object_like_variant() -> Result<()> {
         // test print object-like variant, e.g., `Enumeration::Object{id: 123, name: "Alice"}`
         let mut output = Vec::new();
-        let mut writer = TokenStreamWriter::new(&mut output);
+        let mut writer = TokenWriter::new(&mut output);
         writer.print_token(&Token::Enumeration(
             "Enumeration".to_owned(),
             "Object".to_owned(),

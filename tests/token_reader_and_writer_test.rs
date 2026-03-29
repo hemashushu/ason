@@ -7,13 +7,13 @@
 use ason::token::{NumberToken, Token};
 
 #[test]
-fn test_token_stream_read() {
+fn test_token_reader() {
     let text = r#"{
     id: 123
 }"#;
 
-    // Create a token stream reader from the ASON document string.
-    let mut reader = ason::token_stream_reader::stream_from_str(text);
+    // Create a token reader from the ASON document string.
+    let mut reader = ason::token_reader::reader_from_str(text);
 
     // Function `reader.next()` returns `Option<Result<Token, AsonError>>`,
     // where `Option::None` indicates the end of the stream,
@@ -59,7 +59,7 @@ fn test_token_stream_write() -> std::io::Result<()> {
     let mut output = Vec::new();
 
     // Create a token stream writer and write some tokens to the output stream.
-    let mut writer = ason::token_stream_writer::TokenStreamWriter::new(&mut output);
+    let mut writer = ason::token_writer::TokenWriter::new(&mut output);
 
     writer.print_opening_brace()?;
     writer.print_token(&Token::Identifier("id".to_owned()))?;

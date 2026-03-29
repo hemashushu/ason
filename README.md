@@ -8,13 +8,13 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
 
 <!-- code_chunk_output -->
 
-- [1. ASON Example](#1-ason-example)
-- [2. Comparison of Common Data Serialization Formats](#2-comparison-of-common-data-serialization-formats)
-- [3. What improvements does ASON bring over JSON?](#3-what-improvements-does-ason-bring-over-json)
+- [1 ASON Example](#1-ason-example)
+- [2 Comparison of Common Data Serialization Formats](#2-comparison-of-common-data-serialization-formats)
+- [3 What improvements does ASON bring over JSON?](#3-what-improvements-does-ason-bring-over-json)
 - [4 Library and APIs](#4-library-and-apis)
   - [4.1 Serialization and Deserialization](#41-serialization-and-deserialization)
   - [4.2 Parser and Writer](#42-parser-and-writer)
-  - [4.3 Token Stream Reader and Writer](#43-token-stream-reader-and-writer)
+  - [4.3 Token Reader and Writer](#43-token-reader-and-writer)
 - [5 ASON Quick Reference](#5-ason-quick-reference)
   - [5.1 Primitive Values](#51-primitive-values)
     - [5.1.1 Digit Separators](#511-digit-separators)
@@ -65,13 +65,13 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
   - [7.6 Token Termination](#76-token-termination)
   - [7.7 Processing Pipeline](#77-processing-pipeline)
   - [7.8 Error Handling](#78-error-handling)
-  - [7.9 File Extension](#79-file-extension)
+  - [7.9 File Extension and MIME Type](#79-file-extension-and-mime-type)
 - [8 Linking](#8-linking)
 - [9 License](#9-license)
 
 <!-- /code_chunk_output -->
 
-## 1. ASON Example
+## 1 ASON Example
 
 An example of ASON document:
 
@@ -110,7 +110,7 @@ An example of ASON document:
 }
 ```
 
-## 2. Comparison of Common Data Serialization Formats
+## 2 Comparison of Common Data Serialization Formats
 
 There are many solid data serialization formats available today, such as JSON, YAML, TOML and XML. They are all designed to be readble and writable by both humans and machines.
 
@@ -121,7 +121,7 @@ For developers, JSON offers additional advantages:
 - You don't have to learn an entirely new syntax: JSON closely resembles JavaScript object literals.
 - Implementing a parser is straightforward, which helps ensure longevity and adaptability across evolving software ecosystems.
 
-## 3. What improvements does ASON bring over JSON?
+## 3 What improvements does ASON bring over JSON?
 
 JSON has a simple syntax and has been around for decades, but it struggles to meet diverse modern needs. Many JSON variants have emerged to address its limitations—such as JSONC (which adds comments) and JSON5 (which allows trailing commas and unquoted object keys). However, these variants still cannot represent data accurately due to JSON has a limited type system and lacks fine-grained numeric and domain-specific data types. ASON takes a significant step forward based on JSON with the following improvements:
 
@@ -134,7 +134,7 @@ JSON has a simple syntax and has been around for decades, but it struggles to me
 - **Eliminating the Null Value:** ASON uses the `Option` enumeration to represent optional values, eliminating the error-prone `null` value.
 - **Simple and Consistent:** ASON supports comments, unquoted object field names, trailing commas, and whitespace-separated elements (in addition to commas). These features enhance writing fluency.
 
-In addition to the text format, ASON provides a binary format called _ASONB_ (ASON Binary) for efficient data storage and transmission. ASONB supports incremental storage, memory-mapped file access, and fast random access.
+In addition to the text format, ASON provides a binary format called [ASONB (ASON Binary)](https://github.com/hemashushu/asonb),  ASONB supports both incremental updates and streaming and random access, making it suitable for a wide range of applications, from simple data storage to complex data processing pipelines.
 
 While ASON is designed to resemble JSON, making it easy for JSON users to learn and adopt, it is not compatible with JSON, but conversion between ASON and JSON is straightforward, and implementing an ASON parser is also simple.
 
@@ -144,7 +144,7 @@ The Rust [ason](https://github.com/hemashushu/ason) library provides three set A
 
 1. [Serde](https://github.com/serde-rs/serde) based APIs for serialization and deserialization.
 2. AST (Abstract Syntax Tree) based APIs for parsing and writing ASON documents.
-3. Token stream reader and writer APIs for low-level access to ASON documents.
+3. Token reader and writer APIs for low-level access to ASON documents.
 
 In general, it is recommended to use the serde API since it is simple enough to meet most needs.
 
@@ -251,9 +251,9 @@ assert_eq!(document, text);
 
 Since AST object lacks some information such as comments, whitespace, the original string format (e.g., multi-line string, raw string, etc.), and the original numeric types (e.g., hexadecimal, octal, binary), so the output text may not be exactly the same as the input text, do not use the writer for formatting ASON documents.
 
-### 4.3 Token Stream Reader and Writer
+### 4.3 Token Reader and Writer
 
-ASON Rust library also provides a token stream reader and writer for even more low-level access to ASON documents.
+ASON Rust library also provides a token reader and writer for even more low-level access to ASON documents.
 
 Consider the following ASON document:
 
@@ -263,14 +263,14 @@ Consider the following ASON document:
 }
 ```
 
-The token stream reader can be used to read the document token by token:
+The token reader can be used to read the document token by token:
 
 ```rust
 // The above ASON document
 let text = "...";
 
-// Create a token stream reader from the ASON document string.
-let mut reader = ason::token_stream_reader::stream_from_str(text);
+// Create a token reader from the ASON document string.
+let mut reader = ason::token_reader::read_from_str(text);
 
 // Function `reader.next()` returns `Option<Result<Token, AsonError>>`,
 // where `Option::None` indicates the end of the stream,
@@ -305,9 +305,9 @@ assert_eq!(reader.next().unwrap().unwrap(), Token::ClosingBrace);
 assert!(reader.next().is_none());
 ```
 
-Token stream reader does not verify the syntax of the document while it checks the validity of each token, it is generally used for syntax highlighting and linting, or reading large documents without loading the entire document into memory.
+Token reader does not verify the syntax of the document while it checks the validity of each token, it is generally used for syntax highlighting and linting, or reading large documents without loading the entire document into memory.
 
-There is also a token stream writer for writing tokens into a stream, which is typically used for generating ASON documents incrementally.
+There is also a token writer for writing tokens into a stream, which is typically used for generating ASON documents incrementally.
 
 ```rust
 // Create an output stream (can be a file, network stream, or in-memory buffer).
@@ -329,7 +329,7 @@ let document = String::from_utf8(output).unwrap();
 assert_eq!(document, text);
 ```
 
-Similar to the token stream reader, the token stream writer does not verify the token sequence, it can write any string (including comments and whitespace) as you want, it is just a thin wrapper around the output stream.
+Similar to the token reader, the token writer does not verify the token sequence, it can write any string (including comments and whitespace) as you want, it is just a thin wrapper around the output stream.
 
 ## 5 ASON Quick Reference
 
@@ -1949,9 +1949,9 @@ ASON errors are categorized as:
 - Errors with range: Point to a span of characters in the source (start position and end position). These typically occur when a token or structure has an internal error (e.g., number overflow, invalid escape sequence).
 - Unexpected end of document: Indicate that the input ended prematurely (e.g., an unclosed string, missing closing bracket).
 
-### 7.9 File Extension
+### 7.9 File Extension and MIME Type
 
-The recommended file extension for ASON documents is `.ason`.
+The file extension for ASON documents is `.ason`, and the MIME type is `application/ason`.
 
 ## 8 Linking
 
