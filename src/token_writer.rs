@@ -342,7 +342,7 @@ mod tests {
         token_writer::TokenWriter,
     };
 
-    /// Helper function to create a token stream writer that writes to a string.
+    /// Helper function to create a token writer that writes to a string.
     fn print_token_to_string(token: &Token) -> String {
         let mut output = Vec::new();
         let mut writer = TokenWriter::new(&mut output);

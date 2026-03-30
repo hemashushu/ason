@@ -56,24 +56,114 @@ where
     let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
 
     // Deserialize
-    let peekable_token_stream_iter =
-        PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
+    let peekable_token_iter = PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
 
-    let mut deserializer = Deserializer::new(peekable_token_stream_iter);
+    let mut deserializer = Deserializer::new(peekable_token_iter);
 
     let value = T::deserialize(&mut deserializer)?;
 
-    // // Check extraneous tokens
-    // match deserializer.next_token()? {
-    //     Some(_) => Err(AsonError::MessageWithRange(
-    //         "Extraneous token found after document end.".to_owned(),
-    //         deserializer.last_range,
-    //     )),
-    //     None => Ok(value),
-    // }
-
-    Ok(value)
+    // Check extraneous tokens
+    match deserializer.next_token()? {
+        Some(_) => Err(AsonError::MessageWithRange(
+            "Extraneous token found after document end.".to_owned(),
+            deserializer.last_range,
+        )),
+        None => Ok(value),
+    }
 }
+
+// pub fn list_from_str<T>(s: &str) -> Result<ListDeserializer<T>, AsonError>
+// where
+//     T: de::DeserializeOwned,
+// {
+//     let mut chars = s.chars();
+//     list_from_char_iterator(&mut chars)
+// }
+
+// pub fn list_from_reader<T, R: Read>(reader: R) -> Result<ListDeserializer<T>, AsonError>
+// where
+//     T: de::DeserializeOwned,
+// {
+//     let mut char_iter = UTF8CharIterator::new(reader);
+//     list_from_char_iterator(&mut char_iter)
+// }
+
+// pub fn list_from_char_iterator<T>(
+//     char_iterator: &mut dyn Iterator<Item = char>,
+// ) -> Result<ListDeserializer<T>, AsonError>
+// where
+//     T: de::DeserializeOwned,
+// {
+//     // There are two main ways to write Deserialize trait bounds, see:
+//     // https://serde.rs/lifetimes.html
+
+//     let char_position_iter = CharsWithPositionIterator::new(char_iterator);
+
+//     // Lex
+//     let peekable_char_position_iter =
+//         PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+//     let lexer = Lexer::new(peekable_char_position_iter);
+
+//     // Normalize signed numbers
+//     let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+//     let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
+
+//     let mut peekable_token_iter = PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
+//     match peekable_token_iter.peek(0) {
+//         Some(r) => {
+//             match r {
+//                 Ok(TokenWithRange { token, .. }) => {
+//                     if token == &Token::OpeningBracket {
+//                         // consume the opening bracket
+//                         peekable_token_iter.next();
+//                     } else {
+//                         return Err(AsonError::MessageWithRange(
+//                             "Expect a \"List\".".to_owned(),
+//                             Range::default(),
+//                         ));
+//                     }
+//                 }
+//                 Err(e) => return Err(e.clone()),
+//             }
+//         }
+//         None => {
+//             return Err(AsonError::UnexpectedEndOfDocument(
+//                 "Expect a \"List\".".to_owned(),
+//             ));
+//         }
+//     }
+
+//     let deserializer = Deserializer::new(peekable_token_iter);
+//     Ok(ListDeserializer::new(deserializer))
+// }
+
+// pub struct ListDeserializer<'a> {
+//     deserializer: Deserializer<'a>,
+// }
+
+// impl<'a> ListDeserializer<'a> {
+//     pub fn new(deserializer: Deserializer<'a>) -> Self {
+//         Self { deserializer }
+//     }
+// }
+
+// impl<T> Iterator for ListDeserializer<T> {
+//     type Item = Result<T, AsonError>;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         if self
+//             .deserializer
+//             .peek_token_and_equals(0, &Token::ClosingBracket)
+//             .ok()?
+//         {
+//             // exits the procedure when the end marker ']' is encountered.
+//             None
+//         } else {
+//             let value = T::deserialize(&mut self.deserializer);
+//             Some(value)
+//         }
+//     }
+// }
 
 type UpstreamIterator<'a> =
     NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<&'a mut dyn Iterator<Item = char>>>>;
@@ -714,9 +804,7 @@ struct ArrayAccessor<'a, 'de: 'a> {
 
 impl<'a, 'de> ArrayAccessor<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
-        Self {
-            de,
-        }
+        Self { de }
     }
 }
 
@@ -748,9 +836,7 @@ struct TupleAccessor<'a, 'de: 'a> {
 
 impl<'a, 'de> TupleAccessor<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
-        Self {
-            de,
-        }
+        Self { de }
     }
 }
 
@@ -782,9 +868,7 @@ struct MapAccessor<'a, 'de: 'a> {
 
 impl<'a, 'de> MapAccessor<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
-        Self {
-            de,
-        }
+        Self { de }
     }
 }
 
@@ -826,9 +910,7 @@ struct ObjectAccessor<'a, 'de: 'a> {
 
 impl<'a, 'de> ObjectAccessor<'a, 'de> {
     fn new(de: &'a mut Deserializer<'de>) -> Self {
-        Self {
-            de,
-        }
+        Self { de }
     }
 }
 

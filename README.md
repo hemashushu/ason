@@ -314,8 +314,8 @@ There is also a token writer for writing tokens into a stream, which is typicall
 // Here we use `Vec<u8>` for testing.
 let mut output = Vec::new();
 
-// Create a token stream writer and write some tokens to the output stream.
-let mut writer = ason::token_stream_writer::TokenStreamWriter::new(&mut output);
+// Create a token writer and write some tokens to the output stream.
+let mut writer = ason::token_writer::TokenWriter::new(&mut output);
 
 writer.print_opening_brace()?;
 writer.print_token(&Token::Identifier("id".to_owned()))?;

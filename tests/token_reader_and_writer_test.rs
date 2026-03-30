@@ -58,7 +58,7 @@ fn test_token_stream_write() -> std::io::Result<()> {
     // Here we use `Vec<u8>` for testing.
     let mut output = Vec::new();
 
-    // Create a token stream writer and write some tokens to the output stream.
+    // Create a token writer and write some tokens to the output stream.
     let mut writer = ason::token_writer::TokenWriter::new(&mut output);
 
     writer.print_opening_brace()?;
