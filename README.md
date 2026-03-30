@@ -14,7 +14,6 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
 - [4 Library and APIs](#4-library-and-apis)
   - [4.1 Serialization and Deserialization](#41-serialization-and-deserialization)
   - [4.2 Parser and Writer](#42-parser-and-writer)
-  - [4.3 Token Reader and Writer](#43-token-reader-and-writer)
 - [5 ASON Quick Reference](#5-ason-quick-reference)
   - [5.1 Primitive Values](#51-primitive-values)
     - [5.1.1 Digit Separators](#511-digit-separators)
@@ -143,8 +142,8 @@ While ASON is designed to resemble JSON, making it easy for JSON users to learn 
 The Rust [ason](https://github.com/hemashushu/ason) library provides three set APIs:
 
 1. [Serde](https://github.com/serde-rs/serde) based APIs for serialization and deserialization.
-2. AST (Abstract Syntax Tree) based APIs for parsing and writing ASON documents.
-3. Token reader and writer APIs for low-level access to ASON documents.
+2. Stream-based APIs for serialization and deserialization of List and Named-List.
+3. AST (Abstract Syntax Tree) based APIs for parsing and writing ASON documents.
 
 In general, it is recommended to use the serde API since it is simple enough to meet most needs.
 
@@ -250,86 +249,6 @@ assert_eq!(document, text);
 ```
 
 Since AST object lacks some information such as comments, whitespace, the original string format (e.g., multi-line string, raw string, etc.), and the original numeric types (e.g., hexadecimal, octal, binary), so the output text may not be exactly the same as the input text, do not use the writer for formatting ASON documents.
-
-### 4.3 Token Reader and Writer
-
-ASON Rust library also provides a token reader and writer for even more low-level access to ASON documents.
-
-Consider the following ASON document:
-
-```json5
-{
-    id: 123
-}
-```
-
-The token reader can be used to read the document token by token:
-
-```rust
-// The above ASON document
-let text = "...";
-
-// Create a token reader from the ASON document string.
-let mut reader = ason::token_reader::read_from_str(text);
-
-// Function `reader.next()` returns `Option<Result<Token, AsonError>>`,
-// where `Option::None` indicates the end of the stream,
-// `Some(Err)` indicates a lexing error, and `Some(Ok)` contains the next token.
-
-// The first token should be the opening curly brace `{`.
-let first_result = reader.next().unwrap();
-assert!(first_result.is_ok());
-
-let first_token = first_result.unwrap();
-assert_eq!(first_token, Token::OpeningBrace);
-
-// The next token should be the identifier `id`.
-assert_eq!(
-    reader.next().unwrap().unwrap(),
-    Token::Identifier("id".to_string())
-);
-
-// The next token should be the colon `:`.
-assert_eq!(reader.next().unwrap().unwrap(), Token::Colon);
-
-// The next token should be the number `123`, which is of type `i32` by default.
-assert_eq!(
-    reader.next().unwrap().unwrap(),
-    Token::Number(NumberToken::I32(123))
-);
-
-// The last token should be the closing curly brace `}`.
-assert_eq!(reader.next().unwrap().unwrap(), Token::ClosingBrace);
-
-// There should be no more tokens.
-assert!(reader.next().is_none());
-```
-
-Token reader does not verify the syntax of the document while it checks the validity of each token, it is generally used for syntax highlighting and linting, or reading large documents without loading the entire document into memory.
-
-There is also a token writer for writing tokens into a stream, which is typically used for generating ASON documents incrementally.
-
-```rust
-// Create an output stream (can be a file, network stream, or in-memory buffer).
-// Here we use `Vec<u8>` for testing.
-let mut output = Vec::new();
-
-// Create a token writer and write some tokens to the output stream.
-let mut writer = ason::token_writer::TokenWriter::new(&mut output);
-
-writer.print_opening_brace()?;
-writer.print_token(&Token::Identifier("id".to_owned()))?;
-writer.print_colon()?;
-writer.print_space()?;
-writer.print_token(&Token::Number(NumberToken::I32(123)))?;
-writer.print_closing_brace()?;
-
-// Verify the output
-let document = String::from_utf8(output).unwrap();
-assert_eq!(document, text);
-```
-
-Similar to the token reader, the token writer does not verify the token sequence, it can write any string (including comments and whitespace) as you want, it is just a thin wrapper around the output stream.
 
 ## 5 ASON Quick Reference
 
