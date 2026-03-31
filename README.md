@@ -208,9 +208,9 @@ assert_eq!(serialized_text, text);
 
 ### 4.2 Streaming Deserialization and Serialization
 
-The `ason::de` module also provides streaming deserialization APIs, which allow you to deserialize ASON documents incrementally without loading the entire document into memory. This is particularly useful for large documents or the documents are transmitted over a network and pipe.
+The `ason::de` module also provides streaming deserialization APIs, which let you deserialize ASON documents incrementally without loading the entire document into memory. This is particularly useful for large documents or for data transmitted over a network connection or pipe.
 
-But only documents only contain a `List` can be deserialized using the streaming deserialization APIs, and the deserialized elements are returned one by one as an iterator. For example:
+Currently, the streaming deserialization APIs support only documents whose root value is a `List`. The list elements are deserialized and returned one by one through an iterator. For example:
 
 ```rust
 let text = r#"[11 13]"#;
@@ -223,7 +223,7 @@ assert_eq!(13, de.next().unwrap().unwrap());
 assert!(de.next().is_none());
 ```
 
-The `ason::ser` module provides streaming serialization APIs, for example:
+The `ason::ser` module provides corresponding streaming serialization APIs. For example:
 
 ```rust
 let mut buf: Vec<u8> = vec![];
