@@ -12,8 +12,9 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
 - [2 Comparison of Common Data Serialization Formats](#2-comparison-of-common-data-serialization-formats)
 - [3 What improvements does ASON bring over JSON?](#3-what-improvements-does-ason-bring-over-json)
 - [4 Library and APIs](#4-library-and-apis)
-  - [4.1 Serialization and Deserialization](#41-serialization-and-deserialization)
-  - [4.2 Parser and Writer](#42-parser-and-writer)
+  - [4.1 Deserialization and Serialization](#41-deserialization-and-serialization)
+  - [4.2 Streaming Deserialization and Serialization](#42-streaming-deserialization-and-serialization)
+  - [4.3 Parser and Writer](#43-parser-and-writer)
 - [5 ASON Quick Reference](#5-ason-quick-reference)
   - [5.1 Primitive Values](#51-primitive-values)
     - [5.1.1 Digit Separators](#511-digit-separators)
@@ -141,13 +142,12 @@ While ASON is designed to resemble JSON, making it easy for JSON users to learn 
 
 The Rust [ason](https://github.com/hemashushu/ason) library provides three set APIs:
 
-1. [Serde](https://github.com/serde-rs/serde) based APIs for serialization and deserialization.
-2. Stream-based APIs for serialization and deserialization of List and Named-List.
-3. AST (Abstract Syntax Tree) based APIs for parsing and writing ASON documents.
+1. [Serde](https://github.com/serde-rs/serde) based APIs for deserialization and serialization.
+2. AST (Abstract Syntax Tree) based APIs for parsing and writing ASON documents.
 
 In general, it is recommended to use the serde API since it is simple enough to meet most needs.
 
-### 4.1 Serialization and Deserialization
+### 4.1 Deserialization and Serialization
 
 Consider the following ASON document:
 
@@ -206,7 +206,25 @@ let serialized_text = ason::ser::ser_to_string(&package).unwrap();
 assert_eq!(serialized_text, text);
 ```
 
-### 4.2 Parser and Writer
+### 4.2 Streaming Deserialization and Serialization
+
+The `ason::de` module also provides streaming deserialization APIs, which allow you to deserialize ASON documents incrementally without loading the entire document into memory. This is particularly useful for large documents or the documents are transmitted over a network and pipe.
+
+But only documents only contain a `List` can be deserialized using the streaming deserialization APIs, and the deserialized elements are returned one by one as an iterator. For example:
+
+```rust
+let s = r#"[11 13]"#;
+let data = s.as_bytes();
+let mut char_iter = UTF8CharIterator::new(data);
+let mut de = list_from_char_iterator(&mut char_iter).unwrap();
+
+assert_eq!(11, de.next().unwrap().unwrap());
+assert_eq!(13, de.next().unwrap().unwrap());
+assert!(de.next().is_none());
+
+```
+
+### 4.3 Parser and Writer
 
 You can parse the ASON document into AST object using the `ason::parser::parse_from_str` function:
 

@@ -4,7 +4,7 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::io::Read;
+use std::{io::Read, marker::PhantomData};
 
 use crate::{
     char_with_position::CharsWithPositionIterator,
@@ -72,98 +72,91 @@ where
     }
 }
 
-// pub fn list_from_str<T>(s: &str) -> Result<ListDeserializer<T>, AsonError>
-// where
-//     T: de::DeserializeOwned,
-// {
-//     let mut chars = s.chars();
-//     list_from_char_iterator(&mut chars)
-// }
+/// Deserialize a List of values from a character iterator,
+/// return a `ListDeserializer` that can be used to iterate over the deserialized values one by one.
+///
+/// - If the upstream is a std::io::Read, use `let mut char_iter = UTF8CharIterator::new(reader)`
+///   to convert it to a character iterator.
+/// - If the upstream is a string slice, use `let mut chars = s.chars()` to convert it to a character iterator.
+pub fn list_from_char_iterator<T>(
+    char_iterator: &'_ mut dyn Iterator<Item = char>,
+) -> Result<ListDeserializer<'_, T>, AsonError>
+where
+    T: de::DeserializeOwned,
+{
+    let char_position_iter = CharsWithPositionIterator::new(char_iterator);
+    let peekable_char_position_iter =
+        PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+    let lexer = Lexer::new(peekable_char_position_iter);
+    let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+    let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
+    let mut peekable_token_iter = PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
 
-// pub fn list_from_reader<T, R: Read>(reader: R) -> Result<ListDeserializer<T>, AsonError>
-// where
-//     T: de::DeserializeOwned,
-// {
-//     let mut char_iter = UTF8CharIterator::new(reader);
-//     list_from_char_iterator(&mut char_iter)
-// }
+    match peekable_token_iter.peek(0) {
+        Some(Ok(TokenWithRange { token, range })) => {
+            if token == &Token::OpeningBracket {
+                // consume the opening bracket '['
+                peekable_token_iter.next();
+            } else {
+                return Err(AsonError::MessageWithRange(
+                    "Expect a \"List\".".to_owned(),
+                    *range,
+                ));
+            }
+        }
+        Some(Err(e)) => return Err(e.clone()),
+        None => {
+            return Err(AsonError::UnexpectedEndOfDocument(
+                "Expect a \"List\".".to_owned(),
+            ));
+        }
+    }
 
-// pub fn list_from_char_iterator<T>(
-//     char_iterator: &mut dyn Iterator<Item = char>,
-// ) -> Result<ListDeserializer<T>, AsonError>
-// where
-//     T: de::DeserializeOwned,
-// {
-//     // There are two main ways to write Deserialize trait bounds, see:
-//     // https://serde.rs/lifetimes.html
+    let deserializer = Deserializer::new(peekable_token_iter);
+    Ok(ListDeserializer::new(deserializer))
+}
 
-//     let char_position_iter = CharsWithPositionIterator::new(char_iterator);
+pub struct ListDeserializer<'a, T>
+where
+    T: de::DeserializeOwned,
+{
+    deserializer: Deserializer<'a>,
+    _marker: PhantomData<T>,
+}
 
-//     // Lex
-//     let peekable_char_position_iter =
-//         PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
-//     let lexer = Lexer::new(peekable_char_position_iter);
+impl<'a, T> ListDeserializer<'a, T>
+where
+    T: de::DeserializeOwned,
+{
+    pub fn new(deserializer: Deserializer<'a>) -> Self {
+        Self {
+            deserializer,
+            _marker: PhantomData,
+        }
+    }
+}
 
-//     // Normalize signed numbers
-//     let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
-//     let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
+impl<'a, T> Iterator for ListDeserializer<'a, T>
+where
+    T: de::DeserializeOwned,
+{
+    type Item = Result<T, AsonError>;
 
-//     let mut peekable_token_iter = PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
-//     match peekable_token_iter.peek(0) {
-//         Some(r) => {
-//             match r {
-//                 Ok(TokenWithRange { token, .. }) => {
-//                     if token == &Token::OpeningBracket {
-//                         // consume the opening bracket
-//                         peekable_token_iter.next();
-//                     } else {
-//                         return Err(AsonError::MessageWithRange(
-//                             "Expect a \"List\".".to_owned(),
-//                             Range::default(),
-//                         ));
-//                     }
-//                 }
-//                 Err(e) => return Err(e.clone()),
-//             }
-//         }
-//         None => {
-//             return Err(AsonError::UnexpectedEndOfDocument(
-//                 "Expect a \"List\".".to_owned(),
-//             ));
-//         }
-//     }
-
-//     let deserializer = Deserializer::new(peekable_token_iter);
-//     Ok(ListDeserializer::new(deserializer))
-// }
-
-// pub struct ListDeserializer<'a> {
-//     deserializer: Deserializer<'a>,
-// }
-
-// impl<'a> ListDeserializer<'a> {
-//     pub fn new(deserializer: Deserializer<'a>) -> Self {
-//         Self { deserializer }
-//     }
-// }
-
-// impl<T> Iterator for ListDeserializer<T> {
-//     type Item = Result<T, AsonError>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if self
-//             .deserializer
-//             .peek_token_and_equals(0, &Token::ClosingBracket)
-//             .ok()?
-//         {
-//             // exits the procedure when the end marker ']' is encountered.
-//             None
-//         } else {
-//             let value = T::deserialize(&mut self.deserializer);
-//             Some(value)
-//         }
-//     }
-// }
+    fn next(&mut self) -> Option<Self::Item> {
+        if self
+            .deserializer
+            .peek_token_and_equals(0, &Token::ClosingBracket)
+            .ok()?
+        {
+            // exits the procedure when the end marker ']' is encountered.
+            self.deserializer.next_token().ok()?; // consume the closing bracket
+            None
+        } else {
+            let value = T::deserialize(&mut self.deserializer);
+            Some(value)
+        }
+    }
+}
 
 type UpstreamIterator<'a> =
     NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<&'a mut dyn Iterator<Item = char>>>>;
@@ -1021,7 +1014,10 @@ impl<'de> VariantAccess<'de> for VariantAccessor<'_, 'de> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{de::de_from_str, error::AsonError};
+    use crate::{
+        de::{de_from_str, list_from_char_iterator},
+        error::AsonError, utf8_char_iterator::UTF8CharIterator,
+    };
     use pretty_assertions::assert_eq;
     use serde::Deserialize;
     use serde_bytes::ByteBuf;
@@ -1998,5 +1994,58 @@ mod tests {
                 address: (11, "sz".to_owned())
             }
         );
+    }
+
+    #[test]
+    fn test_deserialize_list_with_lazy() {
+        let s = r#"[11 13]"#;
+
+        let mut chars = s.chars();
+        let mut de = list_from_char_iterator(&mut chars).unwrap();
+
+        assert_eq!(11, de.next().unwrap().unwrap());
+        assert_eq!(13, de.next().unwrap().unwrap());
+        assert!(de.next().is_none());
+
+        #[derive(Deserialize, Debug, PartialEq)]
+        struct Object {
+            id: i32,
+            name: String,
+        }
+
+        let s = r#"[
+    {
+        id: 11
+        name: "foo"
+    }
+    {
+        id: 13
+        name: "bar"
+    }
+]"#;
+
+        let data = s.as_bytes();
+        let mut char_iter = UTF8CharIterator::new(data);
+        let mut de = list_from_char_iterator(&mut char_iter).unwrap();
+
+        let o1: Object = de.next().unwrap().unwrap();
+        assert_eq!(
+            o1,
+            Object {
+                id: 11,
+                name: "foo".to_owned()
+            }
+        );
+
+        let o2: Object = de.next().unwrap().unwrap();
+        assert_eq!(
+            o2,
+            Object {
+                id: 13,
+                name: "bar".to_owned()
+            }
+        );
+
+        assert!(de.next().is_none());
     }
 }
