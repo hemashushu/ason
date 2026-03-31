@@ -11,7 +11,7 @@ use chrono::DateTime;
 use crate::{
     char_with_position::CharWithPosition,
     error::AsonError,
-    peekable_iterator::PeekableIterator,
+    peekable_iter::PeekableIter,
     position::Position,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
@@ -22,11 +22,9 @@ use crate::{
 // e.g., raw string with hash symbol `r#"..."#`.
 pub const PEEK_BUFFER_LENGTH_LEX: usize = 3;
 
-pub struct Lexer<T>
-where
-    T: Iterator<Item = CharWithPosition>,
-{
-    upstream: PeekableIterator<CharWithPosition, T>,
+pub struct Lexer<'a> {
+    // upstream: PeekableIterator<CharWithPosition, T>,
+    upstream: &'a mut PeekableIter<'a, CharWithPosition>,
 
     // The position of the last consumed character by `next_char()`.
     last_position: Position,
@@ -37,11 +35,8 @@ where
     position_stack: Vec<Position>,
 }
 
-impl<T> Lexer<T>
-where
-    T: Iterator<Item = CharWithPosition>,
-{
-    pub fn new(upstream: PeekableIterator<CharWithPosition, T>) -> Self {
+impl<'a> Lexer<'a> {
+    pub fn new(upstream: &'a mut PeekableIter<'a, CharWithPosition>) -> Self {
         Self {
             upstream,
             last_position: Position::default(),
@@ -112,10 +107,7 @@ where
     }
 }
 
-impl<T> Iterator for Lexer<T>
-where
-    T: Iterator<Item = CharWithPosition>,
-{
+impl<'a> Iterator for Lexer<'a> {
     type Item = Result<TokenWithRange, AsonError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -123,10 +115,7 @@ where
     }
 }
 
-impl<T> Lexer<T>
-where
-    T: Iterator<Item = CharWithPosition>,
-{
+impl<'a> Lexer<'a> {
     fn lex(&mut self) -> Option<Result<TokenWithRange, AsonError>> {
         // ```diagram
         // c....
@@ -2155,10 +2144,10 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        char_with_position::CharsWithPositionIterator,
+        char_with_position::CharsWithPositionIter,
         error::AsonError,
         lexer::{NumberToken, TokenWithRange},
-        peekable_iterator::PeekableIterator,
+        peekable_iter::PeekableIter,
         position::Position,
         range::Range,
     };
@@ -2181,12 +2170,11 @@ mod tests {
 
     /// Helper function to lex tokens from a string
     fn lex_from_str(s: &str) -> Result<Vec<TokenWithRange>, AsonError> {
-        let chars = s.chars();
-
-        let char_position_iter = CharsWithPositionIterator::new(chars);
-        let peekable_char_position_iter =
-            PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
-        let lexer = Lexer::new(peekable_char_position_iter);
+        let mut chars = s.chars();
+        let mut char_position_iter = CharsWithPositionIter::new(&mut chars);
+        let mut peekable_char_position_iter =
+            PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+        let lexer = Lexer::new(&mut peekable_char_position_iter);
 
         // Collect tokens
         //

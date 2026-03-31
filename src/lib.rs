@@ -9,10 +9,10 @@ mod error;
 mod error_printer;
 mod lexer;
 mod normalizer;
-mod peekable_iterator;
+mod peekable_iter;
 mod position;
 mod range;
-mod utf8_char_iterator;
+mod utf8_char_iter;
 
 pub mod ast;
 pub mod de;

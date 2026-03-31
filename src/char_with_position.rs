@@ -26,22 +26,16 @@ impl CharWithPosition {
 }
 
 /// An iterator that yields each character from the upstream iterator along with its position in the source text.
-pub struct CharsWithPositionIterator<T>
-where
-    T: Iterator<Item = char>,
-{
+pub struct CharsWithPositionIter<'a> {
     /// The underlying iterator that provides characters.
-    upstream: T,
+    upstream: &'a mut dyn Iterator<Item = char>,
 
     /// Tracks the current position in the source text.
     current_position: Position,
 }
 
-impl<T> CharsWithPositionIterator<T>
-where
-    T: Iterator<Item = char>,
-{
-    pub fn new(upstream: T) -> Self {
+impl<'a> CharsWithPositionIter<'a> {
+    pub fn new(upstream: &'a mut dyn Iterator<Item = char>) -> Self {
         Self {
             upstream,
             current_position: Position::new(0, 0, 0),
@@ -49,10 +43,7 @@ where
     }
 }
 
-impl<T> Iterator for CharsWithPositionIterator<T>
-where
-    T: Iterator<Item = char>,
-{
+impl Iterator for CharsWithPositionIter<'_> {
     type Item = CharWithPosition;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -83,15 +74,15 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        char_with_position::{CharWithPosition, CharsWithPositionIterator},
+        char_with_position::{CharWithPosition, CharsWithPositionIter},
         position::Position,
     };
 
     #[test]
     fn test_chars_with_position_iter() {
         {
-            let chars = "a\nmn\nxyz".chars();
-            let mut char_position_iter = CharsWithPositionIterator::new(chars);
+            let mut chars = "a\nmn\nxyz".chars();
+            let mut char_position_iter = CharsWithPositionIter::new(&mut chars);
 
             assert_eq!(
                 char_position_iter.next(),
@@ -137,8 +128,8 @@ mod tests {
         }
 
         {
-            let chars = "\n\r\n\n".chars();
-            let mut char_position_iter = CharsWithPositionIterator::new(chars);
+            let mut chars = "\n\r\n\n".chars();
+            let mut char_position_iter = CharsWithPositionIter::new(&mut chars);
 
             assert_eq!(
                 char_position_iter.next(),

@@ -8,20 +8,18 @@ pub const ROUND_QUEUE_LENGTH: usize = 8;
 
 /// `PeekableIter` extends the functionality of `std::iter::Peekable` by allowing
 /// peeking at elements at any specified offset, not just the next one.
-pub struct PeekableIterator<T, U>
+pub struct PeekableIter<'a, T>
 where
     T: PartialEq,
-    U: Iterator<Item = T>,
 {
-    upstream: U,
+    upstream: &'a mut dyn Iterator<Item = T>,
     buffer: RoundQueue<T>,
     buffer_size: usize,
 }
 
-impl<T, U> PeekableIterator<T, U>
+impl<'a, T> PeekableIter<'a, T>
 where
     T: PartialEq,
-    U: Iterator<Item = T>,
 {
     /// Creates a new PeekableIter with the specified buffer size.
     /// The buffer is pre-filled with elements from the upstream iterator.
@@ -33,7 +31,7 @@ where
     /// i.e., `peek(0)`.
     /// The maximum buffer size is `ROUND_QUEUE_LENGTH - 1` (i.e., 7), which allows
     /// peeking up to 7 elements ahead.
-    pub fn new(mut upstream: U, buffer_size: usize) -> Self {
+    pub fn new(upstream: &'a mut dyn Iterator<Item = T>, buffer_size: usize) -> Self {
         let mut buffer = RoundQueue::new(buffer_size);
 
         // Pre-fill the buffer with the first `buffer_size` elements from the upstream iterator.
@@ -57,10 +55,9 @@ where
     }
 }
 
-impl<T, U> Iterator for PeekableIterator<T, U>
+impl<T> Iterator for PeekableIter<'_, T>
 where
     T: PartialEq,
-    U: Iterator<Item = T>,
 {
     type Item = T;
 
@@ -145,13 +142,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::peekable_iterator::PeekableIterator;
+    use crate::peekable_iter::PeekableIter;
 
     #[test]
     fn test_peekable_iter() {
         let s = "0123";
-        let chars = s.chars();
-        let mut iter = PeekableIterator::new(chars, 3);
+        let mut chars = s.chars();
+        let mut iter = PeekableIter::new(&mut chars, 3);
 
         // Initial state: buffer contains '0', '1', '2'
         assert_eq!(Some(&'0'), iter.peek(0));
@@ -192,9 +189,9 @@ mod tests {
     #[test]
     fn test_nested_peekable_iter() {
         let s = "0123";
-        let chars = s.chars();
-        let iter1 = PeekableIterator::new(chars, 3);
-        let mut iter2 = PeekableIterator::new(iter1, 3);
+        let mut chars = s.chars();
+        let mut iter1 = PeekableIter::new(&mut chars, 3);
+        let mut iter2 = PeekableIter::new(&mut iter1, 3);
 
         // Initial state: buffer contains '0', '1', '2'
         assert_eq!(Some(&'0'), iter2.peek(0));

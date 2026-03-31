@@ -7,15 +7,15 @@
 use std::io::Read;
 
 use crate::{
-    char_with_position::CharsWithPositionIterator,
+    char_with_position::CharsWithPositionIter,
     error::AsonError,
     lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
     normalizer::{NormalizeSignedNumberIter, PEEK_BUFFER_LENGTH_NORMALIZE},
     parser::PEEK_BUFFER_LENGTH_PARSE,
-    peekable_iterator::PeekableIterator,
+    peekable_iter::PeekableIter,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
-    utf8_char_iterator::UTF8CharIterator,
+    utf8_char_iter::UTF8CharIter,
 };
 use serde::de::{self, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess};
 
@@ -31,12 +31,12 @@ pub fn de_from_reader<T, R: Read>(reader: R) -> Result<T, AsonError>
 where
     T: de::DeserializeOwned,
 {
-    let mut char_iter = UTF8CharIterator::new(reader);
+    let mut char_iter = UTF8CharIter::new(reader);
     de_from_char_iterator(&mut char_iter)
 }
 
 pub fn de_from_char_iterator<T>(
-    char_iterator: &mut dyn Iterator<Item = char>,
+    char_iter: &mut dyn Iterator<Item = char>,
 ) -> Result<T, AsonError>
 where
     T: de::DeserializeOwned,
@@ -44,21 +44,20 @@ where
     // There are two main ways to write Deserialize trait bounds, see:
     // https://serde.rs/lifetimes.html
 
-    let char_position_iter = CharsWithPositionIterator::new(char_iterator);
+    let mut char_position_iter = CharsWithPositionIter::new(char_iter);
 
     // Lex
-    let peekable_char_position_iter =
-        PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
-    let lexer = Lexer::new(peekable_char_position_iter);
+    let mut peekable_char_position_iter =
+        PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+    let mut lexer = Lexer::new(&mut peekable_char_position_iter);
 
     // Normalize signed numbers
-    let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
-    let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
+    let mut peekable_lexer_iter = PeekableIter::new(&mut lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+    let mut normalizer_iter = NormalizeSignedNumberIter::new(&mut peekable_lexer_iter);
 
     // Deserialize
-    let peekable_token_iter = PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
-
-    let mut deserializer = Deserializer::new(peekable_token_iter);
+    let mut peekable_token_iter = PeekableIter::new(&mut normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
+    let mut deserializer = Deserializer::new(&mut peekable_token_iter);
 
     let value = T::deserialize(&mut deserializer)?;
 
@@ -72,113 +71,15 @@ where
     }
 }
 
-// pub fn list_from_str<T>(s: &str) -> Result<ListDeserializer<T>, AsonError>
-// where
-//     T: de::DeserializeOwned,
-// {
-//     let mut chars = s.chars();
-//     list_from_char_iterator(&mut chars)
-// }
-
-// pub fn list_from_reader<T, R: Read>(reader: R) -> Result<ListDeserializer<T>, AsonError>
-// where
-//     T: de::DeserializeOwned,
-// {
-//     let mut char_iter = UTF8CharIterator::new(reader);
-//     list_from_char_iterator(&mut char_iter)
-// }
-
-// pub fn list_from_char_iterator<T>(
-//     char_iterator: &mut dyn Iterator<Item = char>,
-// ) -> Result<ListDeserializer<T>, AsonError>
-// where
-//     T: de::DeserializeOwned,
-// {
-//     // There are two main ways to write Deserialize trait bounds, see:
-//     // https://serde.rs/lifetimes.html
-
-//     let char_position_iter = CharsWithPositionIterator::new(char_iterator);
-
-//     // Lex
-//     let peekable_char_position_iter =
-//         PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
-//     let lexer = Lexer::new(peekable_char_position_iter);
-
-//     // Normalize signed numbers
-//     let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
-//     let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
-
-//     let mut peekable_token_iter = PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
-//     match peekable_token_iter.peek(0) {
-//         Some(r) => {
-//             match r {
-//                 Ok(TokenWithRange { token, .. }) => {
-//                     if token == &Token::OpeningBracket {
-//                         // consume the opening bracket
-//                         peekable_token_iter.next();
-//                     } else {
-//                         return Err(AsonError::MessageWithRange(
-//                             "Expect a \"List\".".to_owned(),
-//                             Range::default(),
-//                         ));
-//                     }
-//                 }
-//                 Err(e) => return Err(e.clone()),
-//             }
-//         }
-//         None => {
-//             return Err(AsonError::UnexpectedEndOfDocument(
-//                 "Expect a \"List\".".to_owned(),
-//             ));
-//         }
-//     }
-
-//     let deserializer = Deserializer::new(peekable_token_iter);
-//     Ok(ListDeserializer::new(deserializer))
-// }
-
-// pub struct ListDeserializer<'a> {
-//     deserializer: Deserializer<'a>,
-// }
-
-// impl<'a> ListDeserializer<'a> {
-//     pub fn new(deserializer: Deserializer<'a>) -> Self {
-//         Self { deserializer }
-//     }
-// }
-
-// impl<T> Iterator for ListDeserializer<T> {
-//     type Item = Result<T, AsonError>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if self
-//             .deserializer
-//             .peek_token_and_equals(0, &Token::ClosingBracket)
-//             .ok()?
-//         {
-//             // exits the procedure when the end marker ']' is encountered.
-//             None
-//         } else {
-//             let value = T::deserialize(&mut self.deserializer);
-//             Some(value)
-//         }
-//     }
-// }
-
-type UpstreamIterator<'a> =
-    NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<&'a mut dyn Iterator<Item = char>>>>;
-
 pub struct Deserializer<'a> {
-    upstream: PeekableIterator<Result<TokenWithRange, AsonError>, UpstreamIterator<'a>>,
+    upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
 
     /// The range of the last consumed token by `next_token` or `next_token_with_range`.
     last_range: Range,
 }
 
 impl<'a> Deserializer<'a> {
-    fn new(
-        upstream: PeekableIterator<Result<TokenWithRange, AsonError>, UpstreamIterator<'a>>,
-    ) -> Self {
+    fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
         Self {
             upstream,
             last_range: Range::default(),

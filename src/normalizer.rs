@@ -8,7 +8,7 @@ use std::ops::Neg;
 
 use crate::{
     error::AsonError,
-    peekable_iterator::PeekableIterator,
+    peekable_iter::PeekableIter,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
 };
@@ -18,26 +18,17 @@ pub const PEEK_BUFFER_LENGTH_NORMALIZE: usize = 1;
 /// Normalize and check signed numbers in the token stream.
 ///
 /// Token `Plus` and `Minus` are removed after normalization.
-pub struct NormalizeSignedNumberIter<T>
-where
-    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
-{
-    upstream: PeekableIterator<Result<TokenWithRange, AsonError>, T>,
+pub struct NormalizeSignedNumberIter<'a> {
+    upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
 }
 
-impl<T> NormalizeSignedNumberIter<T>
-where
-    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
-{
-    pub fn new(upstream: PeekableIterator<Result<TokenWithRange, AsonError>, T>) -> Self {
+impl<'a> NormalizeSignedNumberIter<'a> {
+    pub fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
         Self { upstream }
     }
 }
 
-impl<T> Iterator for NormalizeSignedNumberIter<T>
-where
-    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
-{
+impl<'a> Iterator for NormalizeSignedNumberIter<'a> {
     type Item = Result<TokenWithRange, AsonError>;
 
     // The normalization and checking rules are as follows:
@@ -410,11 +401,11 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        char_with_position::CharsWithPositionIterator,
+        char_with_position::CharsWithPositionIter,
         error::AsonError,
         lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
         normalizer::{NormalizeSignedNumberIter, PEEK_BUFFER_LENGTH_NORMALIZE},
-        peekable_iterator::PeekableIterator,
+        peekable_iter::PeekableIter,
         position::Position,
         range::Range,
         token::{NumberToken, Token, TokenWithRange},
@@ -423,15 +414,15 @@ mod tests {
     /// Helper function to lex tokens from a string.
     fn lex_from_str(s: &str) -> Result<Vec<TokenWithRange>, AsonError> {
         // Lex
-        let chars = s.chars();
-        let char_position_iter = CharsWithPositionIterator::new(chars);
-        let peekable_char_position_iter =
-            PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
-        let lexer = Lexer::new(peekable_char_position_iter);
+        let mut chars = s.chars();
+        let mut char_position_iter = CharsWithPositionIter::new(&mut chars);
+        let mut peekable_char_position_iter =
+            PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+        let mut lexer = Lexer::new(&mut peekable_char_position_iter);
 
         // Normalize signed numbers
-        let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
-        let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
+        let mut peekable_lexer_iter = PeekableIter::new(&mut lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+        let normalizer_iter = NormalizeSignedNumberIter::new(&mut peekable_lexer_iter);
 
         // Collect tokens
         //

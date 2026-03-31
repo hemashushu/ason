@@ -8,14 +8,14 @@ use std::io::Read;
 
 use crate::{
     ast::{AsonNode, Enumeration, KeyValuePair, NamedListEntry, Number},
-    char_with_position::CharsWithPositionIterator,
+    char_with_position::CharsWithPositionIter,
     error::AsonError,
     lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
     normalizer::{NormalizeSignedNumberIter, PEEK_BUFFER_LENGTH_NORMALIZE},
-    peekable_iterator::PeekableIterator,
+    peekable_iter::PeekableIter,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
-    utf8_char_iterator::UTF8CharIterator,
+    utf8_char_iter::UTF8CharIter,
 };
 
 // Buffer length for peekable iterator used in parser.
@@ -25,37 +25,36 @@ use crate::{
 pub const PEEK_BUFFER_LENGTH_PARSE: usize = 2;
 
 pub fn parse_from_str(s: &str) -> Result<AsonNode, AsonError> {
-    let chars = s.chars();
-    parse_from_char_iterator(chars)
+    let mut chars = s.chars();
+    parse_from_char_iterator(&mut chars)
 }
 
 pub fn parse_from_reader<R>(reader: R) -> Result<AsonNode, AsonError>
 where
     R: Read,
 {
-    let char_iter = UTF8CharIterator::new(reader);
-    parse_from_char_iterator(char_iter)
+    let mut char_iter = UTF8CharIter::new(reader);
+    parse_from_char_iterator(&mut char_iter)
 }
 
-pub fn parse_from_char_iterator<T>(char_iterator: T) -> Result<AsonNode, AsonError>
-where
-    T: Iterator<Item = char>,
-{
-    let char_position_iter = CharsWithPositionIterator::new(char_iterator);
+pub fn parse_from_char_iterator(
+    char_iterator: &mut dyn Iterator<Item = char>,
+) -> Result<AsonNode, AsonError> {
+    let mut char_position_iter = CharsWithPositionIter::new(char_iterator);
 
     // Lex
-    let peekable_char_position_iter =
-        PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
-    let lexer = Lexer::new(peekable_char_position_iter);
+    let mut peekable_char_position_iter =
+        PeekableIter::new(&mut char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+    let mut lexer = Lexer::new(&mut peekable_char_position_iter);
 
     // Normalize signed numbers
-    let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
-    let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
+    let mut peekable_lexer_iter = PeekableIter::new(&mut lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+    let mut normalizer_iter = NormalizeSignedNumberIter::new(&mut peekable_lexer_iter);
 
     // Parse
-    let peekable_token_stream_iter =
-        PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
-    let mut parser = Parser::new(peekable_token_stream_iter);
+    let mut peekable_token_stream_iter =
+        PeekableIter::new(&mut normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
+    let mut parser = Parser::new(&mut peekable_token_stream_iter);
     let root = parser.parse_node()?;
 
     // Check extraneous tokens
@@ -68,21 +67,15 @@ where
     }
 }
 
-struct Parser<T>
-where
-    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
-{
-    upstream: PeekableIterator<Result<TokenWithRange, AsonError>, T>,
+struct Parser<'a> {
+    upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>,
 
     /// The range of the last consumed token by `next_token` or `next_token_with_range`.
     last_range: Range,
 }
 
-impl<T> Parser<T>
-where
-    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
-{
-    fn new(upstream: PeekableIterator<Result<TokenWithRange, AsonError>, T>) -> Self {
+impl<'a> Parser<'a> {
+    fn new(upstream: &'a mut PeekableIter<'a, Result<TokenWithRange, AsonError>>) -> Self {
         Self {
             upstream,
             last_range: Range::default(),
@@ -175,10 +168,7 @@ where
     }
 }
 
-impl<T> Parser<T>
-where
-    T: Iterator<Item = Result<TokenWithRange, AsonError>>,
-{
+impl<'a> Parser<'a> {
     fn parse_node(&mut self) -> Result<AsonNode, AsonError> {
         match self.peek_token(0)? {
             Some(current_token) => {
