@@ -213,15 +213,29 @@ The `ason::de` module also provides streaming deserialization APIs, which allow 
 But only documents only contain a `List` can be deserialized using the streaming deserialization APIs, and the deserialized elements are returned one by one as an iterator. For example:
 
 ```rust
-let s = r#"[11 13]"#;
-let data = s.as_bytes();
+let text = r#"[11 13]"#;
+let data = text.as_bytes();
 let mut char_iter = UTF8CharIterator::new(data);
 let mut de = list_from_char_iterator(&mut char_iter).unwrap();
 
 assert_eq!(11, de.next().unwrap().unwrap());
 assert_eq!(13, de.next().unwrap().unwrap());
 assert!(de.next().is_none());
+```
 
+The `ason::ser` module provides streaming serialization APIs, for example:
+
+```rust
+let mut buf: Vec<u8> = vec![];
+let mut ser = list_to_writer(&mut buf);
+
+ser.start_list().unwrap();
+ser.serialize_element(&11).unwrap();
+ser.serialize_element(&13).unwrap();
+ser.end_list().unwrap();
+
+let serialized_text = String::from_utf8(buf).unwrap();
+assert_eq!(serialized_text, text);
 ```
 
 ### 4.3 Parser and Writer

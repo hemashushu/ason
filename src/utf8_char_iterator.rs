@@ -4,23 +4,23 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::io::{BufReader, Read};
+use std::io::Read;
 
 pub struct UTF8CharIterator<T>
 where
     T: Read,
 {
-    bufreader: BufReader<T>,
+    reader: T,
 }
 
 impl<T> UTF8CharIterator<T>
 where
     T: Read,
 {
+    /// Create a new UTF8CharIterator from a reader.
+    /// `BufReader` is also supported, but not required.
     pub fn new(reader: T) -> Self {
-        Self {
-            bufreader: BufReader::new(reader),
-        }
+        Self { reader }
     }
 }
 
@@ -99,14 +99,14 @@ where
     #[inline]
     fn try_read_byte(&mut self) -> Option<u8> {
         let mut buf = [0_u8; 1];
-        let len = self.bufreader.read(&mut buf).unwrap_or(0);
+        let len = self.reader.read(&mut buf).unwrap_or(0);
         if len == 0 { None } else { Some(buf[0]) }
     }
 
     #[inline]
     fn consume_two_bytes(&mut self) -> Option<[u8; 2]> {
         let mut buf = [0_u8; 2];
-        let len = self.bufreader.read(&mut buf).unwrap_or(0);
+        let len = self.reader.read(&mut buf).unwrap_or(0);
         if len < 2 {
             // Incomplete UTF-8 character steam.
             None
@@ -118,7 +118,7 @@ where
     #[inline]
     fn consume_three_bytes(&mut self) -> Option<[u8; 3]> {
         let mut buf = [0_u8; 3];
-        let len = self.bufreader.read(&mut buf).unwrap_or(0);
+        let len = self.reader.read(&mut buf).unwrap_or(0);
 
         if len < 3 {
             // Incomplete UTF-8 character steam.

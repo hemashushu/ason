@@ -27,11 +27,11 @@ where
     de_from_char_iterator(&mut chars)
 }
 
-pub fn de_from_reader<T, R: Read>(reader: R) -> Result<T, AsonError>
+pub fn de_from_reader<T, R: Read>(mut reader: R) -> Result<T, AsonError>
 where
     T: de::DeserializeOwned,
 {
-    let mut char_iter = UTF8CharIterator::new(reader);
+    let mut char_iter = UTF8CharIterator::new(&mut reader);
     de_from_char_iterator(&mut char_iter)
 }
 
@@ -75,7 +75,7 @@ where
 /// Deserialize a List of values from a character iterator,
 /// return a `ListDeserializer` that can be used to iterate over the deserialized values one by one.
 ///
-/// - If the upstream is a std::io::Read, use `let mut char_iter = UTF8CharIterator::new(reader)`
+/// - If the upstream is a std::io::Read, use `let mut char_iter = UTF8CharIterator::new(&mut reader)`
 ///   to convert it to a character iterator.
 /// - If the upstream is a string slice, use `let mut chars = s.chars()` to convert it to a character iterator.
 pub fn list_from_char_iterator<T>(
@@ -1016,7 +1016,8 @@ impl<'de> VariantAccess<'de> for VariantAccessor<'_, 'de> {
 mod tests {
     use crate::{
         de::{de_from_str, list_from_char_iterator},
-        error::AsonError, utf8_char_iterator::UTF8CharIterator,
+        error::AsonError,
+        utf8_char_iterator::UTF8CharIterator,
     };
     use pretty_assertions::assert_eq;
     use serde::Deserialize;
@@ -1997,7 +1998,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialize_list_with_lazy() {
+    fn test_deserialize_stream_list() {
         let s = r#"[11 13]"#;
 
         let mut chars = s.chars();

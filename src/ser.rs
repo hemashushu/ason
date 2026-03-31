@@ -4,7 +4,7 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::io::Write;
+use std::{io::Write, marker::PhantomData};
 
 use serde::{Serialize, ser};
 
@@ -117,6 +117,56 @@ where
         if self.indent_level > 0 {
             self.indent_level -= 1;
         }
+    }
+}
+
+pub fn list_to_writer<T, W>(writer: &mut W) -> ListSerializer<'_, W, T>
+where
+    W: Write,
+{
+    let serializer = Serializer::new(writer);
+    ListSerializer::new(serializer)
+}
+
+pub struct ListSerializer<'a, W, T>
+where
+    W: Write,
+{
+    serializer: Serializer<'a, W>,
+    _marker: PhantomData<T>,
+}
+
+impl<'a, W, T> ListSerializer<'a, W, T>
+where
+    W: Write,
+{
+    pub fn new(serializer: Serializer<'a, W>) -> Self {
+        Self {
+            serializer,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn start_list(&mut self) -> Result<(), AsonError> {
+        self.serializer.is_first_element = true;
+        self.serializer.print_opening_bracket()
+    }
+
+    pub fn end_list(&mut self) -> Result<(), AsonError> {
+        self.serializer.print_closing_bracket()
+    }
+
+    pub fn serialize_element(&mut self, value: &T) -> Result<(), AsonError>
+    where
+        T: Serialize,
+    {
+        if self.serializer.is_first_element {
+            self.serializer.is_first_element = false;
+        } else {
+            self.serializer.print_newline()?;
+        }
+
+        value.serialize(&mut self.serializer)
     }
 }
 
@@ -648,7 +698,7 @@ mod tests {
     use serde::Serialize;
     use serde_bytes::ByteBuf;
 
-    use crate::ser::ser_to_string;
+    use crate::ser::{list_to_writer, ser_to_string};
 
     #[test]
     fn test_primitive_values() {
@@ -1241,5 +1291,64 @@ mod tests {
     address: (11 "sz")
 }"#
         );
+    }
+
+    #[test]
+    fn test_serialize_stream_list() {
+        let mut buf: Vec<u8> = vec![];
+        let mut ser = list_to_writer(&mut buf);
+
+        ser.start_list().unwrap();
+        ser.serialize_element(&11).unwrap();
+        ser.serialize_element(&13).unwrap();
+        ser.end_list().unwrap();
+
+        let s = String::from_utf8(buf).unwrap();
+        assert_eq!(
+            s,
+            r#"[
+    11
+    13
+]"#
+        );
+
+        #[derive(Serialize, Debug, PartialEq)]
+        struct Object {
+            id: i32,
+            name: String,
+        }
+
+        let mut buf: Vec<u8> = vec![];
+        let mut ser = list_to_writer(&mut buf);
+
+        ser.start_list().unwrap();
+        ser.serialize_element(&Object {
+            id: 11,
+            name: "foo".to_owned(),
+        })
+        .unwrap();
+
+        ser.serialize_element(&Object {
+            id: 13,
+            name: "bar".to_owned(),
+        })
+        .unwrap();
+
+        ser.end_list().unwrap();
+
+        let s = String::from_utf8(buf).unwrap();
+        assert_eq!(
+            s,
+            r#"[
+    {
+        id: 11
+        name: "foo"
+    }
+    {
+        id: 13
+        name: "bar"
+    }
+]"#
+        )
     }
 }
