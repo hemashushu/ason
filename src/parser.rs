@@ -10,19 +10,13 @@ use crate::{
     ast::{AsonNode, Enumeration, KeyValuePair, NamedListEntry, Number},
     char_with_position::CharsWithPositionIterator,
     error::AsonError,
-    lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
-    normalizer::{NormalizeSignedNumberIter, PEEK_BUFFER_LENGTH_NORMALIZE},
+    lexer::Lexer,
+    normalizer::NormalizeSignedNumberIter,
     peekable_iterator::PeekableIterator,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
     utf8_char_iterator::UTF8CharIterator,
 };
-
-// Buffer length for peekable iterator used in parser.
-// We need to peek at most 2 tokens in the following cases:
-// - To distinguish tuple-like variant and object-like variant,
-//   e.g., `Enum::Variant(...)` and `Enum::Variant{...}`.
-pub const PEEK_BUFFER_LENGTH_PARSE: usize = 2;
 
 pub fn parse_from_str(s: &str) -> Result<AsonNode, AsonError> {
     let chars = s.chars();
@@ -44,17 +38,15 @@ where
     let char_position_iter = CharsWithPositionIterator::new(char_iterator);
 
     // Lex
-    let peekable_char_position_iter =
-        PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+    let peekable_char_position_iter = PeekableIterator::new(char_position_iter);
     let lexer = Lexer::new(peekable_char_position_iter);
 
     // Normalize signed numbers
-    let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+    let peekable_lexer_iter = PeekableIterator::new(lexer);
     let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
 
     // Parse
-    let peekable_token_stream_iter =
-        PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
+    let peekable_token_stream_iter = PeekableIterator::new(normalizer_iter);
     let mut parser = Parser::new(peekable_token_stream_iter);
     let root = parser.parse_node()?;
 
@@ -156,17 +148,17 @@ where
 
     // Consume ')', error if the next token is not ')' or no more token
     fn consume_closing_parenthesis(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_assert(&Token::ClosingParenthesis, "closing parenthesis")
+        self.consume_token_and_assert(&Token::ParenthesisClose, "closing parenthesis")
     }
 
     // Consume ']', error if the next token is not ']' or no more token
     fn consume_closing_bracket(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_assert(&Token::ClosingBracket, "closing bracket")
+        self.consume_token_and_assert(&Token::BracketClose, "closing bracket")
     }
 
     // Consume '}', error if the next token is not '}' or no more token
     fn consume_closing_brace(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_assert(&Token::ClosingBrace, "closing brace")
+        self.consume_token_and_assert(&Token::BraceClose, "closing brace")
     }
 
     // Consume ':', error if the next token is not ':' or no more token
@@ -210,11 +202,11 @@ where
                     }
                     Token::Enumeration(type_name, variant_name) => {
                         match self.peek_token(1)? {
-                            Some(Token::OpeningParenthesis) => {
+                            Some(Token::ParenthesisOpen) => {
                                 // tuple-like variant or the single value variant
                                 self.parse_tuple_like_variant()?
                             }
-                            Some(Token::OpeningBrace) => {
+                            Some(Token::BraceOpen) => {
                                 // object-like variant
                                 self.parse_object_like_variant()?
                             }
@@ -234,16 +226,16 @@ where
                         self.next_token()?;
                         v
                     }
-                    Token::OpeningBrace => {
+                    Token::BraceOpen => {
                         // object: {key:value, ...}
                         self.parse_object()?
                     }
-                    Token::OpeningBracket => {
+                    Token::BracketOpen => {
                         // list: [...]
                         // named-list (map): ["name":value, ...]
                         self.parse_list()?
                     }
-                    Token::OpeningParenthesis => {
+                    Token::ParenthesisOpen => {
                         // tuple: (...)
                         self.parse_tuple()?
                     }
@@ -289,7 +281,7 @@ where
 
         // Collect items
         while let Some(token) = self.peek_token(0)? {
-            if token == &Token::ClosingParenthesis {
+            if token == &Token::ParenthesisClose {
                 break;
             }
 
@@ -359,7 +351,7 @@ where
 
         // Collect key-value pairs
         while let Some(token) = self.peek_token(0)? {
-            if token == &Token::ClosingBrace {
+            if token == &Token::BraceClose {
                 break;
             }
 
@@ -418,7 +410,7 @@ where
         let mut list_type = ListType::Unspecified;
 
         while let Some(token) = self.peek_token(0)? {
-            if token == &Token::ClosingBracket {
+            if token == &Token::BracketClose {
                 break;
             }
 
@@ -471,7 +463,7 @@ where
         let mut items: Vec<AsonNode> = vec![];
 
         while let Some(token) = self.peek_token(0)? {
-            if token == &Token::ClosingParenthesis {
+            if token == &Token::ParenthesisClose {
                 break;
             }
 
@@ -717,7 +709,7 @@ mod tests {
                         line: 0,
                         column: 1
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 4,
                         line: 0,
                         column: 4
@@ -737,7 +729,7 @@ mod tests {
                         line: 0,
                         column: 1
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 3,
                         line: 0,
                         column: 3
@@ -757,7 +749,7 @@ mod tests {
                         line: 0,
                         column: 3
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 3,
                         line: 0,
                         column: 3
@@ -777,7 +769,7 @@ mod tests {
                         line: 0,
                         column: 4
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 4,
                         line: 0,
                         column: 4
@@ -1048,7 +1040,7 @@ mod tests {
                         line: 0,
                         column: 1
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 1,
                         line: 0,
                         column: 1
@@ -1189,7 +1181,7 @@ mod tests {
                         line: 0,
                         column: 13
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 13,
                         line: 0,
                         column: 13
@@ -1209,7 +1201,7 @@ mod tests {
                         line: 0,
                         column: 17
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 17,
                         line: 0,
                         column: 17
@@ -1229,7 +1221,7 @@ mod tests {
                         line: 0,
                         column: 18
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 18,
                         line: 0,
                         column: 18
@@ -1397,7 +1389,7 @@ mod tests {
                         line: 0,
                         column: 5
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 9,
                         line: 0,
                         column: 9

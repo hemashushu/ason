@@ -9,9 +9,8 @@ use std::{io::Read, marker::PhantomData};
 use crate::{
     char_with_position::CharsWithPositionIterator,
     error::AsonError,
-    lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
-    normalizer::{NormalizeSignedNumberIter, PEEK_BUFFER_LENGTH_NORMALIZE},
-    parser::PEEK_BUFFER_LENGTH_PARSE,
+    lexer::Lexer,
+    normalizer::NormalizeSignedNumberIter,
     peekable_iterator::PeekableIterator,
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
@@ -47,16 +46,15 @@ where
     let char_position_iter = CharsWithPositionIterator::new(char_iterator);
 
     // Lex
-    let peekable_char_position_iter =
-        PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+    let peekable_char_position_iter = PeekableIterator::new(char_position_iter);
     let lexer = Lexer::new(peekable_char_position_iter);
 
     // Normalize signed numbers
-    let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+    let peekable_lexer_iter = PeekableIterator::new(lexer);
     let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
 
     // Deserialize
-    let peekable_token_iter = PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
+    let peekable_token_iter = PeekableIterator::new(normalizer_iter);
 
     let mut deserializer = Deserializer::new(peekable_token_iter);
 
@@ -85,16 +83,15 @@ where
     T: de::DeserializeOwned,
 {
     let char_position_iter = CharsWithPositionIterator::new(char_iterator);
-    let peekable_char_position_iter =
-        PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+    let peekable_char_position_iter = PeekableIterator::new(char_position_iter);
     let lexer = Lexer::new(peekable_char_position_iter);
-    let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+    let peekable_lexer_iter = PeekableIterator::new(lexer);
     let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
-    let mut peekable_token_iter = PeekableIterator::new(normalizer_iter, PEEK_BUFFER_LENGTH_PARSE);
+    let mut peekable_token_iter = PeekableIterator::new(normalizer_iter);
 
     match peekable_token_iter.peek(0) {
         Some(Ok(TokenWithRange { token, range })) => {
-            if token == &Token::OpeningBracket {
+            if token == &Token::BracketOpen {
                 // consume the opening bracket '['
                 peekable_token_iter.next();
             } else {
@@ -145,7 +142,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         if self
             .deserializer
-            .peek_token_and_equals(0, &Token::ClosingBracket)
+            .peek_token_and_equals(0, &Token::BracketClose)
             .ok()?
         {
             // exits the procedure when the end marker ']' is encountered.
@@ -246,22 +243,22 @@ impl<'a> Deserializer<'a> {
 
     // Consume '(', error if the next token is not '(' or no more token
     fn consume_opening_parenthesis(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_assert(&Token::OpeningParenthesis, "opening parenthesis")
+        self.consume_token_and_assert(&Token::ParenthesisOpen, "opening parenthesis")
     }
 
     // Consume ')', error if the next token is not ')' or no more token
     fn consume_closing_parenthesis(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_assert(&Token::ClosingParenthesis, "closing parenthesis")
+        self.consume_token_and_assert(&Token::ParenthesisClose, "closing parenthesis")
     }
 
     // Consume ']', error if the next token is not ']' or no more token
     fn consume_closing_bracket(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_assert(&Token::ClosingBracket, "closing bracket")
+        self.consume_token_and_assert(&Token::BracketClose, "closing bracket")
     }
 
     // Consume '}', error if the next token is not '}' or no more token
     fn consume_closing_brace(&mut self) -> Result<(), AsonError> {
-        self.consume_token_and_assert(&Token::ClosingBrace, "closing brace")
+        self.consume_token_and_assert(&Token::BraceClose, "closing brace")
     }
 
     // Consume ':', error if the next token is not ':' or no more token
@@ -547,11 +544,11 @@ impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
             Some(Token::Enumeration(type_name, variant_name)) => {
                 if type_name == "Option" {
                     if variant_name == "None"
-                        && !self.peek_token_and_equals(0, &Token::OpeningParenthesis)?
+                        && !self.peek_token_and_equals(0, &Token::ParenthesisOpen)?
                     {
                         visitor.visit_none()
                     } else if variant_name == "Some"
-                        && self.peek_token_and_equals(0, &Token::OpeningParenthesis)?
+                        && self.peek_token_and_equals(0, &Token::ParenthesisOpen)?
                     {
                         self.next_token()?; // consume '('
                         let v = visitor.visit_some(&mut *self);
@@ -623,7 +620,7 @@ impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
         // seq = List/Vector
 
         match self.next_token()? {
-            Some(Token::OpeningBracket) => {
+            Some(Token::BracketOpen) => {
                 let value = visitor.visit_seq(ArrayAccessor::new(self))?;
                 self.consume_closing_bracket()?; // consume ']'
                 Ok(value)
@@ -643,7 +640,7 @@ impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
         V: de::Visitor<'de>,
     {
         match self.next_token()? {
-            Some(Token::OpeningParenthesis) => {
+            Some(Token::ParenthesisOpen) => {
                 let value = visitor.visit_seq(TupleAccessor::new(self))?;
                 self.consume_closing_parenthesis()?; // consume ')'
                 Ok(value)
@@ -679,7 +676,7 @@ impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
     {
         // map = Named List
         match self.next_token()? {
-            Some(Token::OpeningBracket) => {
+            Some(Token::BracketOpen) => {
                 let value = visitor.visit_map(MapAccessor::new(self))?;
                 self.consume_closing_bracket()?; // consume ']'
 
@@ -707,7 +704,7 @@ impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
         // struct = Object
 
         match self.next_token()? {
-            Some(Token::OpeningBrace) => {
+            Some(Token::BraceOpen) => {
                 let value = visitor.visit_map(ObjectAccessor::new(self))?;
                 self.consume_closing_brace()?; // consume '}'
 
@@ -735,11 +732,11 @@ impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
         match self.next_token()? {
             Some(Token::Enumeration(type_name, variant_name)) => {
                 if type_name == name {
-                    if self.peek_token_and_equals(0, &Token::OpeningParenthesis)? {
+                    if self.peek_token_and_equals(0, &Token::ParenthesisOpen)? {
                         // variant with single value or tuple-like variant
                         let v = visitor.visit_enum(VariantAccessor::new(self, &variant_name))?;
                         Ok(v)
-                    } else if self.peek_token_and_equals(0, &Token::OpeningBrace)? {
+                    } else if self.peek_token_and_equals(0, &Token::BraceOpen)? {
                         // object-like variant
                         let v = visitor.visit_enum(VariantAccessor::new(self, &variant_name))?;
                         Ok(v)
@@ -808,7 +805,7 @@ impl<'de> SeqAccess<'de> for ArrayAccessor<'_, 'de> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        if self.de.peek_token_and_equals(0, &Token::ClosingBracket)? {
+        if self.de.peek_token_and_equals(0, &Token::BracketClose)? {
             // exits the procedure when the end marker ']' is encountered.
             return Ok(None);
         }
@@ -872,7 +869,7 @@ impl<'de> MapAccess<'de> for MapAccessor<'_, 'de> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        if self.de.peek_token_and_equals(0, &Token::ClosingBracket)? {
+        if self.de.peek_token_and_equals(0, &Token::BracketClose)? {
             return Ok(None);
         }
 
@@ -915,7 +912,7 @@ impl<'de> MapAccess<'de> for ObjectAccessor<'_, 'de> {
         K: de::DeserializeSeed<'de>,
     {
         // the MapAccess wouldn't stop automatically when it encounters the last item.
-        if self.de.peek_token_and_equals(0, &Token::ClosingBrace)? {
+        if self.de.peek_token_and_equals(0, &Token::BraceClose)? {
             return Ok(None);
         }
 

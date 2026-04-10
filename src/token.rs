@@ -10,13 +10,13 @@ use crate::range::Range;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
-    Colon,              // `:`
-    OpeningBrace,       // `{`
-    ClosingBrace,       // `}`
-    OpeningBracket,     // `[`
-    ClosingBracket,     // `]`
-    OpeningParenthesis, // `(`
-    ClosingParenthesis, // `)`
+    Colon,            // `:`
+    BraceOpen,        // `{`
+    BraceClose,       // `}`
+    BracketOpen,      // `[`
+    BracketClose,     // `]`
+    ParenthesisOpen,  // `(`
+    ParenthesisClose, // `)`
 
     Number(NumberToken),
 

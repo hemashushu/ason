@@ -39,8 +39,8 @@ impl Display for AsonError {
                     "Error from line: {} column: {}, to line: {} column: {}",
                     range.start.line + 1,
                     range.start.column + 1,
-                    range.end_included.line + 1,
-                    range.end_included.column + 1
+                    range.end_inclusive.line + 1,
+                    range.end_inclusive.column + 1
                 )?;
                 write!(f, "{}", detail)
             }

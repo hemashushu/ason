@@ -9,14 +9,14 @@ use crate::position::Position;
 #[derive(Debug, PartialEq, Clone, Copy, Default)]
 pub struct Range {
     pub start: Position,
-    pub end_included: Position,
+    pub end_inclusive: Position,
 }
 
 impl Range {
-    pub fn new(start: &Position, end_included: &Position) -> Self {
+    pub fn new(start: &Position, end_inclusive: &Position) -> Self {
         Self {
             start: *start,
-            end_included: *end_included,
+            end_inclusive: *end_inclusive,
         }
     }
 
@@ -24,7 +24,7 @@ impl Range {
     pub fn from_single_position(pos: &Position) -> Self {
         Self {
             start: *pos,
-            end_included: *pos,
+            end_inclusive: *pos,
         }
     }
 
@@ -35,7 +35,7 @@ impl Range {
         let inc = length - 1;
         Self {
             start: *pos,
-            end_included: Position::new(pos.index + inc, pos.line, pos.column + inc),
+            end_inclusive: Position::new(pos.index + inc, pos.line, pos.column + inc),
         }
     }
 
@@ -46,10 +46,10 @@ impl Range {
     pub fn from_detail(index: usize, line: usize, column: usize, length: usize) -> Self {
         let inc = length - 1;
         let start = Position::new(index, line, column);
-        let end_included = Position::new(index + inc, line, column + inc);
+        let end_inclusive = Position::new(index + inc, line, column + inc);
         Self {
             start,
-            end_included,
+            end_inclusive,
         }
     }
 
@@ -58,7 +58,7 @@ impl Range {
     pub fn merge(left: &Self, right: &Self) -> Self {
         Self {
             start: left.start,
-            end_included: right.end_included,
+            end_inclusive: right.end_inclusive,
         }
     }
 }

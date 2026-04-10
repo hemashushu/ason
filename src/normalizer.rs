@@ -13,8 +13,6 @@ use crate::{
     token::{NumberToken, Token, TokenWithRange},
 };
 
-pub const PEEK_BUFFER_LENGTH_NORMALIZE: usize = 1;
-
 /// Normalize and check signed numbers in the token stream.
 ///
 /// Token `Plus` and `Minus` are removed after normalization.
@@ -412,8 +410,8 @@ mod tests {
     use crate::{
         char_with_position::CharsWithPositionIterator,
         error::AsonError,
-        lexer::{Lexer, PEEK_BUFFER_LENGTH_LEX},
-        normalizer::{NormalizeSignedNumberIter, PEEK_BUFFER_LENGTH_NORMALIZE},
+        lexer::Lexer,
+        normalizer::NormalizeSignedNumberIter,
         peekable_iterator::PeekableIterator,
         position::Position,
         range::Range,
@@ -425,12 +423,11 @@ mod tests {
         // Lex
         let chars = s.chars();
         let char_position_iter = CharsWithPositionIterator::new(chars);
-        let peekable_char_position_iter =
-            PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+        let peekable_char_position_iter = PeekableIterator::new(char_position_iter);
         let lexer = Lexer::new(peekable_char_position_iter);
 
         // Normalize signed numbers
-        let peekable_lexer_iter = PeekableIterator::new(lexer, PEEK_BUFFER_LENGTH_NORMALIZE);
+        let peekable_lexer_iter = PeekableIterator::new(lexer);
         let normalizer_iter = NormalizeSignedNumberIter::new(peekable_lexer_iter);
 
         // Collect tokens
@@ -486,7 +483,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 13,
                             line: 0,
                             column: 13,
@@ -507,7 +504,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 13,
                             line: 0,
                             column: 13,
@@ -541,7 +538,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 6,
                             line: 0,
                             column: 6,
@@ -562,7 +559,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 6,
                             line: 0,
                             column: 6,
@@ -582,7 +579,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 4,
                             line: 0,
                             column: 4,
@@ -616,7 +613,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 9,
                             line: 0,
                             column: 9,
@@ -637,7 +634,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 9,
                             line: 0,
                             column: 9,
@@ -657,7 +654,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 5,
                             line: 0,
                             column: 5,
@@ -691,7 +688,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 17,
                             line: 0,
                             column: 17,
@@ -712,7 +709,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 17,
                             line: 0,
                             column: 17,
@@ -732,7 +729,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 5,
                             line: 0,
                             column: 5,
@@ -770,7 +767,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 29,
                             line: 0,
                             column: 29,
@@ -791,7 +788,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 29,
                             line: 0,
                             column: 29,
@@ -811,7 +808,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 5,
                             line: 0,
                             column: 5,
@@ -878,7 +875,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 4,
                         line: 0,
                         column: 4
@@ -898,7 +895,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 4,
                         line: 0,
                         column: 4
@@ -993,7 +990,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 3,
                         line: 0,
                         column: 3
@@ -1013,7 +1010,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 3,
                         line: 0,
                         column: 3
@@ -1097,7 +1094,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7
@@ -1117,7 +1114,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7
@@ -1202,7 +1199,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7
@@ -1222,7 +1219,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7
@@ -1259,7 +1256,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 11,
                             line: 0,
                             column: 11,
@@ -1280,7 +1277,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 11,
                             line: 0,
                             column: 11,
@@ -1314,7 +1311,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7,
@@ -1335,7 +1332,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7,
@@ -1355,7 +1352,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 6,
                             line: 0,
                             column: 6,
@@ -1389,7 +1386,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 10,
                             line: 0,
                             column: 10,
@@ -1410,7 +1407,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 10,
                             line: 0,
                             column: 10,
@@ -1430,7 +1427,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7,
@@ -1464,7 +1461,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 15,
                             line: 0,
                             column: 15,
@@ -1485,7 +1482,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 15,
                             line: 0,
                             column: 15,
@@ -1505,7 +1502,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7,
@@ -1543,7 +1540,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 25,
                             line: 0,
                             column: 25,
@@ -1564,7 +1561,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 25,
                             line: 0,
                             column: 25,
@@ -1584,7 +1581,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7
@@ -1686,7 +1683,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 42,
                             line: 0,
                             column: 42
@@ -1707,7 +1704,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 42,
                             line: 0,
                             column: 42
@@ -1741,7 +1738,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 14,
                             line: 0,
                             column: 14
@@ -1762,7 +1759,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 14,
                             line: 0,
                             column: 14
@@ -1782,7 +1779,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 6,
                             line: 0,
                             column: 6
@@ -1816,7 +1813,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 25,
                             line: 0,
                             column: 25
@@ -1837,7 +1834,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 25,
                             line: 0,
                             column: 25
@@ -1857,7 +1854,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7
@@ -1893,7 +1890,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 46,
                             line: 0,
                             column: 46
@@ -1914,7 +1911,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 46,
                             line: 0,
                             column: 46
@@ -1934,7 +1931,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7
@@ -1969,7 +1966,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 88,
                             line: 0,
                             column: 88
@@ -1991,7 +1988,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 88,
                             line: 0,
                             column: 88
@@ -2011,7 +2008,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7
@@ -2082,7 +2079,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 13,
                             line: 0,
                             column: 13,
@@ -2103,7 +2100,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 13,
                             line: 0,
                             column: 13,
@@ -2137,7 +2134,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 8,
                             line: 0,
                             column: 8,
@@ -2158,7 +2155,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 8,
                             line: 0,
                             column: 8,
@@ -2178,7 +2175,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 6,
                             line: 0,
                             column: 6,
@@ -2212,7 +2209,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 12,
                             line: 0,
                             column: 12,
@@ -2233,7 +2230,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 12,
                             line: 0,
                             column: 12,
@@ -2253,7 +2250,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7,
@@ -2287,7 +2284,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 17,
                             line: 0,
                             column: 17,
@@ -2308,7 +2305,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 17,
                             line: 0,
                             column: 17,
@@ -2328,7 +2325,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7,
@@ -2366,7 +2363,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 28,
                             line: 0,
                             column: 28,
@@ -2387,7 +2384,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 28,
                             line: 0,
                             column: 28,
@@ -2407,7 +2404,7 @@ mod tests {
                             line: 0,
                             column: 0,
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7,
@@ -2465,7 +2462,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 12,
                         line: 0,
                         column: 12
@@ -2485,7 +2482,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 5,
                         line: 0,
                         column: 5
@@ -2505,7 +2502,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 8,
                         line: 0,
                         column: 8
@@ -2525,7 +2522,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 16,
                         line: 0,
                         column: 16
@@ -2545,7 +2542,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 28,
                         line: 0,
                         column: 28
@@ -2568,7 +2565,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 10,
                         line: 0,
                         column: 10
@@ -2588,7 +2585,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 6,
                         line: 0,
                         column: 6
@@ -2608,7 +2605,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 9,
                         line: 0,
                         column: 9
@@ -2628,7 +2625,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 14,
                         line: 0,
                         column: 14
@@ -2648,7 +2645,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 24,
                         line: 0,
                         column: 24
@@ -2671,7 +2668,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 41,
                         line: 0,
                         column: 41
@@ -2691,7 +2688,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 13,
                         line: 0,
                         column: 13
@@ -2711,7 +2708,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 24,
                         line: 0,
                         column: 24
@@ -2731,7 +2728,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 45,
                         line: 0,
                         column: 45
@@ -2752,7 +2749,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 87,
                         line: 0,
                         column: 87
@@ -2775,7 +2772,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 12,
                         line: 0,
                         column: 12
@@ -2795,7 +2792,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 7,
                         line: 0,
                         column: 7
@@ -2815,7 +2812,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 11,
                         line: 0,
                         column: 11
@@ -2835,7 +2832,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 16,
                         line: 0,
                         column: 16
@@ -2855,7 +2852,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 27,
                         line: 0,
                         column: 27

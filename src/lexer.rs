@@ -17,11 +17,6 @@ use crate::{
     token::{NumberToken, Token, TokenWithRange},
 };
 
-// Buffer length for peekable iterator in lexer, it should be at least 3,
-// because some tokens need to peek 3 characters,
-// e.g., raw string with hash symbol `r#"..."#`.
-pub const PEEK_BUFFER_LENGTH_LEX: usize = 3;
-
 pub struct Lexer<T>
 where
     T: Iterator<Item = CharWithPosition>,
@@ -181,7 +176,7 @@ where
                     self.next_char(); // Consume '{'
 
                     break Ok(TokenWithRange::new(
-                        Token::OpeningBrace,
+                        Token::BraceOpen,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
@@ -189,7 +184,7 @@ where
                     self.next_char(); // Consume '}'
 
                     break Ok(TokenWithRange::new(
-                        Token::ClosingBrace,
+                        Token::BraceClose,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
@@ -197,7 +192,7 @@ where
                     self.next_char(); // Consume '['
 
                     break Ok(TokenWithRange::new(
-                        Token::OpeningBracket,
+                        Token::BracketOpen,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
@@ -205,7 +200,7 @@ where
                     self.next_char(); // Consume ']'
 
                     break Ok(TokenWithRange::new(
-                        Token::ClosingBracket,
+                        Token::BracketClose,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
@@ -213,7 +208,7 @@ where
                     self.next_char(); // Consume '('
 
                     break Ok(TokenWithRange::new(
-                        Token::OpeningParenthesis,
+                        Token::ParenthesisOpen,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
@@ -221,7 +216,7 @@ where
                     self.next_char(); // Consume ')'
 
                     break Ok(TokenWithRange::new(
-                        Token::ClosingParenthesis,
+                        Token::ParenthesisClose,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
@@ -1908,8 +1903,6 @@ where
                     break;
                 }
                 _ => {
-                    // comment_buffer.push(*current_char);
-
                     self.next_char(); // consume char
                 }
             }
@@ -2163,7 +2156,7 @@ mod tests {
         range::Range,
     };
 
-    use super::{Lexer, PEEK_BUFFER_LENGTH_LEX, Token};
+    use super::{Lexer, Token};
 
     impl Token {
         pub fn new_enumeration(type_name: &str, variant_name: &str) -> Self {
@@ -2184,8 +2177,7 @@ mod tests {
         let chars = s.chars();
 
         let char_position_iter = CharsWithPositionIterator::new(chars);
-        let peekable_char_position_iter =
-            PeekableIterator::new(char_position_iter, PEEK_BUFFER_LENGTH_LEX);
+        let peekable_char_position_iter = PeekableIterator::new(char_position_iter);
         let lexer = Lexer::new(peekable_char_position_iter);
 
         // Collect tokens
@@ -2221,32 +2213,32 @@ mod tests {
 
         assert_eq!(
             lex_from_str_without_location("()").unwrap(),
-            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
+            vec![Token::ParenthesisOpen, Token::ParenthesisClose]
         );
 
         assert_eq!(
             lex_from_str_without_location("(  )").unwrap(),
-            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
+            vec![Token::ParenthesisOpen, Token::ParenthesisClose]
         );
 
         assert_eq!(
             lex_from_str_without_location("( , )").unwrap(),
-            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
+            vec![Token::ParenthesisOpen, Token::ParenthesisClose]
         );
 
         assert_eq!(
             lex_from_str_without_location("( , , ,, )").unwrap(),
-            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
+            vec![Token::ParenthesisOpen, Token::ParenthesisClose]
         );
 
         assert_eq!(
             lex_from_str_without_location("(\t\r\n\n\n)").unwrap(),
-            vec![Token::OpeningParenthesis, Token::ClosingParenthesis,]
+            vec![Token::ParenthesisOpen, Token::ParenthesisClose,]
         );
 
         assert_eq!(
             lex_from_str_without_location("(\n,\n)").unwrap(),
-            vec![Token::OpeningParenthesis, Token::ClosingParenthesis]
+            vec![Token::ParenthesisOpen, Token::ParenthesisClose]
         );
 
         // Testing the ranges
@@ -2256,16 +2248,16 @@ mod tests {
         assert_eq!(
             lex_from_str("()").unwrap(),
             vec![
-                TokenWithRange::new(Token::OpeningParenthesis, Range::from_detail(0, 0, 0, 1)),
-                TokenWithRange::new(Token::ClosingParenthesis, Range::from_detail(1, 0, 1, 1)),
+                TokenWithRange::new(Token::ParenthesisOpen, Range::from_detail(0, 0, 0, 1)),
+                TokenWithRange::new(Token::ParenthesisClose, Range::from_detail(1, 0, 1, 1)),
             ]
         );
 
         assert_eq!(
             lex_from_str("(  )").unwrap(),
             vec![
-                TokenWithRange::new(Token::OpeningParenthesis, Range::from_detail(0, 0, 0, 1)),
-                TokenWithRange::new(Token::ClosingParenthesis, Range::from_detail(3, 0, 3, 1)),
+                TokenWithRange::new(Token::ParenthesisOpen, Range::from_detail(0, 0, 0, 1)),
+                TokenWithRange::new(Token::ParenthesisClose, Range::from_detail(3, 0, 3, 1)),
             ]
         );
 
@@ -2279,8 +2271,8 @@ mod tests {
         assert_eq!(
             lex_from_str("(\t\r\n\n\n)").unwrap(),
             vec![
-                TokenWithRange::new(Token::OpeningParenthesis, Range::from_detail(0, 0, 0, 1)),
-                TokenWithRange::new(Token::ClosingParenthesis, Range::from_detail(6, 3, 0, 1)),
+                TokenWithRange::new(Token::ParenthesisOpen, Range::from_detail(0, 0, 0, 1)),
+                TokenWithRange::new(Token::ParenthesisClose, Range::from_detail(6, 3, 0, 1)),
             ]
         );
     }
@@ -2291,12 +2283,12 @@ mod tests {
             lex_from_str_without_location(",:{}[]()+-").unwrap(),
             vec![
                 Token::Colon,
-                Token::OpeningBrace,
-                Token::ClosingBrace,
-                Token::OpeningBracket,
-                Token::ClosingBracket,
-                Token::OpeningParenthesis,
-                Token::ClosingParenthesis,
+                Token::BraceOpen,
+                Token::BraceClose,
+                Token::BracketOpen,
+                Token::BracketClose,
+                Token::ParenthesisOpen,
+                Token::ParenthesisClose,
                 Token::_Plus,
                 Token::_Minus
             ]
@@ -2313,18 +2305,18 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location("(name)").unwrap(),
             vec![
-                Token::OpeningParenthesis,
+                Token::ParenthesisOpen,
                 Token::new_identifier("name"),
-                Token::ClosingParenthesis,
+                Token::ParenthesisClose,
             ]
         );
 
         assert_eq!(
             lex_from_str_without_location("( a )").unwrap(),
             vec![
-                Token::OpeningParenthesis,
+                Token::ParenthesisOpen,
                 Token::new_identifier("a"),
-                Token::ClosingParenthesis,
+                Token::ParenthesisClose,
             ]
         );
 
@@ -2430,7 +2422,7 @@ mod tests {
             lex_from_str("[\n    true\n    false\n]").unwrap(),
             vec![
                 TokenWithRange::new(
-                    Token::OpeningBracket,
+                    Token::BracketOpen,
                     Range::from_position_and_length(&Position::new(0, 0, 0), 1)
                 ),
                 TokenWithRange::new(
@@ -2442,7 +2434,7 @@ mod tests {
                     Range::from_position_and_length(&Position::new(15, 2, 4), 5)
                 ),
                 TokenWithRange::new(
-                    Token::ClosingBracket,
+                    Token::BracketClose,
                     Range::from_position_and_length(&Position::new(21, 3, 0), 1)
                 ),
             ]
@@ -2454,9 +2446,9 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location("(211)").unwrap(),
             vec![
-                Token::OpeningParenthesis,
+                Token::ParenthesisOpen,
                 Token::Number(NumberToken::I32(211)),
-                Token::ClosingParenthesis,
+                Token::ParenthesisClose,
             ]
         );
 
@@ -2528,7 +2520,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 12,
                         line: 0,
                         column: 12,
@@ -2548,7 +2540,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 3,
                         line: 0,
                         column: 3,
@@ -2602,7 +2594,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 3,
                         line: 0,
                         column: 3,
@@ -2622,7 +2614,7 @@ mod tests {
                         line: 0,
                         column: 0,
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 3,
                         line: 0,
                         column: 3,
@@ -2732,7 +2724,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 5,
                             line: 0,
                             column: 5
@@ -2765,7 +2757,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 8,
                             line: 0,
                             column: 8
@@ -2798,7 +2790,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 16,
                             line: 0,
                             column: 16
@@ -2833,7 +2825,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 29,
                             line: 0,
                             column: 29
@@ -2866,7 +2858,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 9,
                             line: 0,
                             column: 9
@@ -2901,7 +2893,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 10,
                             line: 0,
                             column: 10
@@ -2969,7 +2961,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 12,
                         line: 0,
                         column: 12
@@ -2989,7 +2981,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 1,
                         line: 0,
                         column: 1
@@ -3060,7 +3052,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 8,
                             line: 0,
                             column: 8
@@ -3093,7 +3085,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 11,
                             line: 0,
                             column: 11
@@ -3126,7 +3118,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 16,
                             line: 0,
                             column: 16
@@ -3161,7 +3153,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 26,
                             line: 0,
                             column: 26
@@ -3231,7 +3223,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 3,
                         line: 0,
                         column: 3
@@ -3251,7 +3243,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 3,
                         line: 0,
                         column: 3
@@ -3271,7 +3263,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 5,
                         line: 0,
                         column: 5
@@ -3390,7 +3382,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 42,
                         line: 0,
                         column: 42
@@ -3423,7 +3415,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 1,
                         line: 0,
                         column: 1
@@ -3494,7 +3486,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 15,
                             line: 0,
                             column: 15
@@ -3527,7 +3519,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 26,
                             line: 0,
                             column: 26
@@ -3562,7 +3554,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 47,
                             line: 0,
                             column: 47
@@ -3597,7 +3589,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 89,
                             line: 0,
                             column: 89
@@ -3680,7 +3672,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 14,
                         line: 0,
                         column: 14
@@ -3713,7 +3705,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 1,
                         line: 0,
                         column: 1
@@ -3785,7 +3777,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 7,
                             line: 0,
                             column: 7
@@ -3819,7 +3811,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 11,
                             line: 0,
                             column: 11
@@ -3853,7 +3845,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 18,
                             line: 0,
                             column: 18
@@ -3887,7 +3879,7 @@ mod tests {
                             line: 0,
                             column: 0
                         },
-                        end_included: Position {
+                        end_inclusive: Position {
                             index: 32,
                             line: 0,
                             column: 32
@@ -3922,9 +3914,9 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location("('a')").unwrap(),
             vec![
-                Token::OpeningParenthesis,
+                Token::ParenthesisOpen,
                 Token::Char('a'),
-                Token::ClosingParenthesis
+                Token::ParenthesisClose
             ]
         );
 
@@ -4042,7 +4034,7 @@ mod tests {
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 1,
                         line: 0,
                         column: 1
@@ -4128,7 +4120,7 @@ mod tests {
                         line: 0,
                         column: 3
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 4,
                         line: 0,
                         column: 4
@@ -4150,7 +4142,7 @@ mod tests {
                         line: 0,
                         column: 3
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 10,
                         line: 0,
                         column: 10
@@ -4172,7 +4164,7 @@ mod tests {
                         line: 0,
                         column: 3
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 10,
                         line: 0,
                         column: 10
@@ -4237,9 +4229,9 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location(r#"("abc")"#).unwrap(),
             vec![
-                Token::OpeningParenthesis,
+                Token::ParenthesisOpen,
                 Token::new_string("abc"),
-                Token::ClosingParenthesis,
+                Token::ParenthesisClose,
             ]
         );
 
@@ -4356,7 +4348,7 @@ mod tests {
                         line: 0,
                         column: 6
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 7,
                         line: 0,
                         column: 7
@@ -4378,7 +4370,7 @@ mod tests {
                         line: 0,
                         column: 6
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 13,
                         line: 0,
                         column: 13
@@ -4400,7 +4392,7 @@ mod tests {
                         line: 0,
                         column: 6
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 13,
                         line: 0,
                         column: 13
@@ -4725,7 +4717,7 @@ mod tests {
             .unwrap(),
             vec![
                 TokenWithRange::new(
-                    Token::OpeningBracket,
+                    Token::BracketOpen,
                     Range::new(&Position::new(0, 0, 0), &Position::new(0, 0, 0))
                 ),
                 TokenWithRange::new(
@@ -4737,7 +4729,7 @@ mod tests {
                     Range::new(&Position::new(26, 3, 5), &Position::new(52, 6, 2))
                 ),
                 TokenWithRange::new(
-                    Token::ClosingBracket,
+                    Token::BracketClose,
                     Range::new(&Position::new(53, 6, 3), &Position::new(53, 6, 3))
                 ),
             ]
@@ -5000,7 +4992,7 @@ hello
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 19,
                         line: 0,
                         column: 19
@@ -5020,7 +5012,7 @@ hello
                         line: 0,
                         column: 0
                     },
-                    end_included: Position {
+                    end_inclusive: Position {
                         index: 10,
                         line: 0,
                         column: 10
@@ -5060,9 +5052,9 @@ hello
             lex_from_str_without_location("Option::Some(123)").unwrap(),
             vec![
                 Token::new_enumeration("Option", "Some"),
-                Token::OpeningParenthesis,
+                Token::ParenthesisOpen,
                 Token::Number(NumberToken::I32(123)),
-                Token::ClosingParenthesis,
+                Token::ParenthesisClose,
             ]
         );
 
@@ -5072,9 +5064,9 @@ hello
                 Token::new_identifier("value"),
                 Token::Colon,
                 Token::new_enumeration("Result", "Ok"),
-                Token::OpeningParenthesis,
+                Token::ParenthesisOpen,
                 Token::Number(NumberToken::I32(456)),
-                Token::ClosingParenthesis,
+                Token::ParenthesisClose,
             ]
         );
     }
@@ -5269,7 +5261,7 @@ hello
             )
             .unwrap(),
             vec![
-                Token::OpeningBracket,
+                Token::BracketOpen,
                 Token::Number(NumberToken::I32(1)),
                 Token::Number(NumberToken::I32(2)),
                 Token::Number(NumberToken::I32(3)),
@@ -5278,7 +5270,7 @@ hello
                 Token::Number(NumberToken::I32(6)),
                 Token::Number(NumberToken::I32(7)),
                 Token::Number(NumberToken::I32(8)),
-                Token::ClosingBracket,
+                Token::BracketClose,
             ]
         );
 
@@ -5361,14 +5353,14 @@ hello
             )
             .unwrap(),
             vec![
-                Token::OpeningBrace,
+                Token::BraceOpen,
                 Token::new_identifier("id"),
                 Token::Colon,
                 Token::Number(NumberToken::I32(123)),
                 Token::new_identifier("name"),
                 Token::Colon,
                 Token::new_string("foo"),
-                Token::ClosingBrace,
+                Token::BraceClose,
             ]
         );
 
@@ -5380,11 +5372,11 @@ hello
             )
             .unwrap(),
             vec![
-                Token::OpeningBracket,
+                Token::BracketOpen,
                 Token::Number(NumberToken::I32(123)),
                 Token::Number(NumberToken::I32(456)),
                 Token::Number(NumberToken::I32(789)),
-                Token::ClosingBracket,
+                Token::BracketClose,
             ]
         );
 
@@ -5396,11 +5388,11 @@ hello
             )
             .unwrap(),
             vec![
-                Token::OpeningParenthesis,
+                Token::ParenthesisOpen,
                 Token::Number(NumberToken::I32(123)),
                 Token::new_string("foo"),
                 Token::Boolean(true),
-                Token::ClosingParenthesis,
+                Token::ParenthesisClose,
             ]
         );
 
@@ -5416,28 +5408,28 @@ hello
             )
             .unwrap(),
             vec![
-                Token::OpeningBrace, // {
+                Token::BraceOpen, // {
                 Token::new_identifier("a"),
                 Token::Colon,
-                Token::OpeningBracket, // [
+                Token::BracketOpen, // [
                 Token::Number(NumberToken::I32(1)),
                 Token::Number(NumberToken::I32(2)),
                 Token::Number(NumberToken::I32(3)),
-                Token::ClosingBracket, // ]
+                Token::BracketClose, // ]
                 Token::new_identifier("b"),
                 Token::Colon,
-                Token::OpeningParenthesis, // (
+                Token::ParenthesisOpen, // (
                 Token::Boolean(false),
                 Token::DateTime(DateTime::parse_from_rfc3339("2000-01-01 10:10:10Z").unwrap()),
-                Token::ClosingParenthesis, // )
+                Token::ParenthesisClose, // )
                 Token::new_identifier("c"),
                 Token::Colon,
-                Token::OpeningBrace, // {
+                Token::BraceOpen, // {
                 Token::new_identifier("id"),
                 Token::Colon,
                 Token::Number(NumberToken::I32(11)),
-                Token::ClosingBrace, // }
-                Token::ClosingBrace, // }
+                Token::BraceClose, // }
+                Token::BraceClose, // }
             ]
         );
     }

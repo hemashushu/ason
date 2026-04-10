@@ -178,7 +178,7 @@ impl AsonError {
 
                 let snippet_range = calculate_snippet_and_indication(
                     range.start.index,
-                    range.end_included.index - range.start.index + 1,
+                    range.end_inclusive.index - range.start.index + 1,
                     source_text_length,
                 );
                 let (snippet_line, indication_line) =

@@ -12,11 +12,11 @@ mod normalizer;
 mod peekable_iterator;
 mod position;
 mod range;
+mod token;
 
 pub mod ast;
 pub mod de;
 pub mod parser;
 pub mod ser;
-pub mod token;
 pub mod utf8_char_iterator;
 pub mod writer;
