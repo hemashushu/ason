@@ -42,9 +42,9 @@ where
     //
     // - Remove the '+' tokens in front of numbers (includes `+Inf`).
     // - Apply the '-' tokens to numbers (includes `-Inf`).
-    // - Checks if the signed number is overflowed.
+    // - Check whether the signed number overflows.
     //
-    // Note that the lexer only checked the number width, it does not check the valid range of a signed integer,
+    // Note that the lexer only checks number width; it does not validate the signed integer range,
     // because it lexes the sign token and the number token separately, for example,
     // `-128_i8` is lexed into two tokens: `-` and `128_i8`,
     fn next(&mut self) -> Option<Self::Item> {
@@ -86,7 +86,7 @@ where
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
                                                 format!(
-                                                    "The signed i8 number {} is overflowed.",
+                                                    "The signed i8 number {} overflowed.",
                                                     v
                                                 ),
                                                 Range::merge(&start_range, next_range),
@@ -96,7 +96,7 @@ where
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
                                                 format!(
-                                                    "The signed i16 number {} is overflowed.",
+                                                    "The signed i16 number {} overflowed.",
                                                     v
                                                 ),
                                                 Range::merge(&start_range, next_range),
@@ -106,7 +106,7 @@ where
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
                                                 format!(
-                                                    "The signed i32 number {} is overflowed.",
+                                                    "The signed i32 number {} overflowed.",
                                                     v
                                                 ),
                                                 Range::merge(&start_range, next_range),
@@ -116,14 +116,14 @@ where
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
                                                 format!(
-                                                    "The signed i64 number {} is overflowed.",
+                                                    "The signed i64 number {} overflowed.",
                                                     v
                                                 ),
                                                 Range::merge(&start_range, next_range),
                                             )))
                                         }
                                         _ => {
-                                            // consumes the the plus sign (it's already done) and the
+                                            // Consume the plus sign (already consumed) and the
                                             // number token.
                                             let TokenWithRange {
                                                 token: combined_token,
@@ -222,7 +222,7 @@ where
                                                 format!("-{}", v).parse::<i8>().map_err(|_| {
                                                     AsonError::MessageWithRange(
                                                         format!(
-                                                            "Can not convert \"{}\" to negative i8",
+                                                            "Cannot convert \"{}\" to a negative i8.",
                                                             v
                                                         ),
                                                         combined_range,
@@ -252,7 +252,7 @@ where
                                                 format!("-{}", v).parse::<i16>().map_err(|_| {
                                                     AsonError::MessageWithRange(
                                                         format!(
-                                                            "Can not convert \"{}\" to negative i16.",
+                                                            "Cannot convert \"{}\" to a negative i16.",
                                                             v
                                                         ),
                                                         combined_range,
@@ -282,7 +282,7 @@ where
                                                 format!("-{}", v).parse::<i32>().map_err(|_| {
                                                     AsonError::MessageWithRange(
                                                         format!(
-                                                            "Can not convert \"{}\" to negative i32.",
+                                                            "Cannot convert \"{}\" to a negative i32.",
                                                             v
                                                         ),
                                                         combined_range,
@@ -312,7 +312,7 @@ where
                                                 format!("-{}", v).parse::<i64>().map_err(|_| {
                                                     AsonError::MessageWithRange(
                                                         format!(
-                                                            "Can not convert \"{}\" to negative i64.",
+                                                            "Cannot convert \"{}\" to a negative i64.",
                                                             v
                                                         ),
                                                         combined_range,
@@ -368,28 +368,28 @@ where
                         Token::Number(NumberToken::I8(v)) if *v > i8::MAX as u8 => {
                             // check signed number overflow
                             Some(Err(AsonError::MessageWithRange(
-                                format!("The signed i8 number {} is overflowed.", v),
+                                format!("The signed i8 number {} overflowed.", v),
                                 start_range,
                             )))
                         }
                         Token::Number(NumberToken::I16(v)) if *v > i16::MAX as u16 => {
                             // check signed number overflow
                             Some(Err(AsonError::MessageWithRange(
-                                format!("The signed i16 number {} is overflowed.", v),
+                                format!("The signed i16 number {} overflowed.", v),
                                 start_range,
                             )))
                         }
                         Token::Number(NumberToken::I32(v)) if *v > i32::MAX as u32 => {
                             // check signed number overflow
                             Some(Err(AsonError::MessageWithRange(
-                                format!("The signed i32 number {} is overflowed.", v),
+                                format!("The signed i32 number {} overflowed.", v),
                                 start_range,
                             )))
                         }
                         Token::Number(NumberToken::I64(v)) if *v > i64::MAX as u64 => {
                             // check signed number overflow
                             Some(Err(AsonError::MessageWithRange(
-                                format!("The signed i64 number {} is overflowed.", v),
+                                format!("The signed i64 number {} overflowed.", v),
                                 start_range,
                             )))
                         }
@@ -435,8 +435,8 @@ mod tests {
         // do not use `iter.collect::<Vec<_>>()` to collect tokens,
         // because the `Lexer` throws exceptions via `next() -> Option<Result<...>>`.
         //
-        // if we use `collect()`, once an error occurs,
-        // the iterator wouldn't stop immediately, instead, it would continue to iterate until the end,
+        // If we use `collect()`, once an error occurs,
+        // the iterator would not stop immediately; instead, it would continue until the end.
         let mut token_with_ranges = vec![];
         for result in normalizer_iter {
             match result {

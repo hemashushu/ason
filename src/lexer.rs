@@ -494,20 +494,20 @@ where
             }
         }
 
-        // check syntax
+        // Validate syntax.
 
-        // Tailing '.' is not allowed
+        // Trailing '.' is not allowed.
         if number_buffer.ends_with('.') {
             return Err(AsonError::MessageWithRange(
-                "Decimal number can not ends with \".\".".to_owned(),
+                "Decimal number cannot end with '.'.".to_owned(),
                 Range::new(&self.pop_position_from_stack(), &self.last_position),
             ));
         }
 
-        // Tailing 'e' is not allowed
+        // Trailing 'e' is not allowed.
         if number_buffer.ends_with('e') {
             return Err(AsonError::MessageWithRange(
-                "Decimal number can not ends with \"e\".".to_owned(),
+                "Decimal number cannot end with 'e'.".to_owned(),
                 Range::new(&self.pop_position_from_stack(), &self.last_position),
             ));
         }
@@ -529,7 +529,7 @@ where
                     let v = number_buffer.parse::<f32>().map_err(|_| {
                         AsonError::MessageWithRange(
                             format!(
-                                "Can not convert \"{}\" to f32 floating-point number.",
+                                "Cannot convert \"{}\" to an f32 floating-point number.",
                                 number_buffer
                             ),
                             number_range,
@@ -540,7 +540,7 @@ where
                     if v.is_infinite() {
                         return Err(AsonError::MessageWithRange(
                             format!(
-                                "F32 floating point number \"{}\" is overflow.",
+                                "F32 floating-point number \"{}\" overflowed.",
                                 number_buffer
                             ),
                             number_range,
@@ -553,7 +553,7 @@ where
                     let v = number_buffer.parse::<f64>().map_err(|_| {
                         AsonError::MessageWithRange(
                             format!(
-                                "Can not convert \"{}\" to f64 floating-point number.",
+                                "Cannot convert \"{}\" to an f64 floating-point number.",
                                 number_buffer
                             ),
                             number_range,
@@ -564,7 +564,7 @@ where
                     if v.is_infinite() {
                         return Err(AsonError::MessageWithRange(
                             format!(
-                                "F64 floating point number \"{}\" is overflow.",
+                                "F64 floating-point number \"{}\" overflowed.",
                                 number_buffer
                             ),
                             number_range,
@@ -587,7 +587,7 @@ where
             let v = number_buffer.parse::<f64>().map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}\" to f64 floating-point number.",
+                        "Cannot convert \"{}\" to an f64 floating-point number.",
                         number_buffer
                     ),
                     number_range,
@@ -598,7 +598,7 @@ where
             if v.is_infinite() {
                 return Err(AsonError::MessageWithRange(
                     format!(
-                        "F64 floating point number \"{}\" is overflow.",
+                        "F64 floating-point number \"{}\" overflowed.",
                         number_buffer
                     ),
                     number_range,
@@ -613,7 +613,7 @@ where
             let v = number_buffer.parse::<u32>().map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}\" to i32 integer number.",
+                        "Cannot convert \"{}\" to an i32 integer number.",
                         number_buffer,
                     ),
                     number_range,
@@ -734,32 +734,32 @@ where
             }
         }
 
-        // Check syntax
+        // Validate syntax.
 
         // Empty hexadecimal number is not allowed, e.g., "0x"
         if number_buffer.is_empty() {
             return Err(AsonError::MessageWithRange(
-                "Empty hexadecimal number".to_owned(),
+                "Empty hexadecimal number.".to_owned(),
                 Range::new(&self.pop_position_from_stack(), &self.last_position),
             ));
         }
 
-        // Tailing '.' is not allowed in hexadecimal floating-point number
+        // Trailing '.' is not allowed in hexadecimal floating-point numbers.
         if number_buffer.ends_with('.') {
             return Err(AsonError::MessageWithRange(
                 format!(
-                    "Hexadecimal floating point number \"{}\" is missing the exponent.",
+                    "Hexadecimal floating-point number \"{}\" is missing the exponent.",
                     number_buffer
                 ),
                 Range::new(&self.pop_position_from_stack(), &self.last_position),
             ));
         }
 
-        // Tailing 'p' is not allowed in hexadecimal floating-point number
+        // Trailing 'p' is not allowed in hexadecimal floating-point numbers.
         if number_buffer.ends_with('p') {
             return Err(AsonError::MessageWithRange(
                 format!(
-                    "Hexadecimal floating point number \"{}\" is missing the exponent.",
+                    "Hexadecimal floating-point number \"{}\" is missing the exponent.",
                     number_buffer
                 ),
                 Range::new(&self.pop_position_from_stack(), &self.last_position),
@@ -770,7 +770,7 @@ where
         if found_point && !found_p {
             return Err(AsonError::MessageWithRange(
                 format!(
-                    "Hexadecimal floating point number \"{}\" is missing the exponent.",
+                    "Hexadecimal floating-point number \"{}\" is missing the exponent.",
                     number_buffer
                 ),
                 Range::new(&self.pop_position_from_stack(), &self.last_position),
@@ -780,7 +780,7 @@ where
         let number_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
         let number_token = if found_p {
-            // It is hexadecimal floating-point number.
+            // This is a hexadecimal floating-point number.
             // The default type for floating-point is `f64`.
             let mut type_f64 = true;
 
@@ -841,12 +841,12 @@ where
                 number_range,
             )?
         } else {
-            // It is hexadecimal integer number without explicit type.
+            // This is a hexadecimal integer without an explicit type.
             // The default type for integer is `i32`.
             let v = u32::from_str_radix(&number_buffer, 16).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"0x{}\" to i32 integer number.",
+                        "Cannot convert \"0x{}\" to an i32 integer number.",
                         number_buffer
                     ),
                     number_range,
@@ -913,7 +913,7 @@ where
             }
         }
 
-        // Check syntax
+        // Validate syntax.
 
         // Empty binary number is not allowed, e.g., "0b"
         if number_buffer.is_empty() {
@@ -933,13 +933,13 @@ where
                 number_range,
             )?
         } else {
-            // It is binary integer number without explicit type.
+            // This is a binary integer without an explicit type.
             // The default type for integer is `i32`.
 
             let v = u32::from_str_radix(&number_buffer, 2).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"0b{}\" to i32 integer number.",
+                        "Cannot convert \"0b{}\" to an i32 integer number.",
                         number_buffer
                     ),
                     number_range,
@@ -977,7 +977,7 @@ where
         while let Some(current_char) = self.peek_char(0) {
             match current_char {
                 '0'..='7' => {
-                    // valid digits for binary number
+                    // Valid digits for octal numbers.
                     number_buffer.push(*current_char);
                     self.next_char(); // consume digit
                 }
@@ -1007,7 +1007,7 @@ where
             }
         }
 
-        // Check syntax
+        // Validate syntax.
 
         // Empty octal number is not allowed, e.g., "0o"
         if number_buffer.is_empty() {
@@ -1027,13 +1027,13 @@ where
                 number_range,
             )?
         } else {
-            // It is octal integer number without explicit type.
+            // This is an octal integer without an explicit type.
             // The default type for integer is `i32`.
 
             let v = u32::from_str_radix(&number_buffer, 8).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"0o{}\" to i32 integer number.",
+                        "Cannot convert \"0o{}\" to an i32 integer number.",
                         number_buffer
                     ),
                     number_range,
@@ -1113,8 +1113,8 @@ where
                                     '\\' => '\\',
                                     '\'' => '\'',
                                     '"' => {
-                                        // double quote does not necessary to be escaped for char
-                                        // however, it is still supported for consistency between chars and strings.
+                                        // A double quote does not need to be escaped in a char literal,
+                                        // but it is supported for consistency with string literals.
                                         '"'
                                     }
                                     't' => {
@@ -1190,7 +1190,7 @@ where
             Some(_) => {
                 // `'a?`
                 return Err(AsonError::MessageWithPosition(
-                    "Expected a quote for char".to_owned(),
+                    "Expected the closing quote for the char literal.".to_owned(),
                     self.last_position,
                 ));
             }
@@ -1215,7 +1215,7 @@ where
 
         self.push_peek_position_into_stack();
 
-        self.next_char(); // comsume char '{'
+        self.next_char(); // consume char '{'
 
         let mut codepoint_buffer = String::new();
 
@@ -1251,7 +1251,7 @@ where
 
         if codepoint_buffer.len() > 6 {
             return Err(AsonError::MessageWithRange(
-                "Unicode point code exceeds six digits.".to_owned(),
+                "Unicode code point exceeds six digits.".to_owned(),
                 codepoint_range,
             ));
         }
@@ -1310,8 +1310,8 @@ where
                                             string_buffer.push('\\');
                                         }
                                         '\'' => {
-                                            // single quote does not necessary to be escaped for string
-                                            // however, it is still supported for consistency between chars and strings.
+                                            // A single quote does not need to be escaped in a string literal,
+                                            // but it is supported for consistency with char literals.
                                             string_buffer.push('\'');
                                         }
                                         '"' => {
@@ -1715,7 +1715,7 @@ where
                 None => {
                     // d"...EOF
                     return Err(AsonError::UnexpectedEndOfDocument(
-                        "Incomplete date time.".to_owned(),
+                        "Incomplete datetime.".to_owned(),
                     ));
                 }
             }
@@ -1732,7 +1732,7 @@ where
             // YYYY-MM-DD HH:mm:ss
             date_buffer.push('Z');
         } else if len == 20 || len == 25 {
-            // ref3339
+            // RFC 3339
             // YYYY-MM-DDTHH:mm:ssZ
             // YYYY-MM-DDTHH:mm:ss+08:00
         } else {
@@ -1767,7 +1767,7 @@ where
         // ```
 
         let consume_zero_or_more_whitespaces = |iter: &mut Self| -> Result<usize, AsonError> {
-            // exit when encounting non-whitespaces or EOF
+            // Exit when encountering a non-whitespace character or EOF.
             let mut amount: usize = 0;
 
             while let Some(' ' | '\t' | '\r' | '\n') = iter.peek_char(0) {
@@ -1864,7 +1864,7 @@ where
                 break;
             }
 
-            // consume at lease one whitespace
+            // Consume at least one whitespace character.
             consume_one_or_more_whitespaces(self)?;
         }
 
@@ -1887,14 +1887,14 @@ where
         //
         // ```
 
-        // note that the trailing '\n' or '\r\n' does not belong to line comment
+        // Note that trailing '\n' or '\r\n' does not belong to the line comment.
 
         self.next_char(); // consume the 1st '/'
         self.next_char(); // consume the 2nd '/'
 
         while let Some(current_char) = self.peek_char(0) {
-            // ignore all chars until encountering '\n' or '\r\n'.
-            // do not consume '\n' or '\r\n' since they do not belong to the line comment token.
+            // Ignore all chars until encountering '\n' or '\r\n'.
+            // Do not consume '\n' or '\r\n' because they do not belong to the line comment token.
             match current_char {
                 '\n' => {
                     break;
@@ -2014,7 +2014,7 @@ fn convert_integer_number_string_with_data_type(
             let v = u8::from_str_radix(number_string, radix).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}{}\" to i8 integer number.",
+                        "Cannot convert \"{}{}\" to an i8 integer number.",
                         prefix_name, number_string,
                     ),
                     number_range,
@@ -2027,7 +2027,7 @@ fn convert_integer_number_string_with_data_type(
             let v = u8::from_str_radix(number_string, radix).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}{}\" to u8 integer number.",
+                        "Cannot convert \"{}{}\" to a u8 integer number.",
                         prefix_name, number_string,
                     ),
                     number_range,
@@ -2040,7 +2040,7 @@ fn convert_integer_number_string_with_data_type(
             let v = u16::from_str_radix(number_string, radix).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}{}\" to i16 integer number.",
+                        "Cannot convert \"{}{}\" to an i16 integer number.",
                         prefix_name, number_string,
                     ),
                     number_range,
@@ -2053,7 +2053,7 @@ fn convert_integer_number_string_with_data_type(
             let v = u16::from_str_radix(number_string, radix).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}{}\" to u16 integer number.",
+                        "Cannot convert \"{}{}\" to a u16 integer number.",
                         prefix_name, number_string,
                     ),
                     number_range,
@@ -2066,7 +2066,7 @@ fn convert_integer_number_string_with_data_type(
             let v = u32::from_str_radix(number_string, radix).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}{}\" to i32 integer number.",
+                        "Cannot convert \"{}{}\" to an i32 integer number.",
                         prefix_name, number_string
                     ),
                     number_range,
@@ -2079,7 +2079,7 @@ fn convert_integer_number_string_with_data_type(
             let v = u32::from_str_radix(number_string, radix).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}{}\" to u32 integer number.",
+                        "Cannot convert \"{}{}\" to a u32 integer number.",
                         prefix_name, number_string
                     ),
                     number_range,
@@ -2092,7 +2092,7 @@ fn convert_integer_number_string_with_data_type(
             let v = u64::from_str_radix(number_string, radix).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}{}\" to i64 integer number.",
+                        "Cannot convert \"{}{}\" to an i64 integer number.",
                         prefix_name, number_string
                     ),
                     number_range,
@@ -2105,7 +2105,7 @@ fn convert_integer_number_string_with_data_type(
             let v = u64::from_str_radix(number_string, radix).map_err(|_| {
                 AsonError::MessageWithRange(
                     format!(
-                        "Can not convert \"{}{}\" to u64 integer number.",
+                        "Cannot convert \"{}{}\" to a u64 integer number.",
                         prefix_name, number_string
                     ),
                     number_range,
@@ -2185,8 +2185,8 @@ mod tests {
         // do not use `iter.collect::<Vec<_>>()` to collect tokens,
         // because the `Lexer` throws exceptions via `next() -> Option<Result<...>>`.
         //
-        // if we use `collect()`, once an error occurs,
-        // the iterator wouldn't stop immediately, instead, it would continue to iterate until the end,
+        // If we use `collect()`, once an error occurs,
+        // the iterator would not stop immediately; instead, it would continue iterating to the end.
         let mut token_with_ranges = vec![];
         for result in lexer {
             match result {

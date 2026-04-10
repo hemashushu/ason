@@ -6,7 +6,7 @@
 
 pub const ROUND_QUEUE_LENGTH: usize = 8;
 
-/// `PeekableIter` extends the functionality of `std::iter::Peekable` by allowing
+/// `PeekableIterator` extends `std::iter::Peekable` by allowing
 /// peeking at elements at any specified offset, not just the next one.
 pub struct PeekableIterator<T, U>
 where
@@ -22,7 +22,7 @@ where
     T: PartialEq,
     U: Iterator<Item = T>,
 {
-    /// Creates a new PeekableIter with the specified buffer size.
+    /// Creates a new `PeekableIterator` with the specified buffer size.
     /// The buffer is pre-filled with elements from the upstream iterator.
     pub fn new(mut upstream: U) -> Self {
         let mut buffer = RoundQueue::new();
@@ -64,7 +64,7 @@ where
     }
 }
 
-/// A fixed-size circular queue used for buffering elements in PeekableIter.
+/// A fixed-size circular queue used for buffering elements in `PeekableIterator`.
 struct RoundQueue<T>
 where
     T: PartialEq,

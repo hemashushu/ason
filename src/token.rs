@@ -46,15 +46,15 @@ pub enum Token {
 
     DateTime(DateTime<FixedOffset>),
 
-    // An identifier is used for object (or struct) field name,
-    // It is a sequence of letters, digits, underscores:
+    // An identifier is used for an object (or struct) field name.
+    // It is a sequence of letters, digits, and underscores:
     // - `[a-zA-Z0-9_]`
     // - '\u{a0}' - '\u{d7ff}'
     // - '\u{e000}' - '\u{10ffff}'
     Identifier(String),
 
-    // An enumeration is consisted of a type name and a variant name, e.g.,
-    // `Option::None`, the "Option" is type name, and "None" is variant name.
+    // An enumeration consists of a type name and a variant name, for example,
+    // `Option::None`, where "Option" is the type name and "None" is the variant name.
     Enumeration(String, String),
 
     HexadecimalByteData(Vec<u8>),

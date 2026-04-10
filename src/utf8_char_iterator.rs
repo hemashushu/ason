@@ -108,7 +108,7 @@ where
         let mut buf = [0_u8; 2];
         let len = self.reader.read(&mut buf).unwrap_or(0);
         if len < 2 {
-            // Incomplete UTF-8 character steam.
+            // Incomplete UTF-8 character stream.
             None
         } else {
             Some(buf)
@@ -121,7 +121,7 @@ where
         let len = self.reader.read(&mut buf).unwrap_or(0);
 
         if len < 3 {
-            // Incomplete UTF-8 character steam.
+            // Incomplete UTF-8 character stream.
             None
         } else {
             Some(buf)

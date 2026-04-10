@@ -795,7 +795,7 @@ mod tests {
             assert_eq!(ser_to_string(&'\\').unwrap(), r#"'\\'"#);
             assert_eq!(ser_to_string(&'\'').unwrap(), r#"'\''"#);
 
-            // double quote does not necessary to be escaped
+            // A double quote does not need to be escaped.
             assert_eq!(ser_to_string(&'"').unwrap(), r#"'"'"#);
             assert_eq!(ser_to_string(&'\"').unwrap(), r#"'"'"#);
 

@@ -145,7 +145,7 @@ where
             .peek_token_and_equals(0, &Token::BracketClose)
             .ok()?
         {
-            // exits the procedure when the end marker ']' is encountered.
+            // Exit when the closing marker ']' is encountered.
             self.deserializer.next_token().ok()?; // consume the closing bracket
             None
         } else {
@@ -203,9 +203,9 @@ impl<'a> Deserializer<'a> {
         }
     }
 
-    // Peek the next token and check if it equals to the expected token,
-    // return false if not equals or no more token,
-    // error if lexing error occurs
+    // Peek at the next token and compare it with the expected token.
+    // Return false when it does not match or when there are no more tokens.
+    // Return an error if lexing fails while peeking.
     fn peek_token_and_equals(
         &self,
         offset: usize,
@@ -216,8 +216,8 @@ impl<'a> Deserializer<'a> {
             Some(token) if token == expected_token))
     }
 
-    // Consume the next token and assert it equals to the expected token,
-    // error if not equal or no more token
+    // Consume the next token and assert that it matches the expected token.
+    // Return an error if it does not match or if there are no more tokens.
     fn consume_token_and_assert(
         &mut self,
         expected_token: &Token,
@@ -806,7 +806,7 @@ impl<'de> SeqAccess<'de> for ArrayAccessor<'_, 'de> {
         T: de::DeserializeSeed<'de>,
     {
         if self.de.peek_token_and_equals(0, &Token::BracketClose)? {
-            // exits the procedure when the end marker ']' is encountered.
+            // Exit when the closing marker ']' is encountered.
             return Ok(None);
         }
 
@@ -875,7 +875,7 @@ impl<'de> MapAccess<'de> for MapAccessor<'_, 'de> {
 
         if self.de.peek_token(0)?.is_none() {
             return Err(AsonError::UnexpectedEndOfDocument(
-                "Incomplete List.".to_owned(),
+                "Incomplete Named List.".to_owned(),
             ));
         }
 
@@ -911,7 +911,7 @@ impl<'de> MapAccess<'de> for ObjectAccessor<'_, 'de> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        // the MapAccess wouldn't stop automatically when it encounters the last item.
+        // `MapAccess` does not stop automatically at the last item.
         if self.de.peek_token_and_equals(0, &Token::BraceClose)? {
             return Ok(None);
         }

@@ -108,9 +108,9 @@ where
         }
     }
 
-    // Peek the next token and check if it equals to the expected token,
-    // return false if not equals or no more token,
-    // error if lexing error occurs during peeking.
+    // Peek at the next token and compare it with the expected token.
+    // Return false when it does not match or when there are no more tokens.
+    // Return an error if lexing fails while peeking.
     fn peek_token_and_equals(
         &self,
         offset: usize,
@@ -121,8 +121,8 @@ where
             Some(token) if token == expected_token))
     }
 
-    // Consume the next token and assert it equals to the expected token,
-    // error if not equal or no more token
+    // Consume the next token and assert that it matches the expected token.
+    // Return an error if it does not match or if there are no more tokens.
     fn consume_token_and_assert(
         &mut self,
         expected_token: &Token,
