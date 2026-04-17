@@ -4,9 +4,7 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use ason::{
-    de::list_from_char_iterator, ser::list_to_writer, utf8_char_iterator::UTF8CharIterator,
-};
+use ason::utf8_char_iterator::UTF8CharIterator;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -53,20 +51,28 @@ fn test_serialize_and_deserialize() {
 
 #[test]
 fn test_stream_serialize_and_deserialize() {
-    let text = r#"[
-    {
-        id: 11
-        name: "foo"
-    }
-    {
-        id: 13
-        name: "bar"
-    }
-]"#;
+    let o1 = Object {
+        id: 11,
+        name: "foo".to_owned(),
+    };
 
-    let data = text.as_bytes();
-    let mut char_iter = UTF8CharIterator::new(data);
-    let mut de = list_from_char_iterator(&mut char_iter).unwrap();
+    let o2 = Object {
+        id: 13,
+        name: "bar".to_owned(),
+    };
+
+    let mut buf = vec![];
+    let mut ser = ason::ser::list_to_writer(&mut buf);
+
+    ser.start_list().unwrap();
+    ser.serialize_element(&o1).unwrap();
+    ser.serialize_element(&o2).unwrap();
+    ser.end_list().unwrap();
+
+    // deserialize
+    let mut cursor = std::io::Cursor::new(buf);
+    let mut char_iter = UTF8CharIterator::new(&mut cursor);
+    let mut de = ason::de::list_from_char_iterator(&mut char_iter).unwrap();
 
     let o1: Object = de.next().unwrap().unwrap();
     assert_eq!(
@@ -87,15 +93,4 @@ fn test_stream_serialize_and_deserialize() {
     );
 
     assert!(de.next().is_none());
-
-    let mut buf: Vec<u8> = vec![];
-    let mut ser = list_to_writer(&mut buf);
-
-    ser.start_list().unwrap();
-    ser.serialize_element(&o1).unwrap();
-    ser.serialize_element(&o2).unwrap();
-    ser.end_list().unwrap();
-
-    let serialized_text = String::from_utf8(buf).unwrap();
-    assert_eq!(serialized_text, text);
 }

@@ -2,8 +2,6 @@
 
 _ASON_ is a data serialization format that evolved from JSON, featuring strong numeric typing and native support for enumeration types. With excellent readability and maintainability, ASON is well-suited for configuration files, data transfer, and data storage.
 
-**Table of Content**
-
 <!-- @import "[TOC]" {cmd="toc" depthFrom=2 depthTo=4 orderedList=false} -->
 
 <!-- code_chunk_output -->
@@ -140,12 +138,27 @@ While ASON is designed to resemble JSON, making it easy for JSON users to learn 
 
 ## 4 Library and APIs
 
-The Rust [ason](https://github.com/hemashushu/ason) library provides three set APIs:
+The Rust [ason](https://github.com/hemashushu/ason) library is the reference implementation of ASON.
 
-1. [Serde](https://github.com/serde-rs/serde) based APIs for deserialization and serialization.
-2. AST (Abstract Syntax Tree) based APIs for parsing and writing ASON documents.
+Add it to your project with:
 
-In general, it is recommended to use the serde API since it is simple enough to meet most needs.
+```sh
+cargo add ason
+```
+
+or add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+ason = "2.1.3"
+```
+
+The `ason` crate provides two API families:
+
+1. [Serde](https://github.com/serde-rs/serde)-based APIs for serialization and deserialization (including streaming APIs).
+2. AST (Abstract Syntax Tree)-based APIs for parsing and writing ASON documents.
+
+In most cases, the serde-based API is recommended because it is simple and sufficient for common use cases.
 
 ### 4.1 Deserialization and Serialization
 
@@ -162,7 +175,7 @@ Consider the following ASON document:
 }
 ```
 
-This document consists of an object and a list. The object has `name`, `version` and `dependencies` fields, and the list has strings as elements. We can create a Rust struct corresponding to this document:
+This document contains an object with three fields: `name`, `version`, and `dependencies`. The `dependencies` field is a list of strings. The following Rust struct maps directly to this document:
 
 ```rust
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -173,15 +186,15 @@ struct Package {
 }
 ```
 
-The struct needs to be annotated with `Serialize` and `Deserialize` traits (which are provided by the _serde_ serialization framework) to enable serialization and deserialization.
+To enable serialization and deserialization, derive `Serialize` and `Deserialize` from serde.
 
-The following code demonstrates how to use the function `ason::de::de_from_str` to deserialize the ASON document string into a `Package` struct instance:
+Use `ason::de::de_from_str` to deserialize the ASON text into a `Package` instance:
 
 ```rust
 // The above ASON document
 let text = "...";
 
-// Deserialize the ASON document string into a `Package` struct.
+// Deserialize the ASON document string into a `Package` value.
 let package: Package = ason::de::de_from_str(text).unwrap();
 
 // Verify the deserialized `Package` struct.
@@ -198,7 +211,7 @@ assert_eq!(
 );
 ```
 
-You can serialize the `Package` struct instance back into an ASON document string using the `ason::ser::ser_to_string` function:
+To serialize the `Package` value back to an ASON string, use `ason::ser::ser_to_string`:
 
 ```rust
 // Serialize the `Package` struct back into an ASON document string.
@@ -208,39 +221,99 @@ assert_eq!(serialized_text, text);
 
 ### 4.2 Streaming Deserialization and Serialization
 
-The `ason::de` module also provides streaming deserialization APIs, which let you deserialize ASON documents incrementally without loading the entire document into memory. This is particularly useful for large documents or for data transmitted over a network connection or pipe.
+For large pipelines, sockets, or append-style producers, ASON also supports streaming list-oriented workflows. In this mode, values are produced and consumed one element at a time instead of materializing the entire document up front.
 
-Currently, the streaming deserialization APIs support only documents whose root value is a `List`. The list elements are deserialized and returned one by one through an iterator. For example:
+Currently, the streaming APIs are centered on documents whose root value is a `List`.
 
-```rust
-let text = r#"[11 13]"#;
-let data = text.as_bytes();
-let mut char_iter = UTF8CharIterator::new(data);
-let mut de = list_from_char_iterator(&mut char_iter).unwrap();
-
-assert_eq!(11, de.next().unwrap().unwrap());
-assert_eq!(13, de.next().unwrap().unwrap());
-assert!(de.next().is_none());
-```
-
-The `ason::ser` module provides corresponding streaming serialization APIs. For example:
+The streaming serializer lets you open a list writer, emit items as they become available, and then close the list explicitly:
 
 ```rust
-let mut buf: Vec<u8> = vec![];
-let mut ser = list_to_writer(&mut buf);
+use serde::{Deserialize, Serialize};
+use std::io::Write;
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Object {
+    id: i32,
+    name: String,
+}
+
+let o1 = Object {
+    id: 11,
+    name: "foo".to_owned(),
+};
+
+let o2 = Object {
+    id: 13,
+    name: "bar".to_owned(),
+};
+
+let mut output = std::io::stdout().lock();
+let mut ser = ason::ser::list_to_writer(&mut output);
 
 ser.start_list().unwrap();
-ser.serialize_element(&11).unwrap();
-ser.serialize_element(&13).unwrap();
+ser.serialize_element(&o1).unwrap();
+ser.serialize_element(&o2).unwrap();
 ser.end_list().unwrap();
 
-let serialized_text = String::from_utf8(buf).unwrap();
-assert_eq!(serialized_text, text);
+output.flush().unwrap();
 ```
+
+The matching streaming deserializer consumes the root list incrementally from a binary input source. The intended flow is:
+
+1. Open a streaming list reader on any binary `Read` source.
+2. Repeatedly request the next item from the list.
+3. Deserialize each element into the Rust type you expect.
+4. Stop when the reader reports the end of the list.
+
+This mode is useful when the producer does not know the full list in advance, or when the consumer wants to start processing before the whole document has arrived.
+
+For example, the deserializer can be used to read the list of objects emitted by the serializer above:
+
+```rust
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Object {
+    id: i32,
+    name: String,
+}
+
+let mut input = std::io::stdin().lock();
+let mut char_iter = UTF8CharIterator::new(&mut input);
+let mut de = ason::de::list_from_char_iterator(&mut char_iter).unwrap();
+
+let o1: Object = de.next().unwrap().unwrap();
+assert_eq!(
+    o1,
+    Object {
+        id: 11,
+        name: "foo".to_owned()
+    }
+);
+
+let o2: Object = de.next().unwrap().unwrap();
+assert_eq!(
+    o2,
+    Object {
+        id: 13,
+        name: "bar".to_owned()
+    }
+);
+
+assert!(de.next().is_none());
+
+println!("Deserialization successful!");
+```
+
+You can connect a streaming writer and reader through a Unix pipeline:
+
+```sh
+stream-ser | stream-de
+```
+
+In that setup, the serializer emits list elements as they are generated, and the deserializer processes them in order as they arrive.
 
 ### 4.3 Parser and Writer
 
-You can parse the ASON document into AST object using the `ason::parser::parse_from_str` function:
+You can parse an ASON document into an AST node with `ason::parser::parse_from_str`:
 
 ```rust
 // The above ASON document
@@ -272,7 +345,7 @@ assert_eq!(
 );
 ```
 
-You can also turn the AST object into a string using the `ason::writer::write_to_string` function:
+You can also convert the AST node back into text with `ason::writer::write_to_string`:
 
 ```rust
 // Convert the AST node back to an ASON document string.
@@ -280,7 +353,7 @@ let document = ason::writer::write_to_string(&node);
 assert_eq!(document, text);
 ```
 
-Since AST object lacks some information such as comments, whitespace, the original string format (e.g., multi-line string, raw string, etc.), and the original numeric types (e.g., hexadecimal, octal, binary), so the output text may not be exactly the same as the input text, do not use the writer for formatting ASON documents.
+The AST does not preserve some source-level details, such as comments, whitespace, original string forms (for example, multi-line or raw strings), or original numeric notation (for example, hexadecimal, octal, and binary forms). Therefore, output generated by the writer may be semantically equivalent but not textually identical to the input. Do not use the writer as a formatter for existing ASON documents.
 
 ## 5 ASON Quick Reference
 
@@ -1906,8 +1979,8 @@ The file extension for ASON documents is `.ason`, and the MIME type is `applicat
 
 ## 8 Linking
 
-- [ASON source code on GitHub](https://github.com/hemashushu/ason)
-- [ASON Rust library on Crates.io](https://crates.io/crates/ason)
+- [ASON Specification and library](https://github.com/hemashushu/ason)
+- [ASONB Specification and library](https://github.com/hemashushu/asonb)
 
 ## 9 License
 

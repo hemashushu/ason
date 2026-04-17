@@ -62,7 +62,7 @@ fn get_examples_file_directory() -> PathBuf {
     // - In the VSCode editor `Run Test` context, the `current_dir()` returns the current crate path.
     // - In the VSCode editor `Debug` context, the `current_dir()` always returns the workspace root folder.
     let mut dir = std::env::current_dir().unwrap();
-    dir.push("examples");
+    dir.push("docs");
     dir
 }
 
