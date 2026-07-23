@@ -73,13 +73,40 @@ fn read_example_file_to_string(filename: &str) -> String {
     std::fs::read_to_string(&dir).unwrap()
 }
 
+/// Helpers to assert that two strings are equal,
+/// ignoring differences in line endings (`\r\n` on Windows vs `\n` on Unix).
+fn assert_text_eq(expected: &str, actual: &str) {
+    let expected_lines: Vec<&str> = expected.lines().collect();
+    let actual_lines: Vec<&str> = actual.lines().collect();
+
+    assert_eq!(
+        expected_lines.len(),
+        actual_lines.len(),
+        "Line count mismatch:\nExpected:\n{}\nActual:\n{}",
+        expected,
+        actual
+    );
+
+    for (i, (expected_line, actual_line)) in
+        expected_lines.iter().zip(actual_lines.iter()).enumerate()
+    {
+        assert_eq!(
+            expected_line,
+            actual_line,
+            "Line {} mismatch:\nExpected: '{}'\nActual:   '{}'",
+            i + 1,
+            expected_line,
+            actual_line
+        );
+    }
+}
+
 #[test]
 fn test_example_file_primitive() {
     let text = read_example_file_to_string("01-primitive.ason");
     let root_node = parse_from_str(&text).unwrap();
     let document = write_to_string(&root_node);
-
-    assert_eq!(
+    assert_text_eq(
         &document,
         r#"{
     integer: 123
@@ -177,7 +204,7 @@ fn test_example_file_primitive() {
     tail_comma_1: 401
     tail_comma_2: 409
     tail_comma_3: 419
-}"#
+}"#,
     )
 }
 
@@ -187,8 +214,8 @@ fn test_example_file_list() {
     let root_node = parse_from_str(&text).unwrap();
     let document = write_to_string(&root_node);
 
-    assert_eq!(
-        document,
+    assert_text_eq(
+        &document,
         r#"{
     number_list: [
         1
@@ -227,7 +254,7 @@ fn test_example_file_list() {
         2
         3
     ]
-}"#
+}"#,
     );
 }
 
@@ -237,8 +264,8 @@ fn test_example_file_tuple() {
     let root_node = parse_from_str(&text).unwrap();
     let document = write_to_string(&root_node);
 
-    assert_eq!(
-        document,
+    assert_text_eq(
+        &document,
         r#"{
     tuple: (1 "foo" true)
     tuple_with_trailing_comma: (1 "foo" true)
@@ -246,7 +273,7 @@ fn test_example_file_tuple() {
     mulitline_tuple: (1 "foo" true)
     mulitline_tuple_with_commas: (1 "foo" true)
     mulitline_tuple_with_trailing_comma: (1 "foo" true)
-}"#
+}"#,
     );
 }
 
@@ -256,8 +283,8 @@ fn test_example_file_object() {
     let root_node = parse_from_str(&text).unwrap();
     let document = write_to_string(&root_node);
 
-    assert_eq!(
-        document,
+    assert_text_eq(
+        &document,
         r#"{
     id: 123
     name: "hello"
@@ -278,7 +305,7 @@ fn test_example_file_object() {
             }
         ]
     }
-}"#
+}"#,
     );
 }
 
@@ -288,8 +315,8 @@ fn test_example_file_named_list() {
     let root_node = parse_from_str(&text).unwrap();
     let document = write_to_string(&root_node);
 
-    assert_eq!(
-        document,
+    assert_text_eq(
+        &document,
         r#"{
     string_name: [
         "foo": {
@@ -309,7 +336,7 @@ fn test_example_file_named_list() {
             "qux"
         ]
     ]
-}"#
+}"#,
     );
 }
 
@@ -319,8 +346,8 @@ fn test_example_file_enumeration() {
     let root_node = parse_from_str(&text).unwrap();
     let document = write_to_string(&root_node);
 
-    assert_eq!(
-        document,
+    assert_text_eq(
+        &document,
         r#"{
     variant_without_value: Option::None
     variant_single_value: Option::Some(123)
@@ -340,6 +367,6 @@ fn test_example_file_enumeration() {
         id: 123
         name: "foo"
     })
-}"#
+}"#,
     );
 }
