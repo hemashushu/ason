@@ -4,21 +4,18 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-mod ast;
 mod char_with_position;
 mod de;
 mod error;
 mod error_printer;
 mod lexer;
 mod normalizer;
-mod parser;
 mod peekable_iterator;
 mod position;
 mod range;
 mod ser;
 mod token;
 mod utf8_char_iterator;
-mod writer;
 
 pub use de::ListStreamReader;
 pub use error::AsonError;
