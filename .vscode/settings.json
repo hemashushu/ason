@@ -1,0 +1,12 @@
+{
+    // VS Code settings for excluding certain files and directories
+    // They are hidden from the VS Code explorer and search
+    "files.exclude": {
+        "target": true
+    },
+    // Exclude settings for search, but not necessarily from the explorer
+    "search.exclude": {
+        "IGNORE": true,
+        "target": true
+    }
+}

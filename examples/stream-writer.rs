@@ -4,6 +4,14 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
+//! Build and run this program with this command:
+//!
+//! ```sh
+//! cargo build --examples
+//! cd target/debug/examples
+//! ./stream-writer | ./stream-reader
+//! ```
+
 use std::io::Write;
 
 use serde::{Deserialize, Serialize};
@@ -26,12 +34,22 @@ fn main() {
     };
 
     let mut output = std::io::stdout().lock();
-    let mut ser = ason::ser::list_to_writer(&mut output);
+    let mut stream_writer = ason::ser::list_stream_writer(&mut output);
 
-    ser.start_list().unwrap();
-    ser.serialize_element(&o1).unwrap();
-    ser.serialize_element(&o2).unwrap();
-    ser.end_list().unwrap();
+    // Start the list before serializing elements.
+    stream_writer.start_list().unwrap();
+
+    // Serialize the first element.
+    stream_writer.write(&o1).unwrap();
+
+    // Serialize the second element.
+    stream_writer.write(&o2).unwrap();
+
+    // End the stream explicitly.
+    stream_writer.end_list().unwrap();
 
     output.flush().unwrap();
+
+    let mut stderr = std::io::stderr().lock();
+    writeln!(&mut stderr, "Streaming serialization successful!").unwrap();
 }

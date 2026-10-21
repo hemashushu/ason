@@ -60,7 +60,7 @@ pub enum Token {
     HexadecimalByteData(Vec<u8>),
 
     // Sign tokens, used for number literals.
-    // Note that they are removed after normalization.
+    // Note that they would be removed after normalization.
     _Plus,  // `+`
     _Minus, // `-`
 }

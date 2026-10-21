@@ -8,7 +8,7 @@ use std::io::{Result, Write};
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::ast::{AsonNode, Enumeration, KeyValuePair, NamedListEntry, Number, VariantValue};
+use crate::ast::{AsonNode, Enumeration, KeyValuePair, MapEntry, Number, VariantValue};
 
 pub const DEFAULT_INDENT_CHARS: &str = "    ";
 pub const DEFAULT_NEWLINE_CHARS: &str = "\n";
@@ -279,7 +279,7 @@ where
         Ok(())
     }
 
-    fn print_named_list(&mut self, items: &[NamedListEntry]) -> Result<()> {
+    fn print_map(&mut self, items: &[MapEntry]) -> Result<()> {
         self.print_opening_bracket()?;
 
         for (index, item) in items.iter().enumerate() {
@@ -359,7 +359,7 @@ where
             AsonNode::DateTime(d) => self.print_datetime(d),
             AsonNode::HexadecimalByteData(data) => self.print_hexadecimal_byte_data(data),
             AsonNode::List(items) => self.print_list(items),
-            AsonNode::NamedList(items) => self.print_named_list(items),
+            AsonNode::Map(items) => self.print_map(items),
             AsonNode::Tuple(items) => self.print_tuple(items),
             AsonNode::Object(kvps) => self.print_object(kvps),
             AsonNode::Enumeration(var) => self.print_enumeration(var),
@@ -374,7 +374,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        ast::{AsonNode, Enumeration, KeyValuePair, NamedListEntry, Number},
+        ast::{AsonNode, Enumeration, KeyValuePair, MapEntry, Number},
         writer::write_to_string,
     };
 
@@ -611,24 +611,24 @@ mod tests {
     }
 
     #[test]
-    fn test_print_named_list() {
-        // test print named list with one item, e.g., `["foo": 123]`
+    fn test_print_map() {
+        // test print map with one item, e.g., `["foo": 123]`
         assert_eq!(
-            write_to_string(&AsonNode::NamedList(vec![NamedListEntry {
+            write_to_string(&AsonNode::Map(vec![MapEntry {
                 name: Box::new(AsonNode::new_string("foo")),
                 value: Box::new(AsonNode::new_number(123)),
             }])),
             "[\n    \"foo\": 123\n]".to_owned()
         );
 
-        // test print named list with multiple items, e.g., ["foo": 123, "bar": "Alice"]
+        // test print map with multiple items, e.g., ["foo": 123, "bar": "Alice"]
         assert_eq!(
-            write_to_string(&AsonNode::NamedList(vec![
-                NamedListEntry {
+            write_to_string(&AsonNode::Map(vec![
+                MapEntry {
                     name: Box::new(AsonNode::new_string("foo")),
                     value: Box::new(AsonNode::new_number(123)),
                 },
-                NamedListEntry {
+                MapEntry {
                     name: Box::new(AsonNode::new_string("bar")),
                     value: Box::new(AsonNode::new_string("Alice")),
                 },

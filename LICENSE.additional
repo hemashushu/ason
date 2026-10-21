@@ -1,70 +1,131 @@
-Copyright (c) 2025 Hemashushu <hippospark@gmail.com>, All rights reserved.
+Copyright (c) 2025-2026 Hemashushu <hippospark@gmail.com>
 
-This software (including source code, documentation, and attachments) is released
-under the Mozilla Public License 2.0 (MPL-2.0) with the following additional terms.
+ASON (this software, including its source code, documentation, and accompanying
+files) is licensed under the Mozilla Public License 2.0 ("MPL-2.0", see the
+LICENSE file) together with the Additional Terms below. By using, modifying,
+or distributing this software, you agree to both.
+
+MPL-2.0 in Plain Words
+======================
+
+This section is an informal summary for readers who are new to open source.
+It is not legal advice and does not replace the LICENSE file.
+
+You MAY:
+- use this software for free, for both personal and commercial purposes;
+- modify it, and use it in your own projects, including closed-source ones;
+- redistribute it, in original or modified form.
+
+You MUST:
+- keep all license and copyright notices intact;
+- when you distribute this software (in original or modified form), make the
+  source code of its MPL-2.0 files, including your changes to them, available
+  under MPL-2.0. Your own separate files may use any license you choose.
+
+"Open source" does NOT mean:
+- the software is in the public domain or has no owner;
+- you may claim it, or any part of it, as your own work;
+- the author owes you any warranty or support.
 
 Additional Terms
 ================
 
-In addition to complying with the Mozilla Public License 2.0, the following terms
-apply to this software:
+The following terms apply in addition to MPL-2.0, to any individual, team,
+company, or organization:
 
-1. The license and copyright notices within this software (including source code,
-   documentation, and attachments) must not be removed or altered.
-2. The name of this software must not be changed and republished.
-3. This software must not be repackaged and released under a different name.
-4. No part or entirety of this software may be used to apply for patents,
-   copyrights, trademarks, or other intellectual property rights.
-5. You must not claim this software as independently developed,
-   nor claim ownership of its intellectual property (in whole or in part),
-   nor present it as a research achievement.
-6. The open-source nature of this software does not imply a waiver of copyright.
-   The author retains all copyrights.
-7. When using or including this software, you must prominently credit the
-   author (copyright holder) and the software name in visible locations
-   (e.g., the "About" page of an application or in the README file).
-8. Contributors to this software do not hold any copyright over the software,
-   in whole or in part.
-9. The author (copyright holder) is not liable for any consequences resulting
-   from the use or inclusion of this software and does not provide any technical support.
-10. To reiterate, this software is provided solely for public sharing.
-   The author (copyright holder) assumes no responsibility for any
-   unintended consequences arising from its use or inclusion.
-   If you cannot accept these terms, do not use or include this software.
+1. Keep notices. Do not remove or alter any license or copyright notice in
+   this software (including its source code, documentation, and accompanying
+   files).
+2. No rebranding. Do not republish this software, or a version with only
+   trivial changes (such as renaming, rebranding, or simple wrapping), under
+   a different name. If you distribute a substantially modified version under
+   a new name, you must clearly state that it is derived from ASON and provide
+   a link to the original project.
+3. No intellectual property claims. Do not use this software, in whole or in
+   part, to apply for or register any patent, copyright (including software
+   copyright registration), trademark, or other intellectual property right.
+4. No false authorship. Do not claim this software, in whole or in part, as
+   your own or independently developed work, and do not present it as your
+   own research achievement (e.g., in papers, theses, project reports, or
+   award applications). Using and citing it in research is welcome.
+5. Copyright retained. Making the source code public does not mean giving up
+   copyright. The author retains all copyrights in this software.
+6. Attribution. When you use or include this software, you must credit the
+   author (copyright holder) and the name "ASON" in a place where users can
+   easily see it, such as the "About" page of an application or the README file.
+7. Contributions. The copyright of contributions to this software belongs to
+   the author (copyright holder), as described in the CONTRIBUTING file.
+   Contributors do not hold any copyright in this software, in whole or in part.
+8. No warranty, no support. This software is shared publicly "as is". The
+   author (copyright holder) is not liable for any consequences, intended or
+   not, arising from its use or inclusion, and is not obligated to provide
+   technical support.
 
-These terms apply to any individual, team, company, or organization.
+If you do not accept these terms, do not use or include this software.
 
-Most of the above terms align with common practices in open-source software.
-These terms are listed to clearly explain how to properly use open-source software.
-The open-source license and additional terms aim to protect the rights of
-the original developer and ensure the software is used in a manner consistent with
-the developer's intentions.
+Notes
+=====
+
+Some of the above terms restate what MPL-2.0 and copyright law already require;
+others are additional requirements from the author. They are listed here to
+explain clearly how to use this software properly, to protect the rights of
+the original developer, and to ensure that the software is used in the way
+the developer intended.
 
 - - -
 
-Hemashushu <hippospark@gmail.com> 版权所有 2025
+版权所有 (c) 2025-2026 河马蜀黍 (Hemashushu) <hippospark@gmail.com>
 
-本软件（包括源代码、文档及附件）依据 Mozilla Public License 2.0 许可证发布，并附加以下条款。
+ASON（即本软件，包括源代码、文档及附带文件）依据 Mozilla Public License 2.0
+（以下简称“MPL-2.0”，见 LICENSE 文件）及下列附加条款授权。使用、修改或分发本软件，
+即表示你同意遵守以上两者。
+
+MPL-2.0 简明说明
+===============
+
+本节是写给开源新手的非正式说明，不构成法律意见，也不能替代 LICENSE 文件的正式条文。
+
+你可以：
+- 免费使用本软件，无论是个人用途还是商业用途；
+- 修改本软件，或将其用于你自己的项目（包括闭源项目）；
+- 以原样或修改后的形式再分发本软件。
+
+你必须：
+- 完整保留所有许可协议和版权声明；
+- 分发本软件（无论原样还是修改版）时，以 MPL-2.0 协议公开其中 MPL-2.0 文件的源代码
+  （包括你对这些文件所做的修改）。你自己编写的独立文件可以采用任何协议。
+
+“开源”并不意味着：
+- 本软件属于公有领域，或者没有所有者；
+- 你可以把本软件（或其中任何部分）声称为自己的作品；
+- 作者有义务为你提供任何担保或技术支持。
 
 附加条款
 =======
 
-在遵守 Mozilla Public License 2.0 的基础上，本软件附加以下条款：
+在遵守 MPL-2.0 的基础上，以下条款适用于任何个人、团队、企业及组织：
 
-1. 不得删除或修改本软件（包括源代码、文档及附件）中的协议和版权声明。
-2. 不得更改本软件的名称并重新发布。
-3. 不得对本软件进行简单封装后以新软件名义发布。
-4. 不得使用本软件的全部或部分内容申请专利、版权或商标等知识产权。
-5. 不得声称本软件为自主研发，亦不得声称拥有本软件的知识产权（无论部分或全部），
-   或将本软件作为科研成果。
-6. 本软件的源码开放并不意味着放弃版权，作者保留所有版权。
-7. 使用或包含本软件时，需在显著位置（如应用程序的“关于”页面或 README 文件等）注明本软件的作者（版权拥有者）及软件名称。
-8. 本软件的贡献者不享有本软件的全部或部分版权。
-9. 作者（版权拥有者）对因使用或包含本软件所导致的任何后果不承担责任，亦不提供任何技术支持。
-10. 再次强调，本软件仅供公开分享，若因使用或包含本软件导致意外后果，作者（版权拥有者）不承担任何责任。
-    如无法接受此条款，请勿使用或包含本软件。
+1. 保留声明：不得删除或修改本软件（包括源代码、文档及附带文件）中的任何许可协议和版权声明。
+2. 禁止换名发布：不得将本软件，或仅做了简单改动（如改名、更换标识、简单封装）的版本，
+   以其他名称重新发布。如果以新名称发布经过实质性修改的版本，必须明确注明其源自 ASON，
+   并提供原项目的链接。
+3. 禁止申请知识产权：不得使用本软件的全部或部分内容申请或登记专利、著作权（包括软件著作权登记）、
+   商标或其他知识产权。
+4. 禁止冒认作者：不得声称本软件（全部或部分）为自己的作品或自主研发，也不得将其作为自己的
+   科研成果（如论文、学位论文、项目结题报告、评奖申报材料等）。欢迎在科研中使用并引用本软件。
+5. 保留版权：源代码公开并不意味着放弃版权，作者保留本软件的所有版权。
+6. 署名要求：使用或包含本软件时，必须在用户容易看到的位置（如应用程序的“关于”页面或
+   README 文件）注明本软件的作者（版权所有者）及软件名称“ASON”。
+7. 贡献者版权：对本软件所作贡献的版权归作者（版权所有者）所有，详见 CONTRIBUTING 文件。
+   贡献者不享有本软件全部或部分的版权。
+8. 免责声明：本软件“按原样”公开分享。对于因使用或包含本软件而产生的任何后果（无论是否预期），
+   作者（版权所有者）均不承担责任，也没有义务提供技术支持。
 
-上述条款适用于任何个人、团队、企业及组织。
+如果你无法接受上述条款，请勿使用或包含本软件。
 
-以上条款大部分为开源软件的通用共识，列出此条款旨在以简明方式说明如何正确使用开源软件。
-开源协议及附加条款旨在保护原始开发者的权益，并确保软件以符合开发者意图的方式使用。
+说明
+====
+
+上述条款中，一部分是对 MPL-2.0 和著作权法既有要求的重申，另一部分是作者提出的附加要求。
+列出这些条款，是为了清楚地说明如何正确使用本软件，保护原始开发者的权益，
+并确保本软件以符合开发者意图的方式被使用。

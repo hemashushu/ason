@@ -6,14 +6,14 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
 
 <!-- code_chunk_output -->
 
-- [1 ASON Example](#1-ason-example)
-- [2 Comparison of Common Data Serialization Formats](#2-comparison-of-common-data-serialization-formats)
-- [3 What improvements does ASON bring over JSON?](#3-what-improvements-does-ason-bring-over-json)
+- [1 Example](#1-example)
+- [2 What improvements does ASON bring over JSON?](#2-what-improvements-does-ason-bring-over-json)
+- [3 Comparison of Other Data Serialization Formats](#3-comparison-of-other-data-serialization-formats)
 - [4 Library and APIs](#4-library-and-apis)
   - [4.1 Deserialization and Serialization](#41-deserialization-and-serialization)
   - [4.2 Streaming Deserialization and Serialization](#42-streaming-deserialization-and-serialization)
   - [4.3 Parser and Writer](#43-parser-and-writer)
-- [5 ASON Quick Reference](#5-ason-quick-reference)
+- [5 Quick Reference](#5-quick-reference)
   - [5.1 Primitive Values](#51-primitive-values)
     - [5.1.1 Digit Separators](#511-digit-separators)
     - [5.1.2 Explicit Numeric Types](#512-explicit-numeric-types)
@@ -25,20 +25,20 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
     - [5.2.1 Lists](#521-lists)
     - [5.2.2 Tuples](#522-tuples)
     - [5.2.3 Objects](#523-objects)
-    - [5.2.4 Named Lists](#524-named-lists)
+    - [5.2.4 Maps](#524-maps)
     - [5.2.5 Enumerations](#525-enumerations)
-    - [5.2.6 Type of Compound Values](#526-type-of-compound-values)
+    - [5.2.6 The Type of Compound Values](#526-the-type-of-compound-values)
   - [5.3 Comments](#53-comments)
-  - [5.4 Documents](#54-documents)
+  - [5.4 ASON Documents](#54-ason-documents)
 - [6 Mapping between Rust Data Types and ASON Types](#6-mapping-between-rust-data-types-and-ason-types)
   - [6.1 Structs](#61-structs)
   - [6.2 Vecs](#62-vecs)
   - [6.3 HashMaps](#63-hashmaps)
   - [6.4 Tuples](#64-tuples)
   - [6.5 Enums](#65-enums)
-  - [6.6 Other Data Types](#66-other-data-types)
+  - [6.6 Not Supported Data Types](#66-not-supported-data-types)
   - [6.7 Default Values](#67-default-values)
-- [7 ASON Specification](#7-ason-specification)
+- [7 Specification](#7-specification)
   - [7.1 Document Structure](#71-document-structure)
   - [7.2 Lexical Elements](#72-lexical-elements)
     - [7.2.1 Encoding](#721-encoding)
@@ -55,7 +55,7 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
     - [7.3.6 Hexadecimal Byte Data](#736-hexadecimal-byte-data)
   - [7.4 Compound Values](#74-compound-values)
     - [7.4.1 Lists](#741-lists)
-    - [7.4.2 Named Lists](#742-named-lists)
+    - [7.4.2 Maps](#742-maps)
     - [7.4.3 Tuples](#743-tuples)
     - [7.4.4 Objects](#744-objects)
     - [7.4.5 Enumerations](#745-enumerations)
@@ -69,7 +69,7 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
 
 <!-- /code_chunk_output -->
 
-## 1 ASON Example
+## 1 Example
 
 An example of ASON document:
 
@@ -88,7 +88,7 @@ An example of ASON document:
     datetime: d"2023-03-24 12:30:00+08:00"
     bytedata: h"68 65 6c 6c 6f 0a 00"
     list: [11, 13, 17, 19]
-    named_list: [
+    map: [
         "foo": "The quick brown fox jumps over the lazy dog"
         "bar": "My very educated mother just served us nine pizzas"
     ]
@@ -108,33 +108,27 @@ An example of ASON document:
 }
 ```
 
-## 2 Comparison of Common Data Serialization Formats
+## 2 What improvements does ASON bring over JSON?
 
-There are many solid data serialization formats available today, such as JSON, YAML, TOML and XML. They are all designed to be readble and writable by both humans and machines.
-
-The differences between these formats are minor for small datasets, but become more pronounced as datasets grow or structures become more complex. For example, YAML's indentation-based syntax can cause errors in editing large documents, and TOML's limited support for complex structures can make representing hierarchical data cumbersome. JSON, by contrast, is designed to stay simple, consistent, and expressive at any scale.
-
-For developers, JSON offers additional advantages:
-
-- You don't have to learn an entirely new syntax: JSON closely resembles JavaScript object literals.
-- Implementing a parser is straightforward, which helps ensure longevity and adaptability across evolving software ecosystems.
-
-## 3 What improvements does ASON bring over JSON?
-
-JSON has a simple syntax and has been around for decades, but it struggles to meet diverse modern needs. Many JSON variants have emerged to address its limitations—such as JSONC (which adds comments) and JSON5 (which allows trailing commas and unquoted object keys). However, these variants still cannot represent data accurately due to JSON has a limited type system and lacks fine-grained numeric and domain-specific data types. ASON takes a significant step forward based on JSON with the following improvements:
+JSON has a simple syntax and has been around for decades, but it struggles to meet diverse modern needs. Many JSON variants have emerged to address its limitations, such as JSONC (which adds comments) and JSON5 (which allows trailing commas and unquoted object keys). However, these variants still cannot represent data accurately due to JSON has a limited type system and lacks fine-grained numeric and domain-specific data types. ASON takes a significant step forward based on JSON with the following improvements:
 
 - **Explicit Numeric Types:** ASON numbers can be explicitly typed (e.g., `u8`, `i32`, `f32`, `f64`) ensuring more precise and rigirous data representation. Additionally, integers can be represented in hexadecimal, octal, and binary formats.
-- **New Data Types:** New data types such as `Char`, `DateTime`, and `HexadecimalByteData` to better represent common data types.
-- **More string formats:** "Multi-line strings", "Concatenate strings", "Raw strings", and "Auto-trimmed strings" are added to enhance string representation.
-- **Separate List and Tuple:** ASON distinguishes between `List` (homogeneous elements) and `Tuple` (heterogeneous elements), enhancing data structure clarity.
-- **Separate Named-List and Object:** ASON introduces `Named-List` (also called `Map`) alongside `Object` (also called `Struct`), enhancing data structure clarity in further.
+- **More Primitive Data Types:** New data types such as `Char`, `DateTime`, and `HexadecimalByteData` to better represent common data types.
+- **More String Representation:** "Multi-line strings", "Concatenate strings", "Raw strings", and "Auto-trimmed strings" are added to enhance string representation.
+- **More Accurate Data Structures:** distinguishes between `List` (homogeneous elements) and `Tuple` (heterogeneous elements), introduces `Map` (also called `Dictionary`) alongside `Object` (also called `Struct`), enhancing data structure clarity.
 - **Native Enumerations Support:** ASON natively supports enumerations types (also known as _Algebraic types_ or _Variants_). This enables seamless serialization of complex data structures from high-level programming languages.
 - **Eliminating the Null Value:** ASON uses the `Option` enumeration to represent optional values, eliminating the error-prone `null` value.
 - **Simple and Consistent:** ASON supports comments, unquoted object field names, trailing commas, and whitespace-separated elements (in addition to commas). These features enhance writing fluency.
 
 In addition to the text format, ASON provides a binary format called [ASONB (ASON Binary)](https://github.com/hemashushu/asonb),  ASONB supports both incremental updates and streaming and random access, making it suitable for a wide range of applications, from simple data storage to complex data processing pipelines.
 
-While ASON is designed to resemble JSON, making it easy for JSON users to learn and adopt, it is not compatible with JSON, but conversion between ASON and JSON is straightforward, and implementing an ASON parser is also simple.
+While ASON is designed to resemble JSON, making it easy for JSON users to learn and adopt, it is not compatible with JSON, but conversion between ASON and JSON is straightforward, and implementing an ASON parser is also simple, which helps ensure longevity and adaptability across evolving software ecosystems.
+
+## 3 Comparison of Other Data Serialization Formats
+
+There are many solid data serialization formats available today, such as YAML, TOML and XML. They are all designed to be readable and writable by both humans and machines.
+
+The differences between these formats are minor for small datasets, but become more pronounced as datasets grow or structures become more complex. For example, YAML's indentation-based syntax can cause errors in editing large documents, and TOML's limited support for complex structures can make representing hierarchical data cumbersome. ASON, by contrast, is designed to stay simple, consistent, and expressive at any scale.
 
 ## 4 Library and APIs
 
@@ -150,7 +144,7 @@ or add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ason = "2.1.3"
+ason = "3.0"
 ```
 
 The `ason` crate provides two API families:
@@ -194,7 +188,7 @@ Use `ason::de::de_from_str` to deserialize the ASON text into a `Package` instan
 // The above ASON document
 let text = "...";
 
-// Deserialize the ASON document string into a `Package` value.
+// Deserialize the ASON document string into a `Package` struct instance.
 let package: Package = ason::de::de_from_str(text).unwrap();
 
 // Verify the deserialized `Package` struct.
@@ -221,15 +215,16 @@ assert_eq!(serialized_text, text);
 
 ### 4.2 Streaming Deserialization and Serialization
 
-For large pipelines, sockets, or append-style producers, ASON also supports streaming list-oriented workflows. In this mode, values are produced and consumed one element at a time instead of materializing the entire document up front.
+For pipelines, sockets, or std I/O, ASON also supports streaming list-oriented workflows. In this mode, values are produced and consumed one or more elements at a time instead of materializing the entire document up front.
 
 Currently, the streaming APIs are centered on documents whose root value is a `List`.
 
-The streaming serializer lets you open a list writer, emit items as they become available, and then close the list explicitly:
+The streaming serializer lets you open a list writer, emit items as needed, and then close the list explicitly:
 
 ```rust
-use serde::{Deserialize, Serialize};
 use std::io::Write;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Object {
@@ -237,79 +232,105 @@ struct Object {
     name: String,
 }
 
-let o1 = Object {
-    id: 11,
-    name: "foo".to_owned(),
-};
+fn main() {
+    let o1 = Object {
+        id: 11,
+        name: "foo".to_owned(),
+    };
 
-let o2 = Object {
-    id: 13,
-    name: "bar".to_owned(),
-};
+    let o2 = Object {
+        id: 13,
+        name: "bar".to_owned(),
+    };
 
-let mut output = std::io::stdout().lock();
-let mut ser = ason::ser::list_to_writer(&mut output);
+    let mut output = std::io::stdout().lock();
+    let mut stream_writer = ason::ser::list_stream_writer(&mut output);
 
-ser.start_list().unwrap();
-ser.serialize_element(&o1).unwrap();
-ser.serialize_element(&o2).unwrap();
-ser.end_list().unwrap();
+    // Start the list before serializing elements.
+    stream_writer.start_list().unwrap();
 
-output.flush().unwrap();
+    // Serialize the first element.
+    stream_writer.write(&o1).unwrap();
+
+    // Serialize the second element.
+    stream_writer.write(&o2).unwrap();
+
+    // End the stream explicitly.
+    stream_writer.end_list().unwrap();
+
+    output.flush().unwrap();
+
+    let mut stderr = std::io::stderr().lock();
+    writeln!(&mut stderr, "Streaming serialization successful!").unwrap();
+}
 ```
 
-The matching streaming deserializer consumes the root list incrementally from a binary input source. The intended flow is:
+The streaming deserializer consumes the root list incrementally from a binary input source (e.g., pipelines, sockets, or std I/O). The intended flow is:
 
 1. Open a streaming list reader on any binary `Read` source.
 2. Repeatedly request the next item from the list.
-3. Deserialize each element into the Rust type you expect.
+3. Deserialize each element when it become available.
 4. Stop when the reader reports the end of the list.
-
-This mode is useful when the producer does not know the full list in advance, or when the consumer wants to start processing before the whole document has arrived.
 
 For example, the deserializer can be used to read the list of objects emitted by the serializer above:
 
 ```rust
+
+use std::io::Write;
+
+use ason::utf8_char_iterator::UTF8CharIterator;
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Object {
     id: i32,
     name: String,
 }
 
-let mut input = std::io::stdin().lock();
-let mut char_iter = UTF8CharIterator::new(&mut input);
-let mut de = ason::de::list_from_char_iterator(&mut char_iter).unwrap();
+fn main() {
+    let mut input = std::io::stdin().lock();
+    let mut char_iter = UTF8CharIterator::new(&mut input);
+    let mut stream_reader = ason::de::list_stream_reader(&mut char_iter).unwrap();
 
-let o1: Object = de.next().unwrap().unwrap();
-assert_eq!(
-    o1,
-    Object {
-        id: 11,
-        name: "foo".to_owned()
+    // Deserialize the first element.
+    let o1: Object = stream_reader.next().unwrap().unwrap();
+    assert_eq!(
+        o1,
+        Object {
+            id: 11,
+            name: "foo".to_owned()
+        }
+    );
+
+    // Deserialize the second element.
+    let o2: Object = stream_reader.next().unwrap().unwrap();
+    assert_eq!(
+        o2,
+        Object {
+            id: 13,
+            name: "bar".to_owned()
+        }
+    );
+
+    // Attempt to deserialize the next element until the list ends.
+    while !stream_reader.next().is_none() {
+        // ...
     }
-);
 
-let o2: Object = de.next().unwrap().unwrap();
-assert_eq!(
-    o2,
-    Object {
-        id: 13,
-        name: "bar".to_owned()
-    }
-);
-
-assert!(de.next().is_none());
-
-println!("Deserialization successful!");
+    let mut stderr = std::io::stderr().lock();
+    writeln!(&mut stderr, "Streaming deserialization successful!").unwrap();
+}
 ```
 
-You can connect a streaming writer and reader through a Unix pipeline:
+These code can be found in the `examples` directory of the project, you can build and run them with:
 
 ```sh
-stream-ser | stream-de
+cargo build --examples
+cd target/debug/examples
+./stream-writer | ./stream-reader
 ```
 
-In that setup, the serializer emits list elements as they are generated, and the deserializer processes them in order as they arrive.
+The streaming mode is useful when the producer does not know the full list in advance, or when the consumer wants to start processing before the whole document has arrived.
 
 ### 4.3 Parser and Writer
 
@@ -355,7 +376,7 @@ assert_eq!(document, text);
 
 The AST does not preserve some source-level details, such as comments, whitespace, original string forms (for example, multi-line or raw strings), or original numeric notation (for example, hexadecimal, octal, and binary forms). Therefore, output generated by the writer may be semantically equivalent but not textually identical to the input. Do not use the writer as a formatter for existing ASON documents.
 
-## 5 ASON Quick Reference
+## 5 Quick Reference
 
 ASON is composed of values, there are two kinds of values: primitive and compound. Primitive values are basic data types like integers, strings, booleans. Compound values are structures made up of multiple values (includes primitive and other compound values), such as lists and objects.
 
@@ -368,7 +389,7 @@ ASON supports the following primitive value types:
 - Integers: `123`, `+456`, `-789`
 - Floating-point numbers: `3.142`, `+1.414`, `-1.732`
 - Floating-point with exponent notation: `2.998e10`, `6.674e-11`
-- Special floating-point values: `NaN`, `Inf`, `+Inf`, `-Inf`
+- Special floating-point values: `NaN`, `+Inf` (or `Inf`), `-Inf`
 - Hexadecimal integers: `0x41`, `+0x51`, `-0x61`, `0x71`
 - Hexadecimal floating-point: `0x1.4p3`, `0x1.921f_b6p1`
 - Octal integers: `0o755`, `+0o600`, `-0o500`
@@ -380,7 +401,7 @@ ASON supports the following primitive value types:
 - Escape sequences: `'\r'`, `'\n'`, `'\t'`, `'\\'`
 - Unicode escapes: `'\u{2d}'`, `'\u{6587}'`
 - Strings: `"abc文字😊"`, `"foo\nbar"`
-- Raw strings: `r"[a-z]+\d+"`, `r#"<\w+\s(\w+="[^"]+")*>"#`
+- Multiline, concatenated, auto-trimmed strings, and raw strings: see the below "String Presentation" section.
 
 **Boolean, Date and Binary Values:**
 
@@ -430,11 +451,23 @@ Important notes:
 
 #### 5.1.6 String Presentation
 
-Strings in ASON can be represented in multiple ways: normal strings, raw strings, multi-line strings, concatenated strings, and auto-trimmed strings.
+Strings in ASON can be represented in multiple ways: normal strings, multi-line strings, concatenated strings, auto-trimmed strings, and raw strings.
 
-##### 5.1.6.1 Multi-Line Strings
+##### 5.1.6.1 Normal Strings
 
-Strings in ASON are enclosed in double quotation marks (`"`). A string ends when the closing quotation mark is reached, allowing strings to span multiple lines.
+Strings in ASON are enclosed in double quotation marks (`"`). A string ends when the closing quotation mark is reached.
+
+For example:
+
+```json5
+{
+    normal_string: "Hello, World!"
+}
+```
+
+##### 5.1.6.2 Multi-Line Strings
+
+ASON strings can span multiple lines.
 
 For example:
 
@@ -470,7 +503,7 @@ In this form, all whitespace (including line breaks, tabs, and spaces) becomes p
 
 Note that all leading spaces are preserved.
 
-###### 5.1.6.2 Concatenated Strings
+###### 5.1.6.3 Concatenated Strings
 
 To improve readability, ASON allows splitting a long string across multiple lines by adding a backslash (`\`) at the end of each line. The subsequent text will be concatenated with leading whitespace removed. For example:
 
@@ -485,9 +518,17 @@ To improve readability, ASON allows splitting a long string across multiple line
 }
 ```
 
-This is equivalent to `"My very educated mother just served us nine pizzas"`. This form is especially useful for representing paragraphs or long sentences without introducing unwanted line breaks.
+This is equivalent to:
 
-###### 5.1.6.3 Auto-Trimmed Strings
+```json5
+{
+    concatenated_string: "My very educated mother just served us nine pizzas"
+}
+```
+
+This form is especially useful for representing paragraphs or long sentences without introducing unwanted line breaks.
+
+###### 5.1.6.4 Auto-Trimmed Strings
 
 Auto-trimmed strings provide another way to represent multi-line strings. They automatically trim the same amount of leading whitespace from each line. For example:
 
@@ -555,9 +596,34 @@ Another example:
 
 The two strings are equivalent to `"Hello"` and `"Earth\n  &\nMars"`.
 
+###### 5.1.6.5 Raw Strings
+
+Raw strings in ASON are enclosed in double quotation marks with a preceding `r`, all characters within the string are treated literally. 
+
+They are useful for representing strings that contain special characters without needing to escape them. For example:
+
+```json5
+{
+    raw_string: r"[a-z]\d+"
+}
+```
+
+In the example above, the slashes in the string are treated as literal characters, not as escape sequences. Therefore, `r"[a-z]\d+"` represents the regular expression pattern `[a-z]\d+` exactly as written.
+
+Sometimes there may be a need to include quotation marks within a raw string. In such cases, you can insert any number of hash symbols (`#`) between the `r` and the opening quotation mark, and also after the closing quotation mark. For example:
+
+```json5
+{
+    raw_string: r#"He said, "Hello, World!""#
+    raw_string_with_hashes: r##"He said, "Hello, World!""##
+}
+```
+
+Note that the number of hash symbols used must match on both sides of the raw string. If the number of closing hash symbols is less than the opening one, the quote and the hash symbols will be considered part of the string content yet, and if the number of closing hash symbols is more than the opening one, the extra hash symbols will be treated as unexpected characters.
+
 ### 5.2 Compound Values
 
-ASON supports the following compound value types: Lists, Tuples, Objects, Named Lists and Enumerations.
+ASON supports these compound value types: Lists, Tuples, Objects, Maps and Enumerations.
 
 #### 5.2.1 Lists
 
@@ -592,7 +658,7 @@ The elements in a List can also be written on separate lines, with optional comm
 ]
 ```
 
-A comma following the last element (tail comma) is allowed, this feature is primarily intended to make it easy to reorder elements when editing multi-line lists.
+A comma following the last element (tail comma) is allowed, this feature is primarily intended to make it easy to reorder elements in text editors.
 
 Commas in ASON are used as separators for readability, but they are not mandatory. Therefore, the following List is valid and is equivalent to the above List:
 
@@ -654,7 +720,7 @@ As described above, commas in ASON are optional and whitespace can be used as se
 Tuples are different from Lists in that:
 
 - The elements in a Tuple can be of different data types, while the elements in a List must be of the same data type.
-- The amount of elements in a Tuple is fixed, while the amount of elements in a List is dynamic.
+- The amount of elements in a Tuple is fixed, while the amount of elements in a List is variable.
 - Tuples are enclosed in parentheses (`(...)`), while Lists are enclosed in square brackets (`[...]`).
 
 #### 5.2.3 Objects
@@ -715,11 +781,13 @@ The values within an Object can be any type, including primitive values and comp
 }
 ```
 
-> Objects are also called Structs in some programming languages.
+> Objects are also called _Structs_ in some programming languages.
 
-#### 5.2.4 Named Lists
+ASON Objects are different from JSON Objects in that the keys in ASON Objects are identifiers rather than strings, and the number of key-value pairs is fixed, unlike JSON Objects where the number of key-value pairs can vary.
 
-Named Lists are special Lists that each value is associated with a name, we call such elements name-value pairs. The following is an example of a Named List which consists of string-string pairs:
+#### 5.2.4 Maps
+
+Maps are special Lists that each value is associated with a name, we call such elements name-value pairs. The following is an example of a Map which consists of string-string pairs:
 
 ```json5
 [
@@ -729,7 +797,7 @@ Named Lists are special Lists that each value is associated with a name, we call
 ]
 ```
 
-The names are typically strings or numbers, other types are also allowed. For example, the following is a Named List that consists of integer-string pairs:
+The names are typically strings, other types are also allowed. For example, the following is a Map that consists of integer-string pairs:
 
 ```json5
 [
@@ -741,17 +809,21 @@ The names are typically strings or numbers, other types are also allowed. For ex
 ]
 ```
 
-Named Lists are different from Objects in that:
+Maps are different from Objects in that:
 
-- The keys in an Object are identifiers, while the names in a Named List can be of any type.
-- The amount of key-value pairs in an Object is fixed, while the amount of name-value pairs in a Named List is dynamic.
-- Objects are enclosed in curly braces (`{...}`), while Named Lists are enclosed in square brackets (`[...]`).
+- The keys in an Object are identifiers, while the names in a Map can be of any type.
+- The amount of key-value pairs in an Object is fixed, while the amount of name-value pairs in a Map is variable.
+- Objects are enclosed in curly braces (`{...}`), while Maps are enclosed in square brackets (`[...]`).
 
-> Named Lists are also called Maps in some programming languages.
+In principle, Maps are special Lists.
+
+> Maps are also called _Dictionary_ in some programming languages.
+
+ASON Maps with string keys are similar to JSON Objects, except that they are enclosed in square brackets (`[...]`) instead of curly braces (`{...}`).
 
 #### 5.2.5 Enumerations
 
-An Enumeration is a custom data type that consists of a type name and a set of variants. Each variant can optionally carry a value. The following demonstrates an Enumeration type named `Option` with two variants: `None` and `Some`, where `None` does not carry a value, while `Some` carries a value of type integer:
+An Enumeration is a special data type that consists of a type name and a set of variants. Each variant can optionally carry a value. The following demonstrates an Enumeration type named `Option` with two variants: `None` and `Some`, where `None` does not carry a value, while `Some` carries a value of type integer:
 
 ```json
 Option::None
@@ -794,13 +866,13 @@ Color::RGB(255, 127, 63)
 
 > Enumerations are also known as _Algebraic types_ or _Variants_ in some programming languages.
 
-#### 5.2.6 Type of Compound Values
+#### 5.2.6 The Type of Compound Values
 
 Similar to primitive values, compound values also have their own types. When deserializing an ASON document into values of a programming language, the type of compound values must match the expected type, otherwise deserialization will fail.
 
 > List requires all elements to be of the same type, if a List contains compound values, the type of the compound values must also be consistent.
 
-##### 5.2.6.1 Type of Lists
+##### 5.2.6.1 Lists
 
 The type of a List is determined by the type of its elements. For example, a List of integers has the type `[i32]`, a List of strings has the type `[String]`.
 
@@ -808,11 +880,11 @@ Since the amount of elements in a List is variable, the type of a List does not 
 
 The type of empty List is determined by the context in which it is used.
 
-##### 5.2.6.2 Type of Tuples
+##### 5.2.6.2 Tuples
 
 The type of a Tuple is determined by the type and order of its elements. For example, the Tuple `(11, "Alice", true)` has the type `(i32, String, bool)`, while the Tuple `("Bob", 3.14)` has the type `(String, f64)`.
 
-##### 5.2.6.3 Type of Objects
+##### 5.2.6.3 Objects
 
 The type of an Object is determined by the keys and the corresponding value types. For example, the Object
 
@@ -825,13 +897,13 @@ The type of an Object is determined by the keys and the corresponding value type
 
 has the type `{ id: i32, name: String }`.
 
-Note that some programming languages allow default values for missing fields in an Object, in such cases, the type of `{id: 123, name: "Alice"}` and `{id: 123}` can both be `{ id: i32, name: String }`, because the `name` field can be filled with a default value when it is missing.
+Note that some programming languages allow default values for missing fields in an Object, the type of missing fields can be inferred. For example, the type of `{id: 123}` in a List can be `{ id: i32, name: String }` if other elements in the List have the `name` field with a String value.
 
-But `{id: 123, user: "Bob"}` and `{id: 123, user: {name: "Bob", email: "bob@example.com"}}` are not of the same type, because the type of `user` field is different in the two Objects.
+But `{id: 123, user: "Bob"}` and `{id: "001", user: "Alice"}` are not of the same type, because the type of `id` field is different.
 
-##### 5.2.6.4 Type of Named Lists
+##### 5.2.6.4 Maps
 
-The type of a Named List is determined by the type of its name-value pairs. For example, the Named List:
+The type of a Map is determined by the type of its name-value pairs. For example, the Map:
 
 ```json5
 [
@@ -845,7 +917,7 @@ has the type `[String: i32]`.
 
 ##### 5.2.6.5 Type of Enumerations
 
-The type of an Enumeration is determined by its type name. For example, the Enumeration `Option` has the type `Option`, and the Enumeration `Shape` has the type `Shape`.
+The type of an Enumeration is determined by its type name. For example, the Enumeration `Option::None` has the type `Option`, and the Enumeration `Shape::Circle{x, y, r}` has the type `Shape`.
 
 ### 5.3 Comments
 
@@ -886,11 +958,11 @@ Unlike JavaScript, C/C++ and Rust, ASON block comments support nesting. For exam
 */  
 ```
 
-The nesting feature of block comments makes it more convenient for us to comment on a piece of code that already has a block comment.
+The nesting feature of block comments makes it more convenient for us to comment on a piece of code that already has a block comment inside it.
 
-### 5.4 Documents
+### 5.4 ASON Documents
 
-The root of an ASON document can only be a single value, which can be either a primitive value or a compound value. A typical ASON document is usually an Object or a List, however, all types of values are allowed, such as a single number, a string, a Tuple, etc. The following two are valid ASON documents:
+The root of an ASON document can only be a single value, which can be either a primitive value or a compound value. A typical ASON document is usually an Object or a List, however, all types of values are allowed, even a single number, a string, a Tuple, etc. The following two are valid ASON documents:
 
 ```json5
 // The root value is a Tuple.
@@ -1072,7 +1144,7 @@ The corresponding ASON document for instance `m1` is:
 
 ### 6.4 Tuples
 
-Tuple in Rust can be considered as structs with omitted field names. Tuple just corresponds to ASON `Tuple`.
+Tuple in Rust just corresponds to ASON `Tuple`.
 
 For example, the following code demonstrates a vector of tuples, where each tuple consists of an integer and a string:
 
@@ -1146,7 +1218,7 @@ The corresponding ASON document for this instance is:
 ]
 ```
 
-### 6.6 Other Data Types
+### 6.6 Not Supported Data Types
 
 Some Rust data types are not supported, includes:
 
@@ -1167,7 +1239,9 @@ Rust serde framework allows you to specify default values for missing fields in 
 #[derive(Serialize, Deserialize)]
 struct User {
     id: i32,
+    
     name: String,
+
     #[serde(default = "default_age")]
     age: u8
 }
@@ -1182,17 +1256,13 @@ In this example, the `age` field has a default value of `u8`, so if the `age` fi
 }
 ```
 
-## 7 ASON Specification
+## 7 Specification
 
 This section describes the ASON specification in detail. It is mainly intended for developers who want to implement ASON parsers and formatters in other programming languages. For general users, please refer to the previous sections.
 
 ### 7.1 Document Structure
 
-An ASON document consists of exactly one value at the root level. The root value can be any valid ASON value: a primitive value (Number, String, Boolean, etc.) or a compound value (Object, List, Tuple, etc.).
-
-A document containing zero value or more than one value at the root level is invalid.
-
-Valid documents:
+An ASON document consists of exactly one value at the root level. The root value can be any valid ASON value: a primitive value (Number, String, Boolean, etc.) or a compound value (Object, List, Tuple, etc.):
 
 ```json5
 // A single object as root
@@ -1209,7 +1279,7 @@ Valid documents:
 42
 ```
 
-Invalid documents:
+A document containing zero value or more than one value at the root level is invalid:
 
 ```json5
 // Two values at root level (invalid)
@@ -1234,16 +1304,16 @@ The following characters are treated as whitespace and are used to separate toke
 
 | Character       | Code Point |
 |-----------------|------------|
-| Space           | U+0020     |
-| Tab             | U+0009     |
-| Carriage Return | U+000D     |
-| Line Feed       | U+000A     |
+| Space           | `U+0020`   |
+| Tab             | `U+0009`   |
+| Carriage Return | `U+000D`   |
+| Line Feed       | `U+000A`   |
 
 The "carriage return - line feed" pair (`\r\n`, Windows-style) is treated as a single line break.
 
 #### 7.2.3 Commas
 
-Commas (`,`) serve as optional separators between elements of Lists, Tuples, Objects, and Named Lists. They carry no semantic meaning and are treated as whitespace by the parser. Trailing commas (after the last element) are permitted.
+Commas (`,`) serve as optional separators between elements of Lists, Tuples, Objects, and Maps. They carry no semantic meaning and are treated as whitespace by the parser. Trailing commas (after the last element) are permitted.
 
 The following are all equivalent:
 
@@ -1288,9 +1358,9 @@ The following punctuation characters are significant tokens:
 |-------|----------------------------------------------------|
 | `{`   | Opening brace (Objects)                            |
 | `}`   | Closing brace (Objects)                            |
-| `[`   | Opening bracket (Lists and Named Lists)            |
-| `]`   | Closing bracket (Lists and Named Lists)            |
-| `:`   | Key-value separator (Objects and Named Lists)      |
+| `[`   | Opening bracket (Lists and Maps)                   |
+| `]`   | Closing bracket (Lists and Maps)                   |
+| `:`   | Key-value separator (Objects and Maps)             |
 | `(`   | Opening parenthesis (Tuples)                       |
 | `)`   | Closing parenthesis (Tuples)                       |
 | `+`   | Positive sign (Numbers)                            |
@@ -1307,18 +1377,18 @@ ASON supports integer and floating-point numbers with explicit type annotations.
 
 The supported number types are:
 
-| Type  | Description                      | Width   | Range                    |
-|-------|----------------------------------|---------|--------------------------|
-| `i8`  | Signed 8-bit integer             | 8 bits  | -128 to 127              |
-| `u8`  | Unsigned 8-bit integer           | 8 bits  | 0 to 255                 |
-| `i16` | Signed 16-bit integer            | 16 bits | -32,768 to 32,767        |
-| `u16` | Unsigned 16-bit integer          | 16 bits | 0 to 65,535              |
+| Type  | Description                      | Width   | Range                           |
+|-------|----------------------------------|---------|---------------------------------|
+| `i8`  | Signed 8-bit integer             | 8 bits  | -128 to 127                     |
+| `u8`  | Unsigned 8-bit integer           | 8 bits  | 0 to 255                        |
+| `i16` | Signed 16-bit integer            | 16 bits | -32,768 to 32,767               |
+| `u16` | Unsigned 16-bit integer          | 16 bits | 0 to 65,535                     |
 | `i32` | Signed 32-bit integer            | 32 bits | -2,147,483,648 to 2,147,483,647 |
-| `u32` | Unsigned 32-bit integer          | 32 bits | 0 to 4,294,967,295       |
-| `i64` | Signed 64-bit integer            | 64 bits | -2^63 to 2^63 - 1        |
-| `u64` | Unsigned 64-bit integer          | 64 bits | 0 to 2^64 - 1            |
-| `f32` | 32-bit floating-point (IEEE 754) | 32 bits | ±3.4028235e+38           |
-| `f64` | 64-bit floating-point (IEEE 754) | 64 bits | ±1.7976931348623157e+308 |
+| `u32` | Unsigned 32-bit integer          | 32 bits | 0 to 4,294,967,295              |
+| `i64` | Signed 64-bit integer            | 64 bits | -2^63 to 2^63 - 1               |
+| `u64` | Unsigned 64-bit integer          | 64 bits | 0 to 2^64 - 1                   |
+| `f32` | 32-bit floating-point (IEEE 754) | 32 bits | ±3.4028235e+38                  |
+| `f64` | 64-bit floating-point (IEEE 754) | 64 bits | ±1.7976931348623157e+308        |
 
 Default types:
 
@@ -1417,7 +1487,7 @@ Rules:
 - The default type is `f64`.
 - Only `f32` and `f64` type suffixes are valid for hexadecimal floating-point numbers. Integer type suffixes (e.g., `i32`, `u32`) are not permitted.
 
-> Note: Appending a type suffix directly to a hexadecimal integer creates ambiguity because `f` is a valid hexadecimal digit. For example, `0x21_f32` is parsed as the hexadecimal integer `0x21f32`, not a typed floating-point number. Use P notation for hexadecimal floating-point values.
+> Note: Appending a type suffix directly to a hexadecimal integer creates ambiguity because character `f` is a valid hexadecimal digit. For example, `0x21_f32` is parsed as the hexadecimal integer `0x21f32`, not a typed floating-point number. Use `P` notation if you want to specify hexadecimal floating-point values.
 
 ##### 7.3.1.8 Digit Separators
 
@@ -1454,18 +1524,14 @@ Rules:
 
 ASON supports the special floating-point values `NaN` (Not a Number) and `Inf` (Infinity):
 
-| Literal    | Value                 |
-|------------|-----------------------|
-| `NaN`      | f64 NaN               |
-| `NaN_f32`  | f32 NaN               |
-| `NaN_f64`  | f64 NaN               |
-| `Inf`      | f64 positive infinity |
-| `Inf_f32`  | f32 positive infinity |
-| `Inf_f64`  | f64 positive infinity |
-| `+Inf`     | f64 positive infinity |
-| `-Inf`     | f64 negative infinity |
-| `+Inf_f32` | f32 positive infinity |
-| `-Inf_f32` | f32 negative infinity |
+| Literal                              | Value                 |
+|--------------------------------------|-----------------------|
+| `NaN`, `NaN_f64`                     | f64 NaN               |
+| `NaN_f32`                            | f32 NaN               |
+| `Inf`, `+Inf`, `Inf_f64`, `+Inf_f64` | f64 positive infinity |
+| `-Inf`, `-Inf_f64`                   | f64 negative infinity |
+| `Inf_f32`, `+Inf_f32`                | f32 positive infinity |
+| `-Inf_f32`                           | f32 negative infinity |
 
 Rules:
 
@@ -1500,35 +1566,35 @@ A character containing more than one character (e.g., `'ab'`) is also invalid. S
 
 The following escape sequences are supported in both character and string literals:
 
-| Escape Sequence | Character                    |
-|-----------------|------------------------------|
-| `\\`            | Backslash (`\`)              |
-| `\'`            | Single quote (`'`)           |
-| `\"`            | Double quote (`"`)           |
-| `\t`            | Horizontal tab (U+0009)      |
-| `\n`            | Line feed / newline (U+000A) |
-| `\r`            | Carriage return (U+000D)     |
-| `\0`            | Null character (U+0000)      |
-| `\u{HHHHHH}`    | Unicode code point           |
+| Escape Sequence | Character                        |
+|-----------------|----------------------------------|
+| `\\`            | Backslash (`\`)                  |
+| `\'`            | Single quote (`'`)               |
+| `\"`            | Double quote (`"`)               |
+| `\t`            | Horizontal tab (`U+0009`)        |
+| `\n`            | Line feed `/` newline (`U+000A`) |
+| `\r`            | Carriage return (`U+000D`)       |
+| `\0`            | Null character (`U+0000`)        |
+| `\u{HHHHHH}`    | Unicode code point               |
 
 Unicode escape sequences use the format `\u{H...}`, where `H...` is 1 to 6 hexadecimal digits representing a Unicode code point. The braces are mandatory. Examples: `\u{2d}` (character hyphen `-`), `\u{6587}` (CJK character `文`).
 
-Invalid Unicode code points (values greater than U+10FFFF or surrogate code points U+D800 to U+DFFF) are errors.
+Invalid Unicode code points (values greater than `U+10FFFF` or surrogate code points `U+D800` to `U+DFFF`) are errors.
 
 The following escape sequences from other languages are not supported:
 
-| Escape Sequence | Description                      |
-|-----------------|----------------------------------|
-| `\a`            | Alert (U+0007)                   |
-| `\b`            | Backspace (U+0008)               |
-| `\v`            | Vertical tab (U+000B)            |
-| `\f`            | Form feed (U+000C)               |
-| `\e`            | Escape character (U+001B)        |
-| `\?`            | Question mark (U+003F)           |
-| `\ooo`          | Octal character escapes          |
-| `\xHH`          | Hexadecimal character escapes    |
-| `\uHHHH`        | Unicode code point below 0x10000 |
-| `\Uhhhhhhhh`    | Unicode code point               |
+| Escape Sequence | Description                        |
+|-----------------|------------------------------------|
+| `\a`            | Alert (`U+0007`)                   |
+| `\b`            | Backspace (`U+0008`)               |
+| `\v`            | Vertical tab (`U+000B`)            |
+| `\f`            | Form feed (`U+000C`)               |
+| `\e`            | Escape character (`U+001B`)        |
+| `\?`            | Question mark (`U+003F`)           |
+| `\ooo`          | Octal character escapes            |
+| `\xHH`          | Hexadecimal character escapes      |
+| `\uHHHH`        | Unicode code point below `0x10000` |
+| `\Uhhhhhhhh`    | Unicode code point                 |
 
 #### 7.3.4 Strings
 
@@ -1570,25 +1636,7 @@ This is equivalent to `"The quick brown fox jumps over the lazy dog"`.
 
 The backslash must be immediately followed by `\n` or `\r\n`. The leading whitespace (spaces and tabs) on the continuation line is stripped.
 
-##### 7.3.4.3 Raw Strings
-
-Raw strings use the prefix `r` before the opening double quote: `r"..."`. Within a raw string, escape sequences are disabled (backslashes and all other characters are treated literally).
-
-```json5
-r"^\d*(\.\d+)?$"
-```
-
-This is equivalent to `"^\\d*(\\.\\d+)?$"`.
-
-A variant `r#"..."#` uses hash delimiters, allowing the string to contain unescaped double quotes:
-
-```json5
-r#"<a href="https://hemashushu.github.io/" title="Home">Home Page</a>"#
-```
-
-This is equivalent to `"<a href=\"https://hemashushu.github.io/\" title=\"Home\">Home Page</a>"`.
-
-##### 7.3.4.4 Auto-Trimmed Strings
+##### 7.3.4.3 Auto-Trimmed Strings
 
 Auto-trimmed strings use triple double quotes (`"""`) and automatically remove common leading whitespace from each line. The syntax is:
 
@@ -1631,6 +1679,31 @@ Another example:
 The two strings are equivalent to `"Hello"` and `"Earth\n  &\nMars"`.
 
 Note: Within auto-trimmed strings, escape sequences are **not** processed. All characters (including backslashes) are preserved as-is (similar to raw strings), except for the trimming of common leading whitespace.
+
+##### 7.3.4.4 Raw Strings
+
+Raw strings use the prefix `r` before the opening double quote: `r"..."`. Within a raw string, escape sequences are disabled (backslashes and all other characters are treated literally).
+
+```json5
+r"^\d*(\.\d+)?$"
+```
+
+This is equivalent to `"^\\d*(\\.\\d+)?$"`.
+
+A variant `r#"..."#` uses hash delimiters, allowing the string to contain unescaped double quotes:
+
+```json5
+r#"<a href="https://hemashushu.github.io/" title="Home">Home Page</a>"#
+```
+
+This is equivalent to `"<a href=\"https://hemashushu.github.io/\" title=\"Home\">Home Page</a>"`.
+
+Multiple hash delimiters can be used for raw strings, such as `r##"..."##`, allowing the string to contain sequences like `"#"` without needing to escape them.
+
+The number of hashes used at the start and end of the string must match:
+
+- If the number of closing hash symbols is less than the opening one, the quote and the hash symbols will be considered part of the string content.
+- If the number of closing hash symbols is more than the opening one, the extra hash symbols will be treated as unexpected characters.
 
 #### 7.3.5 DateTime
 
@@ -1715,12 +1788,12 @@ Examples:
 []
 ```
 
-#### 7.4.2 Named Lists
+#### 7.4.2 Maps
 
-A Named List (also called a Map) is an ordered sequence of name-value pairs enclosed in square brackets. It is distinguished from a regular list by the presence of a colon (`:`) after the first element.
+A Map (also called a Dictionary) is an ordered sequence of name-value pairs enclosed in square brackets. It is distinguished from a regular list by the presence of a colon (`:`) after the first element.
 
 ```text
-named_list = "[" { name_value_pair [","] } "]"
+map = "[" { name_value_pair [","] } "]"
 name_value_pair = value ":" value
 ```
 
@@ -1741,7 +1814,7 @@ Examples:
 ]
 ```
 
-An empty named list is represented as an empty list `[]`.
+An empty map is represented as an empty list `[]`.
 
 #### 7.4.3 Tuples
 
@@ -1839,7 +1912,7 @@ Shape::Rect{width: 200, height: 100}
 
 An empty parentheses variant (`Option::Some()`) is **not** valid. If a variant carries parentheses, at least one value must be present.
 
-> Note: The distinction between a single value variant (form 2) and a tuple-like variant (form 3) depends on the number of values within the parentheses. If there is exactly one value, it is a single value variant. If there are two or more values, it is a tuple-like variant.
+> Note: The distinction between a single value variant (e.g., `Option::Some(123)`) and a tuple-like variant (e.g., `Color::RGB(255, 127, 63)`) depends on the number of values within the parentheses. If there is exactly one value, it is a single value variant. If there are two or more values, it is a tuple-like variant.
 
 ### 7.5 Grammar Summary
 
@@ -1856,7 +1929,7 @@ value               = number
                     | hex_byte_data
                     | enumeration
                     | list
-                    | named_list
+                    | map
                     | tuple
                     | object ;
 
@@ -1891,7 +1964,8 @@ char                = "'" ( character | escape_sequence ) "'" ;
 string              = normal_string | raw_string | raw_string_hash | auto_trimmed_string ;
 normal_string       = '"' { string_char } '"' ;
 raw_string          = 'r"' { any_char_except_quote } '"' ;
-raw_string_hash     = 'r#"' { any_char_except_quote_hash } '"#' ;
+raw_string_hash     = 'r' hashes '"' { any_char_except_quote_and_hashes } '"' hashes ;
+hashes              = "#" { "#" } ;
 auto_trimmed_string = '"""' newline { content_line } newline { whitespace } '"""' ;
 
 (* DateTime *)
@@ -1902,7 +1976,7 @@ hex_byte_data       = 'h"' { hex_byte } '"' ;
 
 (* Compound Values *)
 list                = "[" value { separator value } "]" ;
-named_list          = "[" value ":" value { separator value ":" value } "]" ;
+map          = "[" value ":" value { separator value ":" value } "]" ;
 tuple               = "(" value { separator value } ")" ;
 object              = "{" { identifier ":" value [separator] } "}" ;
 enumeration         = identifier "::" identifier [ "(" value { separator value } ")" | "{" { identifier ":" value [separator] } "}" ] ;
@@ -1929,7 +2003,7 @@ Tokens in ASON are terminated by the following characters (also known as termina
 - Comma: `,`
 - Punctuation: `:`, `{`, `}`, `[`, `]`, `(`, `)`
 - Comment start: `/` (when followed by `/` or `*`)
-- End of file (EOF)
+- End of file (`EOF`)
 
 This means tokens such as numbers, identifiers, and keywords do not require explicit delimiters, they end when one of the above characters is encountered.
 
@@ -1937,11 +2011,11 @@ This means tokens such as numbers, identifiers, and keywords do not require expl
 
 An ASON parser typically processes the input in the following stages:
 
-Stage 1. Character stream
+**Stage 1. Character stream**
 
 The input is read as a stream of UTF-8 encoded characters with associated position information (index, line, and column).
 
-Stage 2. Lexing (Tokenization)
+**Stage 2. Lexing (Tokenization)**
 
 The character stream is transformed into a token stream. During this stage:
 
@@ -1951,7 +2025,7 @@ The character stream is transformed into a token stream. During this stage:
 - Identifiers are recognized, and keywords (`true`, `false`, `NaN`, `Inf`) are interpreted as their respective token types.
 - The `::` sequence within an identifier produces an `Enumeration` token containing both the type name and variant name.
 
-Stage 3. Normalization
+**Stage 3. Normalization**
 
 The token stream is post-processed to merge sign tokens (`+` and `-`) with the following number token. During this stage:
 
@@ -1961,9 +2035,9 @@ The token stream is post-processed to merge sign tokens (`+` and `-`) with the f
 - Applying signs to unsigned types or `NaN` is reported as an error.
 - Bare number tokens (without a preceding sign) are checked for overflow in their signed range.
 
-Stage 4. Parsing
+**Stage 4. Parsing**
 
-The normalized token stream is parsed into an Abstract Syntax Tree (AST). During this stage, the parser recognizes compound structures (Objects, Lists, Tuples, Named Lists, Enumerations) and verifies structural correctness (matching brackets, required colons, non-empty tuples, etc.).
+The normalized token stream is parsed into an Abstract Syntax Tree (AST). During this stage, the parser recognizes compound structures (Objects, Lists, Tuples, Maps, Enumerations) and verifies structural correctness (matching brackets, required colons, non-empty tuples, etc.).
 
 ### 7.8 Error Handling
 

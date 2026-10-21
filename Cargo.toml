@@ -1,6 +1,6 @@
 [package]
 name = "ason"
-version = "2.1.3"
+version = "3.0.0"
 edition = "2024"
 
 license = "MPL-2.0"
@@ -11,8 +11,8 @@ keywords = ["ason", "serde"]
 categories = ["encoding", "parsing"]
 
 [dependencies]
-chrono = "0.4.44"
-serde = { version = "1.0.228", features = ["derive"] }
+chrono = "0.4.45"
+serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"
 hexfloat2 = "0.2.0"
 

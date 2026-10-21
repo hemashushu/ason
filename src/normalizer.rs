@@ -85,40 +85,28 @@ where
                                         NumberToken::I8(v) if *v > i8::MAX as u8 => {
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
-                                                format!(
-                                                    "The signed i8 number {} overflowed.",
-                                                    v
-                                                ),
+                                                format!("The signed i8 number {} overflowed.", v),
                                                 Range::merge(&start_range, next_range),
                                             )))
                                         }
                                         NumberToken::I16(v) if *v > i16::MAX as u16 => {
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
-                                                format!(
-                                                    "The signed i16 number {} overflowed.",
-                                                    v
-                                                ),
+                                                format!("The signed i16 number {} overflowed.", v),
                                                 Range::merge(&start_range, next_range),
                                             )))
                                         }
                                         NumberToken::I32(v) if *v > i32::MAX as u32 => {
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
-                                                format!(
-                                                    "The signed i32 number {} overflowed.",
-                                                    v
-                                                ),
+                                                format!("The signed i32 number {} overflowed.", v),
                                                 Range::merge(&start_range, next_range),
                                             )))
                                         }
                                         NumberToken::I64(v) if *v > i64::MAX as u64 => {
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
-                                                format!(
-                                                    "The signed i64 number {} overflowed.",
-                                                    v
-                                                ),
+                                                format!("The signed i64 number {} overflowed.", v),
                                                 Range::merge(&start_range, next_range),
                                             )))
                                         }
@@ -439,10 +427,8 @@ mod tests {
         // the iterator would not stop immediately; instead, it would continue until the end.
         let mut token_with_ranges = vec![];
         for result in normalizer_iter {
-            match result {
-                Ok(twr) => token_with_ranges.push(twr),
-                Err(e) => return Err(e),
-            }
+            let twr = result?;
+            token_with_ranges.push(twr);
         }
 
         Ok(token_with_ranges)

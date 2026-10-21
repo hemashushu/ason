@@ -62,17 +62,17 @@ fn test_stream_serialize_and_deserialize() {
     };
 
     let mut buf = vec![];
-    let mut ser = ason::ser::list_to_writer(&mut buf);
+    let mut ser = ason::ser::list_stream_writer(&mut buf);
 
     ser.start_list().unwrap();
-    ser.serialize_element(&o1).unwrap();
-    ser.serialize_element(&o2).unwrap();
+    ser.write(&o1).unwrap();
+    ser.write(&o2).unwrap();
     ser.end_list().unwrap();
 
     // deserialize
     let mut cursor = std::io::Cursor::new(buf);
     let mut char_iter = UTF8CharIterator::new(&mut cursor);
-    let mut de = ason::de::list_from_char_iterator(&mut char_iter).unwrap();
+    let mut de = ason::de::list_stream_reader(&mut char_iter).unwrap();
 
     let o1: Object = de.next().unwrap().unwrap();
     assert_eq!(

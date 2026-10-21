@@ -27,7 +27,7 @@ pub struct KeyValuePair {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct NamedListEntry {
+pub struct MapEntry {
     pub name: Box<AsonNode>,
     pub value: Box<AsonNode>,
 }
@@ -64,7 +64,7 @@ pub enum AsonNode {
     Enumeration(Enumeration),
     HexadecimalByteData(Vec<u8>),
     List(Vec<AsonNode>),
-    NamedList(Vec<NamedListEntry>),
+    Map(Vec<MapEntry>),
     Tuple(Vec<AsonNode>),
     Object(Vec<KeyValuePair>),
 }

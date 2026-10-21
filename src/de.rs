@@ -76,9 +76,9 @@ where
 /// - If the upstream is a std::io::Read, use `let mut char_iter = UTF8CharIterator::new(&mut reader)`
 ///   to convert it to a character iterator.
 /// - If the upstream is a string slice, use `let mut chars = s.chars()` to convert it to a character iterator.
-pub fn list_from_char_iterator<T>(
+pub fn list_stream_reader<T>(
     char_iterator: &'_ mut dyn Iterator<Item = char>,
-) -> Result<ListDeserializer<'_, T>, AsonError>
+) -> Result<ListStreamReader<'_, T>, AsonError>
 where
     T: de::DeserializeOwned,
 {
@@ -110,10 +110,10 @@ where
     }
 
     let deserializer = Deserializer::new(peekable_token_iter);
-    Ok(ListDeserializer::new(deserializer))
+    Ok(ListStreamReader::new(deserializer))
 }
 
-pub struct ListDeserializer<'a, T>
+pub struct ListStreamReader<'a, T>
 where
     T: de::DeserializeOwned,
 {
@@ -121,7 +121,7 @@ where
     _marker: PhantomData<T>,
 }
 
-impl<'a, T> ListDeserializer<'a, T>
+impl<'a, T> ListStreamReader<'a, T>
 where
     T: de::DeserializeOwned,
 {
@@ -133,7 +133,7 @@ where
     }
 }
 
-impl<'a, T> Iterator for ListDeserializer<'a, T>
+impl<'a, T> Iterator for ListStreamReader<'a, T>
 where
     T: de::DeserializeOwned,
 {
@@ -674,7 +674,7 @@ impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
     where
         V: de::Visitor<'de>,
     {
-        // map = Named List
+        // map = Map
         match self.next_token()? {
             Some(Token::BracketOpen) => {
                 let value = visitor.visit_map(MapAccessor::new(self))?;
@@ -683,11 +683,11 @@ impl<'de> de::Deserializer<'de> for &mut Deserializer<'de> {
                 Ok(value)
             }
             Some(_) => Err(AsonError::MessageWithRange(
-                "Expect a \"Named List\".".to_owned(),
+                "Expect a \"Map\".".to_owned(),
                 self.last_range,
             )),
             None => Err(AsonError::UnexpectedEndOfDocument(
-                "Expect a \"Named List\".".to_owned(),
+                "Expect a \"Map\".".to_owned(),
             )),
         }
     }
@@ -851,7 +851,7 @@ impl<'de> SeqAccess<'de> for TupleAccessor<'_, 'de> {
     }
 }
 
-// Map/Named List Accessor
+// Map/Map Accessor
 struct MapAccessor<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
 }
@@ -875,7 +875,7 @@ impl<'de> MapAccess<'de> for MapAccessor<'_, 'de> {
 
         if self.de.peek_token(0)?.is_none() {
             return Err(AsonError::UnexpectedEndOfDocument(
-                "Incomplete Named List.".to_owned(),
+                "Incomplete Map.".to_owned(),
             ));
         }
 
@@ -1012,7 +1012,7 @@ impl<'de> VariantAccess<'de> for VariantAccessor<'_, 'de> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        de::{de_from_str, list_from_char_iterator},
+        de::{de_from_str, list_stream_reader},
         error::AsonError,
         utf8_char_iterator::UTF8CharIterator,
     };
@@ -1553,7 +1553,7 @@ mod tests {
     }
 
     #[test]
-    fn test_named_list() {
+    fn test_map() {
         let s0 = r#"
         [
             "red": 0xff0000
@@ -1999,7 +1999,7 @@ mod tests {
         let s = r#"[11 13]"#;
 
         let mut chars = s.chars();
-        let mut de = list_from_char_iterator(&mut chars).unwrap();
+        let mut de = list_stream_reader(&mut chars).unwrap();
 
         assert_eq!(11, de.next().unwrap().unwrap());
         assert_eq!(13, de.next().unwrap().unwrap());
@@ -2024,7 +2024,7 @@ mod tests {
 
         let data = s.as_bytes();
         let mut char_iter = UTF8CharIterator::new(data);
-        let mut de = list_from_char_iterator(&mut char_iter).unwrap();
+        let mut de = list_stream_reader(&mut char_iter).unwrap();
 
         let o1: Object = de.next().unwrap().unwrap();
         assert_eq!(

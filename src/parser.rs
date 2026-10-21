@@ -7,7 +7,7 @@
 use std::io::Read;
 
 use crate::{
-    ast::{AsonNode, Enumeration, KeyValuePair, NamedListEntry, Number},
+    ast::{AsonNode, Enumeration, KeyValuePair, MapEntry, Number},
     char_with_position::CharsWithPositionIterator,
     error::AsonError,
     lexer::Lexer,
@@ -387,7 +387,7 @@ where
 
     /// Parse:
     /// - list: `[value, value, ...]`
-    /// - named-list (map): `[name: value, name: value, ...]`
+    /// - map: `[name: value, name: value, ...]`
     fn parse_list(&mut self) -> Result<AsonNode, AsonError> {
         // ```diagram
         // [...]?  //
@@ -398,16 +398,16 @@ where
         self.next_token()?; // consume '['
 
         let mut list_items: Vec<AsonNode> = vec![];
-        let mut named_list_entries: Vec<NamedListEntry> = vec![];
+        let mut map_entries: Vec<MapEntry> = vec![];
 
         #[derive(PartialEq)]
-        enum ListType {
+        enum SequenceType {
             Unspecified,
             List,
-            NamedList,
+            Map,
         }
 
-        let mut list_type = ListType::Unspecified;
+        let mut list_type = SequenceType::Unspecified;
 
         while let Some(token) = self.peek_token(0)? {
             if token == &Token::BracketClose {
@@ -416,38 +416,38 @@ where
 
             let item = self.parse_node()?;
 
-            if list_type == ListType::Unspecified {
+            if list_type == SequenceType::Unspecified {
                 if self.peek_token_and_equals(0, &Token::Colon)? {
-                    list_type = ListType::NamedList
+                    list_type = SequenceType::Map
                 } else {
-                    list_type = ListType::List
+                    list_type = SequenceType::List
                 }
             }
 
-            if list_type == ListType::List {
+            if list_type == SequenceType::List {
                 // Regular list
                 list_items.push(item);
             } else {
-                // Named list
+                // Map
 
                 self.consume_colon()?;
 
                 let value = self.parse_node()?;
-                let entry = NamedListEntry {
+                let entry = MapEntry {
                     name: Box::new(item),
                     value: Box::new(value),
                 };
-                named_list_entries.push(entry);
+                map_entries.push(entry);
             }
         }
 
         // self.next_token()?; // consume ']'
         self.consume_closing_bracket()?; // consume ']'
 
-        if list_type == ListType::List {
+        if list_type == SequenceType::List {
             Ok(AsonNode::List(list_items))
         } else {
-            Ok(AsonNode::NamedList(named_list_entries))
+            Ok(AsonNode::Map(map_entries))
         }
     }
 
@@ -507,7 +507,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use crate::{
-        ast::{Enumeration, KeyValuePair, NamedListEntry, Number},
+        ast::{Enumeration, KeyValuePair, MapEntry, Number},
         error::AsonError,
         parser::parse_from_str,
         position::Position,
@@ -887,13 +887,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_named_list() {
-        let expect_object1 = AsonNode::NamedList(vec![
-            NamedListEntry {
+    fn test_parse_map() {
+        let expect_object1 = AsonNode::Map(vec![
+            MapEntry {
                 name: Box::new(AsonNode::String("foo".to_owned())),
                 value: Box::new(AsonNode::Number(Number::I32(123))),
             },
-            NamedListEntry {
+            MapEntry {
                 name: Box::new(AsonNode::String("bar".to_owned())),
                 value: Box::new(AsonNode::Number(Number::I32(456))),
             },

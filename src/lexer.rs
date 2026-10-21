@@ -129,9 +129,9 @@ where
         // ```
 
         let result = loop {
-            let current_char = match self.peek_char(0) {
-                Some(c) => *c,
-                None => return None, // EOF
+            let current_char = {
+                let c = self.peek_char(0)?;
+                *c
             };
 
             match current_char {
@@ -264,13 +264,9 @@ where
                     // Date
                     break self.lex_datetime();
                 }
-                'r' if self.peek_char_and_equals(1, '"') => {
+                'r' if self.peek_char_and_equals(1, '"') || self.peek_char_and_equals(1, '#') => {
                     // Raw string
                     break self.lex_raw_string();
-                }
-                'r' if self.peek_char_and_equals(1, '#') && self.peek_char_and_equals(2, '"') => {
-                    // Raw string with hash symbol
-                    break self.lex_raw_string_with_hash_symbol();
                 }
                 '"' => {
                     // String
@@ -1438,53 +1434,6 @@ where
 
     fn lex_raw_string(&mut self) -> Result<TokenWithRange, AsonError> {
         // ```diagram
-        // r"abc"?  //
-        // ^^    ^__// to here
-        // ||_______// validated
-        // |________// current char, validated
-        // ```
-
-        self.push_peek_position_into_stack();
-
-        self.next_char(); // consume char 'r'
-        self.next_char(); // consume the '"'
-
-        let mut string_buffer = String::new();
-
-        loop {
-            match self.next_char() {
-                Some(current_char) => {
-                    match current_char {
-                        '"' => {
-                            // encounter the closing double quote, which
-                            // means the end of the string literal.
-                            break;
-                        }
-                        _ => {
-                            // ordinary char
-                            string_buffer.push(current_char);
-                        }
-                    }
-                }
-                None => {
-                    // `r"...EOF`
-                    return Err(AsonError::UnexpectedEndOfDocument(
-                        "Incomplete string.".to_owned(),
-                    ));
-                }
-            }
-        }
-
-        let string_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
-
-        Ok(TokenWithRange::new(
-            Token::String(string_buffer),
-            string_range,
-        ))
-    }
-
-    fn lex_raw_string_with_hash_symbol(&mut self) -> Result<TokenWithRange, AsonError> {
-        // ```diagram
         // r#"abc"#?  //
         // ^^^     ^__// to here
         // |||________// validated
@@ -1496,9 +1445,15 @@ where
 
         self.push_peek_position_into_stack();
 
-        self.next_char(); // consume 'r'
-        self.next_char(); // consume '#'
-        self.next_char(); // consume '"'
+        let mut hash_count = 0;
+
+        self.next_char(); // consume char 'r'
+        while self.peek_char_and_equals(0, '#') {
+            self.next_char(); // consume '#'
+            hash_count += 1;
+        }
+
+        self.next_char(); // consume the '"'
 
         let mut string_buffer = String::new();
 
@@ -1506,10 +1461,29 @@ where
             match self.next_char() {
                 Some(current_char) => {
                     match current_char {
-                        '"' if self.peek_char_and_equals(0, '#') => {
-                            // it is the end of the string
-                            self.next_char(); // consume '#'
-                            break;
+                        '"' => {
+                            // encounter the closing double quote.
+                            // it means the end of the string literal
+                            // if it is followed by the correct number of hash symbols.
+
+                            // count the number of hash symbols following the closing double quote
+                            let mut closing_hash_count = 0;
+                            while closing_hash_count < hash_count
+                                && self.peek_char_and_equals(closing_hash_count, '#')
+                            {
+                                closing_hash_count += 1;
+                            }
+
+                            if closing_hash_count != hash_count {
+                                // push the '"' back into the string buffer
+                                string_buffer.push('"');
+                            } else {
+                                // consume the hash symbols
+                                for _ in 0..closing_hash_count {
+                                    self.next_char();
+                                }
+                                break;
+                            }
                         }
                         _ => {
                             // ordinary char
@@ -1518,7 +1492,7 @@ where
                     }
                 }
                 None => {
-                    // `r#"...EOF`
+                    // `r"...EOF`
                     return Err(AsonError::UnexpectedEndOfDocument(
                         "Incomplete string.".to_owned(),
                     ));
@@ -2189,10 +2163,8 @@ mod tests {
         // the iterator would not stop immediately; instead, it would continue iterating to the end.
         let mut token_with_ranges = vec![];
         for result in lexer {
-            match result {
-                Ok(twr) => token_with_ranges.push(twr),
-                Err(e) => return Err(e),
-            }
+            let twr = result?;
+            token_with_ranges.push(twr);
         }
 
         Ok(token_with_ranges)
@@ -4576,10 +4548,8 @@ mod tests {
             lex_from_str("r\"abc\n   "),
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
-    }
 
-    #[test]
-    fn test_lex_raw_string_with_hash_symbol() {
+        // Testing raw string with hash symbol
         assert_eq!(
             lex_from_str_without_location(
                 "r#\"abc\ndef\n    uvw\r\n\t escape: \\r\\n\\t\\\\ unicode: \\u{1234} xyz quote: \"foo\"\"#"
@@ -4621,6 +4591,64 @@ mod tests {
         assert!(matches!(
             lex_from_str("r#\"abc\nxyz"),
             Err(AsonError::UnexpectedEndOfDocument(_))
+        ));
+
+        // Testing raw string with multiple hash symbols
+        assert_eq!(
+            lex_from_str_without_location("r##\"abc\n    xyz\"## r###\"foo\\nbar\"###").unwrap(),
+            vec![
+                Token::new_string("abc\n    xyz"),
+                Token::new_string("foo\\nbar")
+            ]
+        );
+
+        // Test the ranges for raw strings with multiple hash symbols
+        assert_eq!(
+            lex_from_str("r##\"abc\n    xyz\"## r###\"foo\\nbar\"###").unwrap(),
+            vec![
+                TokenWithRange::new(
+                    Token::new_string("abc\n    xyz"),
+                    Range::new(&Position::new(0, 0, 0), &Position::new(17, 1, 9))
+                ),
+                TokenWithRange::new(
+                    Token::new_string("foo\\nbar"),
+                    Range::new(&Position::new(19, 1, 11), &Position::new(35, 1, 27))
+                )
+            ]
+        );
+
+        // Test hash symbols within raw strings
+        assert_eq!(
+            lex_from_str("r##\"abc#def\"## r##\"foo\"#bar\"##").unwrap(),
+            vec![
+                TokenWithRange::new(
+                    Token::new_string("abc#def"),
+                    Range::new(&Position::new(0, 0, 0), &Position::new(13, 0, 13))
+                ),
+                TokenWithRange::new(
+                    Token::new_string("foo\"#bar"),
+                    Range::new(&Position::new(15, 0, 15), &Position::new(29, 0, 29))
+                )
+            ]
+        );
+
+        // err: un-matched hash symbols
+        assert!(matches!(
+            lex_from_str("r##\"abc\n    xyz\"#").unwrap_err(),
+            AsonError::UnexpectedEndOfDocument(_)
+        ));
+
+        assert!(matches!(
+            lex_from_str("r##\"abc\n    xyz\"###").unwrap_err(),
+            // The 3rd '#' will be unexpected character since it doesn't match the opening '##' raw string delimiter
+            AsonError::MessageWithPosition(
+                _,
+                Position {
+                    index: 18,
+                    line: 1,
+                    column: 10
+                }
+            )
         ));
     }
 

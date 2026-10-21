@@ -1,24 +1,25 @@
 Contributing
 ============
 
-This project was created by HemaShushu <hippospark@gmail.com>,
-all rights reserved. The project is distributed under the Mozilla
-Public License 2.0, HemaShushu promises that users can always use
-this project for free.
+ASON was created by Hemashushu <hippospark@gmail.com>, who holds its
+copyright. It is distributed under the Mozilla Public License 2.0 with
+additional terms (see the LICENSE and LICENSE.additional files), and the
+author promises that it will always remain free to use.
 
-The author of the project (HemaShushu) welcomes contributions
-from the community, and when you submit code or patches, please
-ensure that the following terms are met.
+Contributions from the community are welcome. By submitting a contribution
+(such as code, documentation, or a patch, e.g., via a pull request), you
+confirm that:
 
-(a) the contribution is created in whole or in part by me and I have
-    the right to submit it to the project.
-(b) I understand and agree that the project is open source, that my
-    contribution will be distributed as part of the project and under
-    the same license, and the copyright of my contribution will belong to
-    the author of the project.
+(a) The contribution is your own original work, or you otherwise have the
+    right to submit it. Any third-party material in it must be clearly
+    marked with its source and license.
+(b) You understand and agree that this project is open source, that your
+    contribution will be distributed as part of the project under the same
+    license, and that you transfer the copyright of your own work in the
+    contribution to the author of the project.
 
-You may sign your name at the bottom of the header of the source code
-file where you are contributing, in a format such as
+To credit your work, you may add your name below the copyright notice in
+the header of each source file you contribute to, in the following format:
 
 Contributor: John Smith <name@email_domain>
 
@@ -27,15 +28,17 @@ Contributor: John Smith <name@email_domain>
 参与贡献
 =======
 
-当前项目由河马蜀黍 <hippospark@gmail.com> 创建，保留所有版权。项目采用
-Mozilla Public License 2.0 授权协议分发，河马蜀黍承诺用户可以一直免费使用该项目。
+ASON 由河马蜀黍 <hippospark@gmail.com> 创建并享有版权。本项目采用 Mozilla Public License 2.0
+及附加条款（见 LICENSE 和 LICENSE.additional 文件）授权分发，作者承诺本项目将始终可以免费使用。
 
-项目的作者（即河马蜀黍）欢迎来自社区的贡献，在你提交代码或者补丁时，请确保满足如下条款：
+欢迎来自社区的贡献。当你提交贡献（如代码、文档或补丁，例如通过 Pull Request 提交）时，
+即表示你确认：
 
-(a) 贡献的内容的全部或者部分由你创造，并且你对该内容有权利提交到该项目；
-(b) 你明白并同意该项目是开源的，你贡献的内容将会作为该项目的一部分，并且
-    以相同的授权分发，且你贡献的内容的版权将会归属于项目的作者。
+(a) 所贡献的内容是你的原创作品，或你有权提交该内容。其中如包含第三方内容，
+    必须清楚注明其来源和授权协议；
+(b) 你明白并同意本项目是开源的，你贡献的内容将作为本项目的一部分、以相同的协议分发，
+    并且你将所贡献内容中属于你的那部分版权转让给本项目的作者。
 
-你可以在参与贡献的源代码文件头下方署名，格式如下：
+为了记录你的贡献，你可以在所修改的源代码文件头部的版权声明下方署名，格式如下：
 
 贡献者：张三 <名字@邮箱域名>

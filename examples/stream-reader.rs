@@ -4,6 +4,16 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
+//! Build and run this program with this command:
+//!
+//! ```sh
+//! cargo build --examples
+//! cd target/debug/examples
+//! ./stream-writer | ./stream-reader
+//! ```
+
+use std::io::Write;
+
 use ason::utf8_char_iterator::UTF8CharIterator;
 use serde::{Deserialize, Serialize};
 
@@ -14,18 +24,12 @@ struct Object {
 }
 
 fn main() {
-    // Build and run this program with this command:
-    //
-    // ```sh
-    // cargo build --examples
-    // ./target/debug/examples/stream-ser | ./target/debug/examples/stream-de
-    // ```
-
     let mut input = std::io::stdin().lock();
     let mut char_iter = UTF8CharIterator::new(&mut input);
-    let mut de = ason::de::list_from_char_iterator(&mut char_iter).unwrap();
+    let mut stream_reader = ason::de::list_stream_reader(&mut char_iter).unwrap();
 
-    let o1: Object = de.next().unwrap().unwrap();
+    // Deserialize the first element.
+    let o1: Object = stream_reader.next().unwrap().unwrap();
     assert_eq!(
         o1,
         Object {
@@ -34,7 +38,8 @@ fn main() {
         }
     );
 
-    let o2: Object = de.next().unwrap().unwrap();
+    // Deserialize the second element.
+    let o2: Object = stream_reader.next().unwrap().unwrap();
     assert_eq!(
         o2,
         Object {
@@ -43,7 +48,11 @@ fn main() {
         }
     );
 
-    assert!(de.next().is_none());
+    // Attempt to deserialize the next element until the list ends.
+    while !stream_reader.next().is_none() {
+        // ...
+    }
 
-    println!("Deserialization successful!");
+    let mut stderr = std::io::stderr().lock();
+    writeln!(&mut stderr, "Streaming deserialization successful!").unwrap();
 }

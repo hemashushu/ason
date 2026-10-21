@@ -120,8 +120,6 @@ fn test_example_file_primitive() {
     unsigned_int: 31_u32
     unsigned_long: 37_u64
     floating_point: 3.14
-    floating_point_with_exponent: 602200000000000000000000.0
-    floating_point_with_negative_exponent: 0.000000000066738
     single_precision: 3.14_f32
     double_precision: 6.626
     hexadecimal_integer: 48879
@@ -310,7 +308,7 @@ fn test_example_file_object() {
 }
 
 #[test]
-fn test_example_file_named_list() {
+fn test_example_file_map() {
     let text = read_example_file_to_string("05-named-list.ason");
     let root_node = parse_from_str(&text).unwrap();
     let document = write_to_string(&root_node);

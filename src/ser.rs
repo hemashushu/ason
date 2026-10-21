@@ -120,15 +120,15 @@ where
     }
 }
 
-pub fn list_to_writer<T, W>(writer: &mut W) -> ListSerializer<'_, W, T>
+pub fn list_stream_writer<T, W>(writer: &mut W) -> ListStreamWriter<'_, W, T>
 where
     W: Write,
 {
     let serializer = Serializer::new(writer);
-    ListSerializer::new(serializer)
+    ListStreamWriter::new(serializer)
 }
 
-pub struct ListSerializer<'a, W, T>
+pub struct ListStreamWriter<'a, W, T>
 where
     W: Write,
 {
@@ -136,7 +136,7 @@ where
     _marker: PhantomData<T>,
 }
 
-impl<'a, W, T> ListSerializer<'a, W, T>
+impl<'a, W, T> ListStreamWriter<'a, W, T>
 where
     W: Write,
 {
@@ -156,7 +156,7 @@ where
         self.serializer.print_closing_bracket()
     }
 
-    pub fn serialize_element(&mut self, value: &T) -> Result<(), AsonError>
+    pub fn write(&mut self, value: &T) -> Result<(), AsonError>
     where
         T: Serialize,
     {
@@ -698,7 +698,7 @@ mod tests {
     use serde::Serialize;
     use serde_bytes::ByteBuf;
 
-    use crate::ser::{list_to_writer, ser_to_string};
+    use crate::ser::{list_stream_writer, ser_to_string};
 
     #[test]
     fn test_primitive_values() {
@@ -972,7 +972,7 @@ mod tests {
     }
 
     #[test]
-    fn test_named_list() {
+    fn test_map() {
         let mut m0 = HashMap::<String, String>::new();
         m0.insert("red".to_owned(), "0xff0000".to_owned());
         m0.insert("green".to_owned(), "0x00ff00".to_owned());
@@ -1296,11 +1296,11 @@ mod tests {
     #[test]
     fn test_serialize_stream_list() {
         let mut buf: Vec<u8> = vec![];
-        let mut ser = list_to_writer(&mut buf);
+        let mut ser = list_stream_writer(&mut buf);
 
         ser.start_list().unwrap();
-        ser.serialize_element(&11).unwrap();
-        ser.serialize_element(&13).unwrap();
+        ser.write(&11).unwrap();
+        ser.write(&13).unwrap();
         ser.end_list().unwrap();
 
         let s = String::from_utf8(buf).unwrap();
@@ -1319,16 +1319,16 @@ mod tests {
         }
 
         let mut buf: Vec<u8> = vec![];
-        let mut ser = list_to_writer(&mut buf);
+        let mut ser = list_stream_writer(&mut buf);
 
         ser.start_list().unwrap();
-        ser.serialize_element(&Object {
+        ser.write(&Object {
             id: 11,
             name: "foo".to_owned(),
         })
         .unwrap();
 
-        ser.serialize_element(&Object {
+        ser.write(&Object {
             id: 13,
             name: "bar".to_owned(),
         })
