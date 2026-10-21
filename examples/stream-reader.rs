@@ -14,7 +14,6 @@
 
 use std::io::Write;
 
-use ason::utf8_char_iterator::UTF8CharIterator;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -25,8 +24,8 @@ struct Object {
 
 fn main() {
     let mut input = std::io::stdin().lock();
-    let mut char_iter = UTF8CharIterator::new(&mut input);
-    let mut stream_reader = ason::de::list_stream_reader(&mut char_iter).unwrap();
+    let mut char_iter = ason::UTF8CharIterator::new(&mut input);
+    let mut stream_reader = ason::list_stream_reader(&mut char_iter).unwrap();
 
     // Deserialize the first element.
     let o1: Object = stream_reader.next().unwrap().unwrap();
@@ -48,7 +47,7 @@ fn main() {
         }
     );
 
-    // Attempt to deserialize the next element until the list ends.
+    // Read the remaining elements until the end of the list.
     while !stream_reader.next().is_none() {
         // ...
     }

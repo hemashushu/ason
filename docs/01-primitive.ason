@@ -16,20 +16,9 @@
     unsigned_int: 31_u32
     unsigned_long: 37_u64
 
-    // Floating-point numbers
-
     floating_point: 3.14
-
-    /* 
-    * This file is also used for unit tests.
-    * Since comparing floating-point numbers can be tricky due to precision issues,
-    * the following floating-point numbers are commented out.
-    */
-    
-    /*
     floating_point_with_exponent: 6.022e23
     floating_point_with_negative_exponent: 6.6738e-11
-    */
 
     single_precision: 3.14_f32
     double_precision: 6.626_f64

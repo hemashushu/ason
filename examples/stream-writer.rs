@@ -34,7 +34,7 @@ fn main() {
     };
 
     let mut output = std::io::stdout().lock();
-    let mut stream_writer = ason::ser::list_stream_writer(&mut output);
+    let mut stream_writer = ason::list_stream_writer(&mut output);
 
     // Start the list before serializing elements.
     stream_writer.start_list().unwrap();
@@ -45,7 +45,7 @@ fn main() {
     // Serialize the second element.
     stream_writer.write(&o2).unwrap();
 
-    // End the stream explicitly.
+    // End the list explicitly.
     stream_writer.end_list().unwrap();
 
     output.flush().unwrap();
