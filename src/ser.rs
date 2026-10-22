@@ -4,7 +4,7 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::{io::Write, marker::PhantomData};
+use std::{fmt::Write as _, io::Write, marker::PhantomData};
 
 use serde::{Serialize, ser};
 
@@ -19,6 +19,8 @@ where
 {
     let mut buf: Vec<u8> = vec![];
     ser_to_writer(value, &mut buf)?;
+
+    // The serializer only writes valid UTF-8.
     let s = String::from_utf8(buf).unwrap();
     Ok(s)
 }
@@ -37,6 +39,8 @@ where
 {
     upstream: &'a mut W,
     indent_level: usize,
+
+    // Whether no element has been written into the current List, Tuple, Map, or Object yet.
     is_first_element: bool,
 }
 
@@ -52,6 +56,18 @@ where
         }
     }
 
+    fn print_str(&mut self, s: &str) -> Result<(), AsonError> {
+        self.upstream
+            .write_all(s.as_bytes())
+            .map_err(|e| AsonError::Message(e.to_string()))
+    }
+
+    fn print_fmt(&mut self, args: std::fmt::Arguments) -> Result<(), AsonError> {
+        self.upstream
+            .write_fmt(args)
+            .map_err(|e| AsonError::Message(e.to_string()))
+    }
+
     fn print_newline(&mut self) -> Result<(), AsonError> {
         self.print_str(DEFAULT_NEWLINE_CHARS)?;
         for _ in 0..self.indent_level {
@@ -60,63 +76,58 @@ where
         Ok(())
     }
 
-    fn print_space(&mut self) -> Result<(), AsonError> {
-        self.print_str(" ")?;
-        Ok(())
-    }
-
-    fn print_opening_brace(&mut self) -> Result<(), AsonError> {
-        self.print_str("{")?;
-        self.increase_indent();
-        self.print_newline()?;
-        Ok(())
-    }
-
-    fn print_closing_brace(&mut self) -> Result<(), AsonError> {
-        self.decrease_indent();
-        self.print_newline()?;
-        self.print_str("}")?;
-        Ok(())
-    }
-
-    fn print_opening_bracket(&mut self) -> Result<(), AsonError> {
-        self.print_str("[")?;
-        self.increase_indent();
-        self.print_newline()?;
-        Ok(())
-    }
-
-    fn print_closing_bracket(&mut self) -> Result<(), AsonError> {
-        self.decrease_indent();
-        self.print_newline()?;
-        self.print_str("]")?;
-        Ok(())
-    }
-
-    fn print_opening_parenthesis(&mut self) -> Result<(), AsonError> {
-        self.print_str("(")?;
-        Ok(())
-    }
-
-    fn print_closing_parenthesis(&mut self) -> Result<(), AsonError> {
-        self.print_str(")")?;
-        Ok(())
-    }
-
-    fn print_str(&mut self, s: &str) -> Result<(), AsonError> {
-        self.upstream
-            .write_all(s.as_bytes())
-            .map_err(|e| AsonError::Message(e.to_string()))
-    }
-
-    fn increase_indent(&mut self) {
+    // Start a List, Map, or Object, whose elements are written on separate lines.
+    fn begin_block(&mut self, opening: &str) -> Result<(), AsonError> {
+        self.print_str(opening)?;
         self.indent_level += 1;
+        self.is_first_element = true;
+        Ok(())
     }
 
-    fn decrease_indent(&mut self) {
-        if self.indent_level > 0 {
-            self.indent_level -= 1;
+    fn begin_block_element(&mut self) -> Result<(), AsonError> {
+        self.is_first_element = false;
+        self.print_newline()
+    }
+
+    // An empty block is written as `[]` or `{}`.
+    fn end_block(&mut self, closing: &str) -> Result<(), AsonError> {
+        self.indent_level = self.indent_level.saturating_sub(1);
+        if !self.is_first_element {
+            self.print_newline()?;
         }
+        self.print_str(closing)?;
+
+        // The block itself is an element of its parent, which has been marked as written.
+        self.is_first_element = false;
+        Ok(())
+    }
+
+    // Start a Tuple, whose elements are written on the same line, separated by spaces.
+    fn begin_tuple(&mut self, len: usize) -> Result<(), AsonError> {
+        if len == 0 {
+            return Err(AsonError::Message(
+                "ASON does not support empty Tuples.".to_owned(),
+            ));
+        }
+
+        self.print_str("(")?;
+        self.is_first_element = true;
+        Ok(())
+    }
+
+    fn begin_tuple_element(&mut self) -> Result<(), AsonError> {
+        if self.is_first_element {
+            self.is_first_element = false;
+            Ok(())
+        } else {
+            self.print_str(" ")
+        }
+    }
+
+    fn end_tuple(&mut self) -> Result<(), AsonError> {
+        self.print_str(")")?;
+        self.is_first_element = false;
+        Ok(())
     }
 }
 
@@ -133,14 +144,14 @@ where
     W: Write,
 {
     serializer: Serializer<'a, W>,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<fn(&T)>,
 }
 
 impl<'a, W, T> ListStreamWriter<'a, W, T>
 where
     W: Write,
 {
-    pub fn new(serializer: Serializer<'a, W>) -> Self {
+    fn new(serializer: Serializer<'a, W>) -> Self {
         Self {
             serializer,
             _marker: PhantomData,
@@ -148,24 +159,18 @@ where
     }
 
     pub fn start_list(&mut self) -> Result<(), AsonError> {
-        self.serializer.is_first_element = true;
-        self.serializer.print_opening_bracket()
+        self.serializer.begin_block("[")
     }
 
     pub fn end_list(&mut self) -> Result<(), AsonError> {
-        self.serializer.print_closing_bracket()
+        self.serializer.end_block("]")
     }
 
     pub fn write(&mut self, value: &T) -> Result<(), AsonError>
     where
         T: Serialize,
     {
-        if self.serializer.is_first_element {
-            self.serializer.is_first_element = false;
-        } else {
-            self.serializer.print_newline()?;
-        }
-
+        self.serializer.begin_block_element()?;
         value.serialize(&mut self.serializer)
     }
 }
@@ -190,166 +195,136 @@ where
     }
 
     fn serialize_i8(self, v: i8) -> Result<(), AsonError> {
-        self.print_str(&format!("{}_i8", v))
+        self.print_fmt(format_args!("{}_i8", v))
     }
 
     fn serialize_i16(self, v: i16) -> Result<(), AsonError> {
-        self.print_str(&format!("{}_i16", v))
+        self.print_fmt(format_args!("{}_i16", v))
     }
 
     fn serialize_i32(self, v: i32) -> Result<(), AsonError> {
-        // `i32` is the default type for integer numbers,
-        // so the suffix `_i32` can be omitted.
-        self.print_str(&format!("{}", v))
+        // `i32` is the default integer type, so the suffix `_i32` is omitted.
+        self.print_fmt(format_args!("{}", v))
     }
 
     fn serialize_i64(self, v: i64) -> Result<(), AsonError> {
-        self.print_str(&format!("{}_i64", v))
+        self.print_fmt(format_args!("{}_i64", v))
     }
 
     fn serialize_u8(self, v: u8) -> Result<(), AsonError> {
-        self.print_str(&format!("{}_u8", v))
+        self.print_fmt(format_args!("{}_u8", v))
     }
 
     fn serialize_u16(self, v: u16) -> Result<(), AsonError> {
-        self.print_str(&format!("{}_u16", v))
+        self.print_fmt(format_args!("{}_u16", v))
     }
 
     fn serialize_u32(self, v: u32) -> Result<(), AsonError> {
-        self.print_str(&format!("{}_u32", v))
+        self.print_fmt(format_args!("{}_u32", v))
     }
 
     fn serialize_u64(self, v: u64) -> Result<(), AsonError> {
-        self.print_str(&format!("{}_u64", v))
+        self.print_fmt(format_args!("{}_u64", v))
     }
 
     fn serialize_f32(self, v: f32) -> Result<(), AsonError> {
-        let str = if v.is_nan() {
-            "NaN_f32".to_owned()
+        if v.is_nan() {
+            self.print_str("NaN_f32")
         } else if v == f32::INFINITY {
-            "Inf_f32".to_owned()
+            self.print_str("Inf_f32")
         } else if v == f32::NEG_INFINITY {
-            "-Inf_f32".to_owned()
+            self.print_str("-Inf_f32")
         } else {
-            format!("{}_f32", v)
-        };
-
-        self.print_str(&str)
+            // The type suffix makes it a floating-point number even without a decimal point.
+            self.print_fmt(format_args!("{}_f32", v))
+        }
     }
 
     fn serialize_f64(self, v: f64) -> Result<(), AsonError> {
-        // `f64` is the default type for floating-point numbers,
-        // so the suffix `_f64` can be omitted.
-
-        let str = if v.is_nan() {
-            "NaN".to_owned()
+        // `f64` is the default floating-point type, so the suffix `_f64` is omitted.
+        if v.is_nan() {
+            self.print_str("NaN")
         } else if v == f64::INFINITY {
-            "Inf".to_owned()
+            self.print_str("Inf")
         } else if v == f64::NEG_INFINITY {
-            "-Inf".to_owned()
+            self.print_str("-Inf")
+        } else if v.fract() == 0.0 {
+            // Without a suffix, a decimal point is required to distinguish it from an integer.
+            // For example, `3` is an integer, while `3.0` is a floating-point number.
+            self.print_fmt(format_args!("{}.0", v))
         } else {
-            // a decimal point needs to be appended to indicate that it is a floating-point literal
-            // if there is no decimal point.
-            // For example, `3` is an integer literal, while `3.0` is a floating-point literal.
-            let mut s = v.to_string();
-            if !s.contains('.') {
-                s.push_str(".0");
-            }
-            s
-        };
-        self.print_str(&str)
+            self.print_fmt(format_args!("{}", v))
+        }
     }
 
     fn serialize_char(self, v: char) -> Result<(), AsonError> {
-        // escape single char
-        let str = match v {
-            '\\' => "\\\\".to_owned(),
-            '\'' => "\\'".to_owned(),
-            '\t' => {
-                // horizontal tabulation
-                "\\t".to_owned()
-            }
-            '\r' => {
-                // carriage return, jump to the beginning of the line (CR)
-                "\\r".to_owned()
-            }
-            '\n' => {
-                // new line/line feed (LF)
-                "\\n".to_owned()
-            }
-            '\0' => {
-                // null char
-                "\\0".to_owned()
-            }
-            _ => v.to_string(),
+        let escaped = match v {
+            '\\' => "\\\\",
+            '\'' => "\\'",
+            '\t' => "\\t",
+            '\r' => "\\r",
+            '\n' => "\\n",
+            '\0' => "\\0",
+            _ => return self.print_fmt(format_args!("'{}'", v)),
         };
 
-        self.print_str(&format!("'{}'", str))
+        self.print_fmt(format_args!("'{}'", escaped))
     }
 
     fn serialize_str(self, v: &str) -> Result<(), AsonError> {
-        let str = v
-            .chars()
-            .map(|c| match c {
-                '\\' => "\\\\".to_owned(),
-                '"' => "\\\"".to_owned(),
-                '\t' => "\\t".to_owned(),
+        let mut buf = String::with_capacity(v.len() + 2);
+        buf.push('"');
 
-                // null char is allowed in the source code,
-                // it is used to represent the null-terminated string.
-                '\0' => "\\0".to_owned(),
+        for c in v.chars() {
+            match c {
+                '\\' => buf.push_str("\\\\"),
+                '"' => buf.push_str("\\\""),
+                '\t' => buf.push_str("\\t"),
+                '\0' => buf.push_str("\\0"),
+                // Line breaks are written as they are, which produces multi-line strings.
+                _ => buf.push(c),
+            }
+        }
 
-                _ => c.to_string(),
-            })
-            .collect::<Vec<String>>()
-            .join("");
-
-        self.print_str(&format!("\"{}\"", str))
+        buf.push('"');
+        self.print_str(&buf)
     }
 
-    /// Format the byte array as a hexadecimal string with the following format:
+    /// Writes the bytes as hexadecimal byte data in the following format:
+    ///
+    /// - Each byte is written as a two-digit hexadecimal number (00 to ff).
+    /// - Bytes are separated by a space, with an extra space after every 4 bytes.
+    /// - Every 8 bytes, a line break is added, and the next line is indented
+    ///   to the current indentation level.
     ///
     /// ```text
-    /// - Each byte is represented as a two-digit hexadecimal number (00 to ff).
-    /// - Bytes are separated by a space.
-    /// - Every 4 bytes, an additional space is added for readability.
-    /// - Every 8 bytes, a newline is added, and the subsequent lines are indented.
-    /// - The entire byte array is enclosed in `h"..."`.
-    ///
-    ///   h"00 11 22 33  44 55 66 77
-    ///     88 99 aa bb  cc dd ee ff"
-    /// ^^^^__ indent
+    /// h"00 11 22 33  44 55 66 77
+    /// 88 99 aa bb  cc dd ee ff"
     /// ```
-    ///
-    /// This format is designed to be human-readable and easy to parse.
     fn serialize_bytes(self, v: &[u8]) -> Result<(), AsonError> {
-        let leading_space_chars = DEFAULT_INDENT_CHARS.repeat(self.indent_level);
-        let line_separator = format!("\n{}", leading_space_chars);
-        let str = v
-            .chunks(8)
-            .map(|chunk| {
-                // each line
-                chunk
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, byte)| {
-                        // Rust std format!()
-                        // https://doc.rust-lang.org/std/fmt/
-                        if idx == 4 {
-                            format!("  {:02x}", byte)
-                        } else if idx == 0 {
-                            format!("{:02x}", byte)
-                        } else {
-                            format!(" {:02x}", byte)
-                        }
-                    })
-                    .collect::<Vec<String>>()
-                    .join("")
-            })
-            .collect::<Vec<String>>()
-            .join(&line_separator);
+        let mut buf = String::with_capacity(v.len() * 3 + 3);
+        buf.push_str("h\"");
 
-        self.print_str(&format!("h\"{}\"", str))
+        for (index, byte) in v.iter().enumerate() {
+            if index > 0 {
+                if index % 8 == 0 {
+                    buf.push_str(DEFAULT_NEWLINE_CHARS);
+                    for _ in 0..self.indent_level {
+                        buf.push_str(DEFAULT_INDENT_CHARS);
+                    }
+                } else if index % 8 == 4 {
+                    buf.push_str("  ");
+                } else {
+                    buf.push(' ');
+                }
+            }
+
+            // Writing to a `String` cannot fail.
+            let _ = write!(buf, "{:02x}", byte);
+        }
+
+        buf.push('"');
+        self.print_str(&buf)
     }
 
     fn serialize_none(self) -> Result<(), AsonError> {
@@ -360,22 +335,22 @@ where
     where
         T: ?Sized + Serialize,
     {
-        self.print_str("Option::Some")?;
-        self.print_opening_parenthesis()?;
+        self.print_str("Option::Some(")?;
         value.serialize(&mut *self)?;
-        self.print_closing_parenthesis()?;
-        Ok(())
+        self.print_str(")")
     }
 
     fn serialize_unit(self) -> Result<(), AsonError> {
         // The type of `()` in Rust.
-        Err(AsonError::Message("Does not support Unit.".to_owned()))
+        Err(AsonError::Message(
+            "ASON does not support the unit type \"()\".".to_owned(),
+        ))
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<(), AsonError> {
-        // A unit struct is a struct that has no fields, for example `struct Unit;`.
+        // A unit struct is a struct without fields, for example `struct Unit;`.
         Err(AsonError::Message(
-            "Does not support \"Unit\" style Struct.".to_owned(),
+            "ASON does not support unit structs.".to_owned(),
         ))
     }
 
@@ -385,7 +360,7 @@ where
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<(), AsonError> {
-        self.print_str(&format!("{}::{}", name, variant))
+        self.print_fmt(format_args!("{}::{}", name, variant))
     }
 
     fn serialize_newtype_struct<T>(self, _name: &'static str, _value: &T) -> Result<(), AsonError>
@@ -394,7 +369,7 @@ where
     {
         // A newtype struct is a tuple struct with a single field, for example `struct NewType(u8);`.
         Err(AsonError::Message(
-            "Does not support \"New-Type\" style Struct.".to_owned(),
+            "ASON does not support newtype structs.".to_owned(),
         ))
     }
 
@@ -414,30 +389,23 @@ where
         // }
         // ```
 
-        self.print_str(&format!("{}::{}", name, variant))?;
-        self.print_opening_parenthesis()?;
+        self.print_fmt(format_args!("{}::{}(", name, variant))?;
         value.serialize(&mut *self)?;
-        self.print_closing_parenthesis()?;
-        Ok(())
+        self.print_str(")")
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq, AsonError> {
         // `[...]`
-        self.print_opening_bracket()?;
-        self.is_first_element = true;
+        self.begin_block("[")?;
         Ok(self)
     }
 
-    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, AsonError> {
-        // Note that the Rust fixed length arrays
-        // will be treated as tuples, e.g.
-        // [i32; 4]
-        //
-        // per: https://serde.rs/data-model.html
+    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, AsonError> {
+        // Note that Rust fixed-length arrays, such as `[i32; 4]`, are treated as tuples.
+        // See: https://serde.rs/data-model.html
 
         // `(...)`
-        self.print_opening_parenthesis()?;
-        self.is_first_element = true;
+        self.begin_tuple(len)?;
         Ok(self)
     }
 
@@ -448,7 +416,7 @@ where
     ) -> Result<Self::SerializeTupleStruct, AsonError> {
         // A tuple struct is a struct that looks like a tuple, for example `struct TupleStruct(u8, String);`.
         Err(AsonError::Message(
-            "Does not support \"Tuple\" style Struct.".to_owned(),
+            "ASON does not support tuple structs.".to_owned(),
         ))
     }
 
@@ -457,7 +425,7 @@ where
         name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeTupleVariant, AsonError> {
         // ```rust
         // enum Name {
@@ -465,16 +433,14 @@ where
         // }
         // ```
 
-        self.print_str(&format!("{}::{}", name, variant))?;
-        self.print_opening_parenthesis()?;
-        self.is_first_element = true;
+        self.print_fmt(format_args!("{}::{}", name, variant))?;
+        self.begin_tuple(len)?;
         Ok(self)
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, AsonError> {
-        // `[key: value, ...]`
-        self.print_opening_bracket()?;
-        self.is_first_element = true;
+        // `[name: value, ...]`
+        self.begin_block("[")?;
         Ok(self)
     }
 
@@ -484,8 +450,7 @@ where
         _len: usize,
     ) -> Result<Self::SerializeStruct, AsonError> {
         // `{key: value, ...}`
-        self.print_opening_brace()?;
-        self.is_first_element = true;
+        self.begin_block("{")?;
         Ok(self)
     }
 
@@ -502,9 +467,8 @@ where
         // }
         // ```
 
-        self.print_str(&format!("{}::{}", name, variant))?;
-        self.print_opening_brace()?;
-        self.is_first_element = true;
+        self.print_fmt(format_args!("{}::{}", name, variant))?;
+        self.begin_block("{")?;
         Ok(self)
     }
 }
@@ -520,17 +484,12 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.is_first_element {
-            self.is_first_element = false;
-        } else {
-            self.print_newline()?;
-        }
-
+        self.begin_block_element()?;
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), AsonError> {
-        self.print_closing_bracket()
+        self.end_block("]")
     }
 }
 
@@ -545,17 +504,12 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.is_first_element {
-            self.is_first_element = false;
-        } else {
-            self.print_space()?;
-        }
-
+        self.begin_tuple_element()?;
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), AsonError> {
-        self.print_closing_parenthesis()
+        self.end_tuple()
     }
 }
 
@@ -566,6 +520,7 @@ where
     type Ok = ();
     type Error = AsonError;
 
+    // Unreachable because `serialize_tuple_struct()` always returns an error.
     fn serialize_field<T>(&mut self, _value: &T) -> Result<(), AsonError>
     where
         T: ?Sized + Serialize,
@@ -589,17 +544,12 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.is_first_element {
-            self.is_first_element = false;
-        } else {
-            self.print_space()?;
-        }
-
+        self.begin_tuple_element()?;
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), AsonError> {
-        self.print_closing_parenthesis()
+        self.end_tuple()
     }
 }
 
@@ -614,12 +564,7 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.is_first_element {
-            self.is_first_element = false;
-        } else {
-            self.print_newline()?;
-        }
-
+        self.begin_block_element()?;
         key.serialize(&mut **self)
     }
 
@@ -632,7 +577,7 @@ where
     }
 
     fn end(self) -> Result<(), AsonError> {
-        self.print_closing_bracket()
+        self.end_block("]")
     }
 }
 
@@ -647,19 +592,13 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.is_first_element {
-            self.is_first_element = false;
-        } else {
-            self.print_newline()?;
-        }
-
-        self.print_str(key)?;
-        self.print_str(": ")?;
+        self.begin_block_element()?;
+        self.print_fmt(format_args!("{}: ", key))?;
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), AsonError> {
-        self.print_closing_brace()
+        self.end_block("}")
     }
 }
 
@@ -674,19 +613,13 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if self.is_first_element {
-            self.is_first_element = false;
-        } else {
-            self.print_newline()?;
-        }
-
-        self.print_str(key)?;
-        self.print_str(": ")?;
+        self.begin_block_element()?;
+        self.print_fmt(format_args!("{}: ", key))?;
         value.serialize(&mut **self)
     }
 
     fn end(self) -> Result<(), AsonError> {
-        self.print_closing_brace()
+        self.end_block("}")
     }
 }
 
@@ -1350,5 +1283,81 @@ mod tests {
     }
 ]"#
         )
+    }
+
+    #[test]
+    fn test_empty_compound_values() {
+        #[derive(Serialize)]
+        struct Empty {}
+
+        #[derive(Serialize)]
+        struct Object {
+            items: Vec<i32>,
+            map: HashMap<String, i32>,
+            empty: Empty,
+            id: i32,
+        }
+
+        let v0 = Object {
+            items: vec![],
+            map: HashMap::new(),
+            empty: Empty {},
+            id: 11,
+        };
+
+        assert_eq!(
+            ser_to_string(&v0).unwrap(),
+            r#"{
+    items: []
+    map: []
+    empty: {}
+    id: 11
+}"#
+        );
+
+        let v1: (Vec<i32>, i32) = (vec![], 11);
+        assert_eq!(ser_to_string(&v1).unwrap(), r#"([] 11)"#);
+
+        let v2: Vec<Vec<i32>> = vec![vec![], vec![11]];
+        assert_eq!(
+            ser_to_string(&v2).unwrap(),
+            r#"[
+    []
+    [
+        11
+    ]
+]"#
+        );
+
+        // An empty list stream.
+        let mut buf: Vec<u8> = vec![];
+        let mut ser = list_stream_writer::<i32, _>(&mut buf);
+        ser.start_list().unwrap();
+        ser.end_list().unwrap();
+        assert_eq!(String::from_utf8(buf).unwrap(), "[]");
+
+        // err: empty tuple
+        let v3: [i32; 0] = [];
+        assert!(ser_to_string(&v3).is_err());
+    }
+
+    #[test]
+    fn test_hexadecimal_byte_data_with_multiple_lines() {
+        #[derive(Serialize)]
+        struct Object {
+            data: ByteBuf,
+        }
+
+        let v0 = Object {
+            data: ByteBuf::from((0u8..10).collect::<Vec<u8>>()),
+        };
+
+        assert_eq!(
+            ser_to_string(&v0).unwrap(),
+            r#"{
+    data: h"00 01 02 03  04 05 06 07
+    08 09"
+}"#
+        );
     }
 }

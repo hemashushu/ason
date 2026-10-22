@@ -58,3 +58,31 @@ fn test_stream_serialize_and_deserialize() {
 
     assert!(de.next().is_none());
 }
+
+#[test]
+fn test_concrete_character_iterators() {
+    assert_eq!(
+        ason::de_from_char_iterator::<i32, _>("42".chars()).unwrap(),
+        42
+    );
+
+    let mut chars = "42".chars();
+    assert_eq!(
+        ason::de_from_char_iterator::<i32, _>(&mut chars).unwrap(),
+        42
+    );
+
+    let stream: ason::ListStreamReader<i32, std::str::Chars<'_>> =
+        ason::list_stream_reader("[11 13]".chars()).unwrap();
+    assert_eq!(stream.collect::<Result<Vec<_>, _>>().unwrap(), vec![11, 13]);
+
+    let mut chars = "[11 13]".chars();
+    let stream = ason::list_stream_reader::<i32, _>(&mut chars).unwrap();
+    assert_eq!(stream.collect::<Result<Vec<_>, _>>().unwrap(), vec![11, 13]);
+
+    let chars = UTF8CharIterator::new("[11 13]".as_bytes());
+    let stream = ason::list_stream_reader::<i32, _>(chars).unwrap();
+    assert_eq!(stream.collect::<Result<Vec<_>, _>>().unwrap(), vec![11, 13]);
+
+    assert_eq!(ason::de_from_reader::<i32, _>("42".as_bytes()).unwrap(), 42);
+}
