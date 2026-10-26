@@ -8,7 +8,7 @@
     }
 
     // Variants with single compound value
-    variant_single_value: Option::Some((11, 13))
-    variant_single_value: Option::Some([17, 19, 23, 29])
-    variant_single_value: Option::Some({id: 123, name: "foo"})
+    variant_single_value_tuple: Option::Some((11, 13))
+    variant_single_value_list: Option::Some([17, 19, 23, 29])
+    variant_single_value_object: Option::Some({id: 123, name: "foo"})
 }

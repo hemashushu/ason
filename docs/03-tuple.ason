@@ -1,18 +1,29 @@
 {
     tuple: (1, "foo", true)
+    tuple_compound: (
+        [11, 13],
+        {
+            id:1,
+            name:"Alice"
+        }
+    )
+    tuple_nested: ((1, "foo"), (2, "bar"))
+    tuple_with_only_one_element: (1)
+    tuple_empty: ()
+
     tuple_with_trailing_comma: (1, "foo", true,)
     tuple_with_space_separator: (1 "foo" true)
-    mulitline_tuple: (
+    tuple_multiline: (
         1
         "foo"
         true
     )
-    mulitline_tuple_with_commas: (
+    tuple_multiline_with_commas: (
         1,
         "foo",
         true
     )
-    mulitline_tuple_with_trailing_comma: (
+    tuple_multiline_with_trailing_comma: (
         1,
         "foo",
         true,

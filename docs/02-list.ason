@@ -1,19 +1,39 @@
 {
-    number_list: [1, 2, 3]
-    string_list: ["one", "two", "three"]
-    list_with_trailing_comma: [1, 2, 3, 4,]
-    list_with_space_separator: ["one" "two" "three" "four"]
-    mulitline_list: [
+    list_number: [1, 2, 3]
+    list_string: ["one", "two", "three"]
+    list_tuple: [
+        (11, "foo", false),
+        (13, "bar", true)
+    ]
+    list_object: [{
+        id: 17
+        name: "Alice"
+    }, {
+        id: 19
+        name: "Bob"
+    }]
+    list_enum: [
+        Option::None
+        Option::Some(42)
+    ]
+    list_empty: []
+    list_nested: [
+        [11, 13],
+        [23, 29]
+    ]
+    list_with_trailing_comma: [1, 2, 3,]
+    list_with_space_separator: [1 2 3]
+    list_multiline: [
         1
         2
         3
     ]
-    mulitline_list_with_commas: [
+    list_multiline_with_commas: [
         1,
         2,
         3
     ]
-    mulitline_list_with_trailing_comma: [
+    list_multiline_with_trailing_comma: [
         1,
         2,
         3,

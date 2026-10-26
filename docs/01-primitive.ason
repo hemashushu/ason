@@ -17,10 +17,10 @@
     unsigned_long: 37_u64
 
     floating_point: 3.14
-    floating_point_with_exponent: 6.022e23
-    floating_point_with_negative_exponent: 6.6738e-11
+    floating_point_with_exponent: 2.5e2
+    floating_point_with_negative_exponent: 1.25e-1
 
-    single_precision: 3.14_f32
+    single_precision: 3.142_f32
     double_precision: 6.626_f64
 
     // Hexadecimal integer numbers

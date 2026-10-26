@@ -1,0 +1,34 @@
+{
+    map_color: ["red": "#FF0000", "green": "#00FF00", "blue": "#0000FF"]
+    map_string_to_object: [
+        "foo": {version: "1.0"}
+        "bar": {version: "2.0"}
+    ]
+    map_number_to_list: [
+        11: ["foo", "bar"]
+        13: ["baz", "qux"]
+    ]
+    map_empty: []
+    map_nested: [
+        "foo": ["Alice", "Bob"]
+        "bar": ["Charlie", "Dave"]
+    ]
+
+    map_with_trailing_comma: ["red": "#FF0000", "green": "#00FF00", "blue": "#0000FF",]
+    map_with_space_separator: ["red": "#FF0000" "green": "#00FF00" "blue": "#0000FF"]
+    map_multiline: [
+        "red": "#FF0000"
+        "green": "#00FF00"
+        "blue": "#0000FF"
+    ]
+    map_multiline_with_commas: [
+        "red": "#FF0000",
+        "green": "#00FF00",
+        "blue": "#0000FF"
+    ]
+    map_multiline_with_trailing_comma: [
+        "red": "#FF0000",
+        "green": "#00FF00",
+        "blue": "#0000FF",
+    ]
+}
