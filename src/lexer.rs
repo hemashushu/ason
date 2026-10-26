@@ -23,12 +23,12 @@ where
 {
     upstream: PeekableIterator<CharWithPosition, T>,
 
-    // The position of the last consumed character by `next_char()`.
+    // The position of the last character consumed by `next_char()`.
     last_position: Position,
 
-    // Stack of positions.
-    // It is used to store the positions of characters when consuming them in sequence,
-    // and later used to create the `Range` of tokens.
+    // A stack of positions.
+    // It stores the start positions of tokens while their characters are consumed,
+    // so that the `Range` of each token can be built afterwards.
     position_stack: Vec<Position>,
 }
 
@@ -71,28 +71,20 @@ where
         }
     }
 
-    /// Checks if the character at the given offset matches the expected character.
-    /// It is a convenient method for checking the next few characters without consuming them.
-    /// Returns `true` if the character at the given offset matches the expected character,
-    /// otherwise returns `false`.
+    /// Checks whether the character at the given offset equals the expected character,
+    /// without consuming any characters.
+    ///
+    /// Returns `false` if there is no character at the given offset.
     fn peek_char_and_equals(&self, offset: usize, expected_char: char) -> bool {
         matches!(
             self.upstream.peek(offset),
             Some(CharWithPosition { character, .. }) if character == &expected_char)
     }
 
-    /// Saves the last position to the stack.
+    /// Pushes the current position onto the stack.
     ///
-    /// Where the last position is identical to position of
-    /// the character consumed by `next_char()`.
-    fn push_last_position_into_stack(&mut self) {
-        self.position_stack.push(self.last_position);
-    }
-
-    /// Saves the current position to the stack.
-    ///
-    /// Where the current position is identical to the value returned by
-    /// `self.peek_position(0)`.
+    /// The current position is the position of the next character,
+    /// i.e., the value returned by `self.peek_position(0)`.
     fn push_peek_position_into_stack(&mut self) {
         let position = *self.peek_position(0).unwrap();
         self.position_stack.push(position);
@@ -100,8 +92,7 @@ where
 
     /// Pops a position from the stack.
     ///
-    /// It is usually used after `push_last_position_into_stack()` or
-    /// `push_peek_position_into_stack()` to form a `Range` for a token.
+    /// It is usually called after `push_peek_position_into_stack()` to build the `Range` of a token.
     fn pop_position_from_stack(&mut self) -> Position {
         self.position_stack.pop().unwrap()
     }
@@ -145,35 +136,23 @@ where
                         break Err(e);
                     }
                 }
-                ',' => {
-                    // Comma is used to separate elements in array and object,
-                    // it is identical to space.
-                    // Consume ','
+                ' ' | '\t' | '\r' | '\n' | ',' => {
+                    // Whitespace (including a lone '\r') and commas only separate tokens,
+                    // so they are consumed and discarded.
                     self.next_char();
-                }
-                ' ' | '\t' => {
-                    // Consume space or tab
-                    self.next_char();
-                }
-                '\r' if self.peek_char_and_equals(1, '\n') => {
-                    // Windows style new line `\r\n`
-                    self.next_char(); // Consume '\r'
-                    self.next_char(); // Consume '\n'
-                }
-                '\n' => {
-                    self.next_char(); // Consume '\n'
                 }
                 ':' => {
-                    self.next_char(); // Consume ':'
+                    self.next_char(); // consume ':'
 
-                    // Don't confuse with the enumeration variant separator "::"
+                    // A standalone ':' is never the enumeration separator "::",
+                    // because "::" is consumed as part of the enumeration token.
                     break Ok(TokenWithRange::new(
                         Token::Colon,
                         Range::from_position_and_length(&self.last_position, 1),
                     ));
                 }
                 '{' => {
-                    self.next_char(); // Consume '{'
+                    self.next_char(); // consume '{'
 
                     break Ok(TokenWithRange::new(
                         Token::BraceOpen,
@@ -181,7 +160,7 @@ where
                     ));
                 }
                 '}' => {
-                    self.next_char(); // Consume '}'
+                    self.next_char(); // consume '}'
 
                     break Ok(TokenWithRange::new(
                         Token::BraceClose,
@@ -189,7 +168,7 @@ where
                     ));
                 }
                 '[' => {
-                    self.next_char(); // Consume '['
+                    self.next_char(); // consume '['
 
                     break Ok(TokenWithRange::new(
                         Token::BracketOpen,
@@ -197,7 +176,7 @@ where
                     ));
                 }
                 ']' => {
-                    self.next_char(); // Consume ']'
+                    self.next_char(); // consume ']'
 
                     break Ok(TokenWithRange::new(
                         Token::BracketClose,
@@ -205,7 +184,7 @@ where
                     ));
                 }
                 '(' => {
-                    self.next_char(); // Consume '('
+                    self.next_char(); // consume '('
 
                     break Ok(TokenWithRange::new(
                         Token::ParenthesisOpen,
@@ -213,7 +192,7 @@ where
                     ));
                 }
                 ')' => {
-                    self.next_char(); // Consume ')'
+                    self.next_char(); // consume ')'
 
                     break Ok(TokenWithRange::new(
                         Token::ParenthesisClose,
@@ -221,7 +200,7 @@ where
                     ));
                 }
                 '+' => {
-                    self.next_char(); // Consume '+'
+                    self.next_char(); // consume '+'
 
                     break Ok(TokenWithRange::new(
                         Token::_Plus,
@@ -229,7 +208,7 @@ where
                     ));
                 }
                 '-' => {
-                    self.next_char(); // Consume '-'
+                    self.next_char(); // consume '-'
 
                     break Ok(TokenWithRange::new(
                         Token::_Minus,
@@ -242,26 +221,22 @@ where
                 }
                 '0' if matches!(self.peek_char(1), Some('b' | 'B')) => {
                     // Binary number
-                    break self.lex_binary_number();
+                    break self.lex_binary_or_octal_number(2);
                 }
                 '0' if matches!(self.peek_char(1), Some('o' | 'O')) => {
                     // Octal number
-                    break self.lex_octal_number();
-                }
-                '0' if matches!(self.peek_char(1), Some('.')) => {
-                    // Decimal number
-                    break self.lex_decimal_number();
+                    break self.lex_binary_or_octal_number(8);
                 }
                 '0'..='9' => {
                     // Decimal number
                     break self.lex_decimal_number();
                 }
                 'h' if self.peek_char_and_equals(1, '"') => {
-                    // Hex byte data element
+                    // Hexadecimal byte data
                     break self.lex_hexadecimal_byte_data();
                 }
                 'd' if self.peek_char_and_equals(1, '"') => {
-                    // Date
+                    // DateTime
                     break self.lex_datetime();
                 }
                 'r' if self.peek_char_and_equals(1, '"') || self.peek_char_and_equals(1, '#') => {
@@ -309,8 +284,8 @@ where
 
         let mut identifier_buffer = String::new();
 
-        // A flag to indicate whether '::' is found.
-        // '::' is used to separate type name and variant name in enumeration token.
+        // Whether "::" has been found.
+        // "::" separates the type name and the variant name of an enumeration.
         let mut found_double_colon = false;
 
         self.push_peek_position_into_stack();
@@ -322,38 +297,43 @@ where
                     self.next_char(); // consume char
                 }
                 ':' if self.peek_char_and_equals(1, ':') => {
+                    if found_double_colon {
+                        return Err(AsonError::MessageWithPosition(
+                            "An enumeration can contain only one \"::\".".to_owned(),
+                            *self.peek_position(0).unwrap(),
+                        ));
+                    }
+
                     found_double_colon = true;
                     identifier_buffer.push_str("::");
-                    self.next_char(); // consume 1st ":"
-                    self.next_char(); // consume 2nd ":"
+                    self.next_char(); // consume the 1st ':'
+                    self.next_char(); // consume the 2nd ':'
                 }
                 '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{10ffff}' => {
-                    // A char is a ‘Unicode scalar value’, which is any ‘Unicode code point’ other than a surrogate code point.
-                    // This has a fixed numerical definition: code points are in the range 0 to 0x10FFFF,
-                    // inclusive. Surrogate code points, used by UTF-16, are in the range 0xD800 to 0xDFFF.
+                    // A Rust `char` is a "Unicode scalar value", i.e., any Unicode code point
+                    // in the range 0 to 0x10FFFF (inclusive) except the surrogate code points
+                    // 0xD800 to 0xDFFF, which are used by UTF-16.
+                    // See: https://doc.rust-lang.org/std/primitive.char.html
                     //
-                    // check out:
-                    // https://doc.rust-lang.org/std/primitive.char.html
+                    // The most common CJK characters are in the range '\u{4e00}'..='\u{9fff}'.
+                    // For the complete list of CJK characters, see section 18.1
+                    // "Han: CJK Unified Ideographs" of the Unicode Standard:
                     //
-                    // CJK chars: '\u{4e00}'..='\u{9fff}'
-                    // for complete CJK chars, check out Unicode standard
-                    // Ch. 18.1 Han CJK Unified Ideographs
+                    // | Block                                   | Range       | Comment                                              |
+                    // |-----------------------------------------|-------------|------------------------------------------------------|
+                    // | CJK Unified Ideographs                  | 4E00-9FFF   | Common                                               |
+                    // | CJK Unified Ideographs Extension A      | 3400-4DBF   | Rare                                                 |
+                    // | CJK Unified Ideographs Extension B      | 20000-2A6DF | Rare, historic                                       |
+                    // | CJK Unified Ideographs Extension C      | 2A700-2B73F | Rare, historic                                       |
+                    // | CJK Unified Ideographs Extension D      | 2B740-2B81F | Uncommon, some in current use                        |
+                    // | CJK Unified Ideographs Extension E      | 2B820-2CEAF | Rare, historic                                       |
+                    // | CJK Unified Ideographs Extension F      | 2CEB0-2EBEF | Rare, historic                                       |
+                    // | CJK Unified Ideographs Extension G      | 30000-3134F | Rare, historic                                       |
+                    // | CJK Unified Ideographs Extension H      | 31350-323AF | Rare, historic                                       |
+                    // | CJK Compatibility Ideographs            | F900-FAFF   | Duplicates, unifiable variants, corporate characters |
+                    // | CJK Compatibility Ideographs Supplement | 2F800-2FA1F | Unifiable variants                                   |
                     //
-                    // | Block                                   | LocRange    | Comment |
-                    // |-----------------------------------------|-------------|---------|
-                    // | CJK Unified Ideographs                  | 4E00–9FFF   | Common                         |
-                    // | CJK Unified Ideographs Extension A      | 3400–4DBF   | Rare                           |
-                    // | CJK Unified Ideographs Extension B      | 20000–2A6DF | Rare, historic                 |
-                    // | CJK Unified Ideographs Extension C      | 2A700–2B73F | Rare, historic                 |
-                    // | CJK Unified Ideographs Extension D      | 2B740–2B81F | Uncommon, some in current use  |
-                    // | CJK Unified Ideographs Extension E      | 2B820–2CEAF | Rare, historic                 |
-                    // | CJK Unified Ideographs Extension F      | 2CEB0–2EBEF | Rare, historic                 |
-                    // | CJK Unified Ideographs Extension G      | 30000–3134F | Rare, historic                 |
-                    // | CJK Unified Ideographs Extension H      | 31350–323AF | Rare, historic                 |
-                    // | CJK Compatibility Ideographs            | F900–FAFF   | Duplicates, unifiable variants, corporate characters |
-                    // | CJK Compatibility Ideographs Supplement | 2F800–2FA1F | Unifiable variants             |
-                    //
-                    // see also:
+                    // See also:
                     //
                     // - https://www.unicode.org/versions/Unicode15.0.0/ch18.pdf
                     // - https://en.wikipedia.org/wiki/CJK_Unified_Ideographs
@@ -363,9 +343,7 @@ where
                     identifier_buffer.push(*current_char);
                     self.next_char(); // consume char
                 }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
-                    // | '\'' | '"' => {
-                    // terminator chars
+                c if is_terminator(*c) => {
                     break;
                 }
                 _ => {
@@ -380,15 +358,25 @@ where
         let identifier_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
         let token = if found_double_colon {
-            let (type_name, member_name) = identifier_buffer.split_once("::").unwrap();
-            Token::Enumeration(type_name.to_owned(), member_name.to_owned())
+            let (type_name, variant_name) = identifier_buffer.split_once("::").unwrap();
+
+            // The variant name must be a valid identifier, i.e., non-empty and not starting with a digit.
+            if !matches!(variant_name.chars().next(), Some(c) if !c.is_ascii_digit()) {
+                return Err(AsonError::MessageWithRange(
+                    format!("Invalid variant name \"{}\" for enumeration.", variant_name),
+                    identifier_range,
+                ));
+            }
+
+            Token::Enumeration(type_name.to_owned(), variant_name.to_owned())
         } else {
             match identifier_buffer.as_str() {
                 "true" => Token::Boolean(true),
                 "false" => Token::Boolean(false),
-                "NaN" | "NaN_f64" => Token::Number(NumberToken::F64(f64::NAN)), // the default floating-point type is f64
+                // The default floating-point type is `f64`.
+                "NaN" | "NaN_f64" => Token::Number(NumberToken::F64(f64::NAN)),
                 "NaN_f32" => Token::Number(NumberToken::F32(f32::NAN)),
-                "Inf" | "Inf_f64" => Token::Number(NumberToken::F64(f64::INFINITY)), // the default floating-point type is f64
+                "Inf" | "Inf_f64" => Token::Number(NumberToken::F64(f64::INFINITY)),
                 "Inf_f32" => Token::Number(NumberToken::F32(f32::INFINITY)),
                 _ => Token::Identifier(identifier_buffer),
             }
@@ -412,11 +400,11 @@ where
         // "123_i16", "456_u32", "3.14_f64"
         let mut number_type_opt: Option<NumberType> = None;
 
-        // A flag to indicate whether '.' is found.
+        // Whether '.' has been found.
         // The presence of '.' indicates a floating-point number.
         let mut found_point = false;
 
-        // A flag to indicate whether 'e' is found.
+        // Whether 'e' has been found.
         // The presence of 'e' indicates a floating-point number.
         let mut found_e = false;
 
@@ -433,14 +421,14 @@ where
         while let Some(current_char) = self.peek_char(0) {
             match current_char {
                 '0'..='9' => {
-                    // valid digits for decimal number
+                    // Valid digits for decimal numbers.
                     number_buffer.push(*current_char);
                     self.next_char(); // consume digit
                 }
                 '_' => {
                     self.next_char(); // consume '_'
                 }
-                '.' if !found_point => {
+                '.' if !found_point && !found_e => {
                     // Examples of decimal floating-point numbers with '.':
                     // 3.14
                     // 271.828
@@ -456,18 +444,14 @@ where
                     // 123e-45
 
                     found_e = true;
-                    if self.peek_char_and_equals(1, '-') {
-                        number_buffer.push_str("e-");
-                        self.next_char(); // consume 'e'
-                        self.next_char(); // consume '-'
-                    } else if self.peek_char_and_equals(1, '+') {
-                        number_buffer.push_str("e+");
-                        self.next_char(); // consume 'e'
-                        self.next_char(); // consume '+'
-                    } else {
-                        number_buffer.push(*current_char);
-                        self.next_char(); // consume 'e'
-                    }
+                    number_buffer.push('e');
+                    self.next_char(); // consume 'e'
+                }
+                '+' | '-' if number_buffer.ends_with('e') => {
+                    // The sign of the exponent.
+                    // Underscores are not pushed into the buffer, so "1e_-5" is accepted too.
+                    number_buffer.push(*current_char);
+                    self.next_char(); // consume '+' or '-'
                 }
                 'i' | 'u' | 'f'
                     if number_type_opt.is_none()
@@ -477,8 +461,7 @@ where
                     number_type_opt.replace(number_type);
                     break;
                 }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
-                    // terminator chars
+                c if is_terminator(*c) => {
                     break;
                 }
                 _ => {
@@ -490,133 +473,68 @@ where
             }
         }
 
-        // Validate syntax.
-
-        // Trailing '.' is not allowed.
-        if number_buffer.ends_with('.') {
-            return Err(AsonError::MessageWithRange(
-                "Decimal number cannot end with '.'.".to_owned(),
-                Range::new(&self.pop_position_from_stack(), &self.last_position),
-            ));
-        }
-
-        // Trailing 'e' is not allowed.
-        if number_buffer.ends_with('e') {
-            return Err(AsonError::MessageWithRange(
-                "Decimal number cannot end with 'e'.".to_owned(),
-                Range::new(&self.pop_position_from_stack(), &self.last_position),
-            ));
-        }
-
-        // Leading zeros are not allowed for decimal integers
-        if !found_point && !found_e && number_buffer.len() > 1 && number_buffer.starts_with('0') {
-            return Err(AsonError::MessageWithRange(
-                "Leading zeros are not allowed for decimal integers.".to_owned(),
-                Range::new(&self.pop_position_from_stack(), &self.last_position),
-            ));
-        }
-
         let number_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
-        let number_token: NumberToken = if let Some(number_type) = number_type_opt {
-            // Numbers with explicit type.
-            match number_type {
-                NumberType::F32 => {
-                    let v = number_buffer.parse::<f32>().map_err(|_| {
-                        AsonError::MessageWithRange(
-                            format!(
-                                "Cannot convert \"{}\" to an f32 floating-point number.",
-                                number_buffer
-                            ),
-                            number_range,
-                        )
-                    })?;
+        // Validate syntax.
 
-                    // overflow when parsing from string
-                    if v.is_infinite() {
-                        return Err(AsonError::MessageWithRange(
-                            format!(
-                                "F32 floating-point number \"{}\" overflowed.",
-                                number_buffer
-                            ),
-                            number_range,
-                        ));
-                    }
+        // Leading zeros are not allowed in the integer part, e.g. "0123" and "00.5".
+        let integer_part = number_buffer.split(['.', 'e']).next().unwrap();
+        if integer_part.len() > 1 && integer_part.starts_with('0') {
+            return Err(AsonError::MessageWithRange(
+                "Leading zeros are not allowed in decimal numbers.".to_owned(),
+                number_range,
+            ));
+        }
 
-                    NumberToken::F32(v)
-                }
-                NumberType::F64 => {
-                    let v = number_buffer.parse::<f64>().map_err(|_| {
-                        AsonError::MessageWithRange(
-                            format!(
-                                "Cannot convert \"{}\" to an f64 floating-point number.",
-                                number_buffer
-                            ),
-                            number_range,
-                        )
-                    })?;
+        // The decimal point must be followed by at least one digit, e.g. "123." and "1.e5" are invalid.
+        if number_buffer.ends_with('.') || number_buffer.contains(".e") {
+            return Err(AsonError::MessageWithRange(
+                "The decimal point must be followed by at least one digit.".to_owned(),
+                number_range,
+            ));
+        }
 
-                    // overflow when parsing from string
-                    if v.is_infinite() {
-                        return Err(AsonError::MessageWithRange(
-                            format!(
-                                "F64 floating-point number \"{}\" overflowed.",
-                                number_buffer
-                            ),
-                            number_range,
-                        ));
-                    }
+        // The exponent must contain at least one digit, e.g. "1e", "1e+" and "1e-" are invalid.
+        if number_buffer.ends_with(['e', '+', '-']) {
+            return Err(AsonError::MessageWithRange(
+                "The exponent of a decimal number must contain at least one digit.".to_owned(),
+                number_range,
+            ));
+        }
 
-                    NumberToken::F64(v)
-                }
-                _ => convert_integer_number_string_with_data_type(
-                    &number_buffer,
-                    10,
-                    number_type,
-                    number_range,
-                )?,
-            }
-        } else if found_point || found_e {
-            // Numbers without explicit type, and it is a floating-point number.
-            // The default floating-point number type is `f64`.
-
-            let v = number_buffer.parse::<f64>().map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}\" to an f64 floating-point number.",
-                        number_buffer
-                    ),
-                    number_range,
-                )
-            })?;
-
-            // overflow when parsing from string
-            if v.is_infinite() {
-                return Err(AsonError::MessageWithRange(
-                    format!(
-                        "F64 floating-point number \"{}\" overflowed.",
-                        number_buffer
-                    ),
-                    number_range,
-                ));
-            }
-
-            NumberToken::F64(v)
+        // The default types are `f64` for floating-point numbers and `i32` for integers.
+        let number_type = number_type_opt.unwrap_or(if found_point || found_e {
+            NumberType::F64
         } else {
-            // Numbers without explicit type, and it is an integer number.
-            // The default integer number type is `i32`.
+            NumberType::I32
+        });
 
-            let v = number_buffer.parse::<u32>().map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}\" to an i32 integer number.",
-                        number_buffer,
-                    ),
-                    number_range,
-                )
-            })?;
+        let float_error = || {
+            AsonError::MessageWithRange(
+                format!(
+                    "Cannot convert \"{}\" to type \"{}\" (the value is invalid or out of range).",
+                    number_buffer, number_type
+                ),
+                number_range,
+            )
+        };
 
-            NumberToken::I32(v)
+        // Parsing a too-large value yields infinity rather than an error, so check for it as well.
+        let number_token = match number_type {
+            NumberType::F32 => match number_buffer.parse::<f32>() {
+                Ok(v) if v.is_finite() => NumberToken::F32(v),
+                _ => return Err(float_error()),
+            },
+            NumberType::F64 => match number_buffer.parse::<f64>() {
+                Ok(v) if v.is_finite() => NumberToken::F64(v),
+                _ => return Err(float_error()),
+            },
+            _ => convert_integer_number_string_with_data_type(
+                &number_buffer,
+                10,
+                number_type,
+                number_range,
+            )?,
         };
 
         Ok(TokenWithRange::new(
@@ -638,16 +556,16 @@ where
         let mut number_buffer = String::new();
 
         // Number type suffix, e.g.,
-        // "123_i16", "456_u32", "3.14_f64"
+        // "0xff_u8", "0x1.8p3_f32"
         let mut number_type_opt: Option<NumberType> = None;
 
-        // A flag to indicate whether '.' is found.
+        // Whether '.' has been found.
         // The presence of '.' indicates a floating-point number.
         let mut found_point = false;
 
-        // A flag to indicate whether 'p' is found.
+        // Whether 'p' has been found.
         // The presence of 'p' indicates a hexadecimal floating-point number.
-        let mut found_p: bool = false;
+        let mut found_p = false;
 
         self.push_peek_position_into_stack();
 
@@ -660,14 +578,19 @@ where
                     && found_p
                     && matches!(self.peek_char(1), Some('0'..='9')) =>
                 {
-                    // 'f' is allowed only in the hexadecimal floating point literal, that is,
-                    // the character 'p' should be detected before 'f'.
+                    // 'f' starts a type suffix only after the exponent 'p',
+                    // otherwise it is a hexadecimal digit.
                     let number_type = self.lex_number_type_suffix()?;
                     number_type_opt.replace(number_type);
                     break;
                 }
-                '0'..='9' | 'a'..='f' | 'A'..='F' => {
-                    // valid digits for hex number
+                '0'..='9' => {
+                    number_buffer.push(*current_char);
+                    self.next_char(); // consume digit
+                }
+                'a'..='f' | 'A'..='F' if !found_p => {
+                    // The exponent is a decimal number, so hexadecimal letters
+                    // are only allowed before 'p'.
                     number_buffer.push(*current_char);
                     self.next_char(); // consume digit
                 }
@@ -676,8 +599,8 @@ where
                 }
                 '.' if !found_point && !found_p => {
                     // Examples of hexadecimal floating-point numbers with '.':
-                    // 0x1.9
-                    // 0x12.bc
+                    // 0x1.9p0
+                    // 0x12.bcp0
 
                     found_point = true;
                     number_buffer.push(*current_char);
@@ -685,23 +608,18 @@ where
                 }
                 'p' | 'P' if !found_p => {
                     // Examples of hexadecimal floating-point numbers with 'p':
-                    // 0x0.123p45
-                    // 0x0.123p+45
-                    // 0x0.123p-45
+                    // 0x1.123p45
+                    // 0x1.123p+45
+                    // 0x1.123p-45
 
                     found_p = true;
-                    if self.peek_char_and_equals(1, '-') {
-                        number_buffer.push_str("p-");
-                        self.next_char(); // consume 'p'
-                        self.next_char(); // consume '-'
-                    } else if self.peek_char_and_equals(1, '+') {
-                        number_buffer.push_str("p+");
-                        self.next_char(); // consume 'p'
-                        self.next_char(); // consume '+'
-                    } else {
-                        number_buffer.push(*current_char);
-                        self.next_char(); // consume 'p'
-                    }
+                    number_buffer.push('p');
+                    self.next_char(); // consume 'p'
+                }
+                '+' | '-' if number_buffer.ends_with('p') => {
+                    // The sign of the exponent.
+                    number_buffer.push(*current_char);
+                    self.next_char(); // consume '+' or '-'
                 }
                 'i' | 'u'
                     if number_type_opt.is_none()
@@ -709,16 +627,13 @@ where
                         && !found_p
                         && matches!(self.peek_char(1), Some('0'..='9')) =>
                 {
-                    // Only 'i' and 'u' are allowed for hexadecimal integer numbers,
-                    // 'f' is allowed only in hexadecimal floating-point numbers.
+                    // Only integer type suffixes ('i' and 'u') are allowed for hexadecimal integers,
+                    // because 'f' is a valid hexadecimal digit.
                     let number_type = self.lex_number_type_suffix()?;
                     number_type_opt.replace(number_type);
-
                     break;
                 }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
-                    // | '\'' | '"' => {
-                    // terminator chars
+                c if is_terminator(*c) => {
                     break;
                 }
                 _ => {
@@ -730,126 +645,82 @@ where
             }
         }
 
+        let number_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
+
         // Validate syntax.
 
-        // Empty hexadecimal number is not allowed, e.g., "0x"
+        // An empty hexadecimal number is not allowed, e.g., "0x".
         if number_buffer.is_empty() {
             return Err(AsonError::MessageWithRange(
                 "Empty hexadecimal number.".to_owned(),
-                Range::new(&self.pop_position_from_stack(), &self.last_position),
+                number_range,
             ));
         }
 
-        // Trailing '.' is not allowed in hexadecimal floating-point numbers.
-        if number_buffer.ends_with('.') {
-            return Err(AsonError::MessageWithRange(
-                format!(
-                    "Hexadecimal floating-point number \"{}\" is missing the exponent.",
-                    number_buffer
-                ),
-                Range::new(&self.pop_position_from_stack(), &self.last_position),
-            ));
-        }
-
-        // Trailing 'p' is not allowed in hexadecimal floating-point numbers.
-        if number_buffer.ends_with('p') {
-            return Err(AsonError::MessageWithRange(
-                format!(
-                    "Hexadecimal floating-point number \"{}\" is missing the exponent.",
-                    number_buffer
-                ),
-                Range::new(&self.pop_position_from_stack(), &self.last_position),
-            ));
-        }
-
-        // Found '.' but no 'p' is not allowed in hexadecimal floating-point number
-        if found_point && !found_p {
-            return Err(AsonError::MessageWithRange(
-                format!(
-                    "Hexadecimal floating-point number \"{}\" is missing the exponent.",
-                    number_buffer
-                ),
-                Range::new(&self.pop_position_from_stack(), &self.last_position),
-            ));
-        }
-
-        let number_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
-
-        let number_token = if found_p {
-            // This is a hexadecimal floating-point number.
-            // The default type for floating-point is `f64`.
-            let mut type_f64 = true;
-
-            if let Some(number_type) = number_type_opt {
-                match number_type {
-                    NumberType::F32 => {
-                        type_f64 = false;
-                    }
-                    NumberType::F64 => {
-                        type_f64 = true;
-                    }
-                    _ => {
-                        return Err(AsonError::MessageWithRange(
-                            format!(
-                                "Invalid type \"{}\" for hexadecimal floating-point numbers, only type \"f32\" and \"f64\" are allowed.",
-                                number_type
-                            ),
-                            number_range,
-                        ));
-                    }
+        let number_token = if found_point || found_p {
+            // A hexadecimal floating-point number must have digits on both sides of '.',
+            // and an exponent with at least one digit, e.g., "0x1.8p3".
+            let is_valid = match number_buffer.split_once('p') {
+                Some((significand, exponent)) => {
+                    matches!(significand.split_once('.'),
+                        Some((integer, fraction)) if !integer.is_empty() && !fraction.is_empty())
+                        && !exponent.trim_start_matches(['+', '-']).is_empty()
                 }
+                None => false,
             };
 
-            number_buffer.insert_str(0, "0x");
-
-            if type_f64 {
-                let v = hexfloat2::parse::<f64>(&number_buffer).map_err(|_| {
-                    // there is no detail message provided by `hexfloat2::parse`.
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}\" to f64 floating-point number.",
-                            number_buffer
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::F64(v)
-            } else {
-                let v = hexfloat2::parse::<f32>(&number_buffer).map_err(|_| {
-                    // there is no detail message provided by `hexfloat2::parse`.
-                    AsonError::MessageWithRange(
-                        format!(
-                            "Can not convert \"{}\" to f32 floating-point number.",
-                            number_buffer
-                        ),
-                        number_range,
-                    )
-                })?;
-
-                NumberToken::F32(v)
-            }
-        } else if let Some(number_type) = number_type_opt {
-            convert_integer_number_string_with_data_type(
-                &number_buffer,
-                16,
-                number_type,
-                number_range,
-            )?
-        } else {
-            // This is a hexadecimal integer without an explicit type.
-            // The default type for integer is `i32`.
-            let v = u32::from_str_radix(&number_buffer, 16).map_err(|_| {
-                AsonError::MessageWithRange(
+            if !is_valid {
+                return Err(AsonError::MessageWithRange(
                     format!(
-                        "Cannot convert \"0x{}\" to an i32 integer number.",
+                        "Invalid hexadecimal floating-point number \"0x{}\", the expected format is like \"0x1.8p3\".",
                         number_buffer
                     ),
                     number_range,
-                )
-            })?;
+                ));
+            }
 
-            NumberToken::I32(v)
+            // The default floating-point type is `f64`.
+            let number_type = number_type_opt.unwrap_or(NumberType::F64);
+            number_buffer.insert_str(0, "0x");
+
+            // `hexfloat2::parse` does not provide a detailed error message.
+            let float_error = || {
+                AsonError::MessageWithRange(
+                    format!(
+                        "Cannot convert \"{}\" to type \"{}\" (the value is invalid or out of range).",
+                        number_buffer, number_type
+                    ),
+                    number_range,
+                )
+            };
+
+            match number_type {
+                NumberType::F32 => match hexfloat2::parse::<f32>(&number_buffer) {
+                    Ok(v) if v.is_finite() => NumberToken::F32(v),
+                    _ => return Err(float_error()),
+                },
+                NumberType::F64 => match hexfloat2::parse::<f64>(&number_buffer) {
+                    Ok(v) if v.is_finite() => NumberToken::F64(v),
+                    _ => return Err(float_error()),
+                },
+                _ => {
+                    return Err(AsonError::MessageWithRange(
+                        format!(
+                            "Invalid type \"{}\" for hexadecimal floating-point numbers, only \"f32\" and \"f64\" are allowed.",
+                            number_type
+                        ),
+                        number_range,
+                    ));
+                }
+            }
+        } else {
+            // The default integer type is `i32`.
+            convert_integer_number_string_with_data_type(
+                &number_buffer,
+                16,
+                number_type_opt.unwrap_or(NumberType::I32),
+                number_range,
+            )?
         };
 
         Ok(TokenWithRange::new(
@@ -858,7 +729,10 @@ where
         ))
     }
 
-    fn lex_binary_number(&mut self) -> Result<TokenWithRange, AsonError> {
+    /// Lexes a binary (radix 2) or an octal (radix 8) integer.
+    ///
+    /// These two formats only support integers, not floating-point numbers.
+    fn lex_binary_or_octal_number(&mut self, radix: u32) -> Result<TokenWithRange, AsonError> {
         // ```diagram
         // 0b1010T  //
         // ^^    ^__// to here
@@ -868,25 +742,25 @@ where
         // T = terminator chars || EOF
         // ```
 
+        let format_name = if radix == 2 { "binary" } else { "octal" };
+
         let mut number_buffer = String::new();
         let mut number_type_opt: Option<NumberType> = None;
 
         self.push_peek_position_into_stack();
 
         self.next_char(); // consume '0'
-        self.next_char(); // consume 'b'
+        self.next_char(); // consume 'b' or 'o'
 
         while let Some(current_char) = self.peek_char(0) {
             match current_char {
-                '0' | '1' => {
-                    // valid digits for binary number
+                c if c.is_digit(radix) => {
                     number_buffer.push(*current_char);
                     self.next_char(); // consume digit
                 }
                 '_' => {
                     self.next_char(); // consume '_'
                 }
-                // binary form only supports integer numbers, does not support floating-point numbers
                 'i' | 'u'
                     if number_type_opt.is_none()
                         && matches!(self.peek_char(1), Some('0'..='9')) =>
@@ -895,149 +769,38 @@ where
                     number_type_opt.replace(number_type);
                     break;
                 }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
-                    // | '\'' | '"' => {
-                    // terminator chars
+                c if is_terminator(*c) => {
                     break;
                 }
                 _ => {
                     return Err(AsonError::MessageWithPosition(
-                        format!("Invalid char '{}' for binary number.", current_char),
+                        format!(
+                            "Invalid char '{}' for {} number.",
+                            current_char, format_name
+                        ),
                         *self.peek_position(0).unwrap(),
                     ));
                 }
             }
         }
 
-        // Validate syntax.
+        let number_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
-        // Empty binary number is not allowed, e.g., "0b"
+        // An empty number is not allowed, e.g., "0b" and "0o".
         if number_buffer.is_empty() {
             return Err(AsonError::MessageWithRange(
-                "Empty binary number.".to_owned(),
-                Range::new(&self.pop_position_from_stack(), &self.last_position),
+                format!("Empty {} number.", format_name),
+                number_range,
             ));
         }
 
-        let number_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
-
-        let number_token = if let Some(number_type) = number_type_opt {
-            convert_integer_number_string_with_data_type(
-                &number_buffer,
-                2,
-                number_type,
-                number_range,
-            )?
-        } else {
-            // This is a binary integer without an explicit type.
-            // The default type for integer is `i32`.
-
-            let v = u32::from_str_radix(&number_buffer, 2).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"0b{}\" to an i32 integer number.",
-                        number_buffer
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::I32(v)
-        };
-
-        Ok(TokenWithRange::new(
-            Token::Number(number_token),
+        // The default integer type is `i32`.
+        let number_token = convert_integer_number_string_with_data_type(
+            &number_buffer,
+            radix,
+            number_type_opt.unwrap_or(NumberType::I32),
             number_range,
-        ))
-    }
-
-    fn lex_octal_number(&mut self) -> Result<TokenWithRange, AsonError> {
-        // ```diagram
-        // 0o1267T  //
-        // ^^    ^__// to here
-        // ||_______// validated
-        // |________// current char, validated
-        //
-        // T = terminator chars || EOF
-        // ```
-
-        let mut number_buffer = String::new();
-        let mut number_type_opt: Option<NumberType> = None;
-
-        // Save the start position of the octal number (i.e. the first '0')
-        self.push_peek_position_into_stack();
-
-        self.next_char(); // consume '0'
-        self.next_char(); // consume 'o'
-
-        while let Some(current_char) = self.peek_char(0) {
-            match current_char {
-                '0'..='7' => {
-                    // Valid digits for octal numbers.
-                    number_buffer.push(*current_char);
-                    self.next_char(); // consume digit
-                }
-                '_' => {
-                    self.next_char(); // consume '_'
-                }
-                // octal form only supports integer numbers, does not support floating-point numbers
-                'i' | 'u'
-                    if number_type_opt.is_none()
-                        && matches!(self.peek_char(1), Some('0'..='9')) =>
-                {
-                    let number_type = self.lex_number_type_suffix()?;
-                    number_type_opt.replace(number_type);
-                    break;
-                }
-                ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/' => {
-                    // | '\'' | '"' => {
-                    // terminator chars
-                    break;
-                }
-                _ => {
-                    return Err(AsonError::MessageWithPosition(
-                        format!("Invalid char '{}' for octal number.", current_char),
-                        *self.peek_position(0).unwrap(),
-                    ));
-                }
-            }
-        }
-
-        // Validate syntax.
-
-        // Empty octal number is not allowed, e.g., "0o"
-        if number_buffer.is_empty() {
-            return Err(AsonError::MessageWithRange(
-                "Empty octal number.".to_owned(),
-                Range::new(&self.pop_position_from_stack(), &self.last_position),
-            ));
-        }
-
-        let number_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
-
-        let number_token = if let Some(number_type) = number_type_opt {
-            convert_integer_number_string_with_data_type(
-                &number_buffer,
-                8,
-                number_type,
-                number_range,
-            )?
-        } else {
-            // This is an octal integer without an explicit type.
-            // The default type for integer is `i32`.
-
-            let v = u32::from_str_radix(&number_buffer, 8).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"0o{}\" to an i32 integer number.",
-                        number_buffer
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::I32(v)
-        };
+        )?;
 
         Ok(TokenWithRange::new(
             Token::Number(number_token),
@@ -1065,17 +828,11 @@ where
         type_buffer.push(first_char);
 
         while let Some(current_char) = self.peek_char(0) {
-            match current_char {
-                '0'..='9' => {
-                    // valid char for type name
-                    type_buffer.push(*current_char);
-
-                    // consume digit
-                    self.next_char();
-                }
-                _ => {
-                    break;
-                }
+            if current_char.is_ascii_digit() {
+                type_buffer.push(*current_char);
+                self.next_char(); // consume digit
+            } else {
+                break;
             }
         }
 
@@ -1083,6 +840,19 @@ where
 
         let number_type = convert_str_to_number_type(&type_buffer)
             .map_err(|msg| AsonError::MessageWithRange(msg, type_range))?;
+
+        // The type suffix must be the end of the number token, e.g., "1u8abc" is invalid.
+        if let Some(current_char) = self.peek_char(0)
+            && !is_terminator(*current_char)
+        {
+            return Err(AsonError::MessageWithPosition(
+                format!(
+                    "Invalid char '{}' after the number type suffix.",
+                    current_char
+                ),
+                *self.peek_position(0).unwrap(),
+            ));
+        }
 
         Ok(number_type)
     }
@@ -1101,62 +871,15 @@ where
         let character = match self.next_char() {
             Some(current_char) => {
                 match current_char {
-                    '\\' => {
-                        // escape chars
-                        match self.next_char() {
-                            Some(escape_type) => {
-                                match escape_type {
-                                    '\\' => '\\',
-                                    '\'' => '\'',
-                                    '"' => {
-                                        // A double quote does not need to be escaped in a char literal,
-                                        // but it is supported for consistency with string literals.
-                                        '"'
-                                    }
-                                    't' => {
-                                        // horizontal tabulation
-                                        '\t'
-                                    }
-                                    'r' => {
-                                        // carriage return (CR, ascii 13)
-                                        '\r'
-                                    }
-                                    'n' => {
-                                        // new line character (line feed, LF, ascii 10)
-                                        '\n'
-                                    }
-                                    '0' => {
-                                        // null char
-                                        '\0'
-                                    }
-                                    'u' => {
-                                        if self.peek_char_and_equals(0, '{') {
-                                            // unicode code point, e.g. '\u{2d}', '\u{6587}'
-                                            self.unescape_unicode_code_point()?
-                                        } else {
-                                            return Err(AsonError::MessageWithPosition(
-                                                "Missing the brace for unicode escape sequence."
-                                                    .to_owned(),
-                                                self.last_position,
-                                            ));
-                                        }
-                                    }
-                                    _ => {
-                                        return Err(AsonError::MessageWithPosition(
-                                            format!("Unsupported escape char '{}'.", escape_type),
-                                            self.last_position,
-                                        ));
-                                    }
-                                }
-                            }
-                            None => {
-                                // `\` + EOF
-                                return Err(AsonError::UnexpectedEndOfDocument(
-                                    "Incomplete escape character sequence.".to_owned(),
-                                ));
-                            }
+                    '\\' => match self.next_char() {
+                        Some(escape_type) => self.unescape_char(escape_type)?,
+                        None => {
+                            // `\` + EOF
+                            return Err(AsonError::UnexpectedEndOfDocument(
+                                "Incomplete escape sequence.".to_owned(),
+                            ));
                         }
-                    }
+                    },
                     '\'' => {
                         // `''`
                         return Err(AsonError::MessageWithRange(
@@ -1173,12 +896,12 @@ where
             None => {
                 // `'EOF`
                 return Err(AsonError::UnexpectedEndOfDocument(
-                    "Incomplete character.".to_owned(),
+                    "Incomplete char.".to_owned(),
                 ));
             }
         };
 
-        // consume the right single quote
+        // consume the closing single quote
         match self.next_char() {
             Some('\'') => {
                 // Ok
@@ -1186,20 +909,57 @@ where
             Some(_) => {
                 // `'a?`
                 return Err(AsonError::MessageWithPosition(
-                    "Expected the closing quote for the char literal.".to_owned(),
+                    "Expect the closing quote of the char literal.".to_owned(),
                     self.last_position,
                 ));
             }
             None => {
                 // `'aEOF`
                 return Err(AsonError::UnexpectedEndOfDocument(
-                    "Incomplete character.".to_owned(),
+                    "Incomplete char.".to_owned(),
                 ));
             }
         }
 
         let character_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
         Ok(TokenWithRange::new(Token::Char(character), character_range))
+    }
+
+    /// Converts the character following a backslash into the character it represents.
+    ///
+    /// The escape sequences are shared by char and string literals.
+    fn unescape_char(&mut self, escape_type: char) -> Result<char, AsonError> {
+        let c = match escape_type {
+            '\\' => '\\',
+            // A single quote does not need to be escaped in a string literal, and
+            // a double quote does not need to be escaped in a char literal,
+            // but both are supported for consistency.
+            '\'' => '\'',
+            '"' => '"',
+            't' => '\t', // horizontal tab (U+0009)
+            'r' => '\r', // carriage return (CR, U+000D)
+            'n' => '\n', // line feed (LF, U+000A)
+            '0' => '\0', // null char (U+0000)
+            'u' => {
+                if self.peek_char_and_equals(0, '{') {
+                    // Unicode code point, e.g. '\u{2d}', '\u{6587}'
+                    self.unescape_unicode_code_point()?
+                } else {
+                    return Err(AsonError::MessageWithPosition(
+                        "Missing the opening brace of the Unicode escape sequence.".to_owned(),
+                        self.last_position,
+                    ));
+                }
+            }
+            _ => {
+                return Err(AsonError::MessageWithPosition(
+                    format!("Unsupported escape char '{}'.", escape_type),
+                    self.last_position,
+                ));
+            }
+        };
+
+        Ok(c)
     }
 
     fn unescape_unicode_code_point(&mut self) -> Result<char, AsonError> {
@@ -1223,7 +983,7 @@ where
                     _ => {
                         return Err(AsonError::MessageWithPosition(
                             format!(
-                                "Invalid character '{}' for unicode escape sequence.",
+                                "Invalid char '{}' for Unicode escape sequence.",
                                 current_char
                             ),
                             self.last_position,
@@ -1233,7 +993,7 @@ where
                 None => {
                     // EOF
                     return Err(AsonError::UnexpectedEndOfDocument(
-                        "Incomplete unicode escape sequence.".to_owned(),
+                        "Incomplete Unicode escape sequence.".to_owned(),
                     ));
                 }
             }
@@ -1254,26 +1014,18 @@ where
 
         if codepoint_buffer.is_empty() {
             return Err(AsonError::MessageWithRange(
-                "Empty unicode code point.".to_owned(),
+                "Empty Unicode code point.".to_owned(),
                 codepoint_range,
             ));
         }
 
         let codepoint = u32::from_str_radix(&codepoint_buffer, 16).unwrap();
 
-        if let Some(ch) = char::from_u32(codepoint) {
-            // valid code point:
-            // 0 to 0x10FFFF, inclusive
-            //
-            // ref:
-            // https://doc.rust-lang.org/std/primitive.char.html
-            Ok(ch)
-        } else {
-            Err(AsonError::MessageWithRange(
-                "Invalid unicode code point.".to_owned(),
-                codepoint_range,
-            ))
-        }
+        // `char::from_u32` rejects values above 0x10FFFF and surrogates (0xD800 to 0xDFFF).
+        // See: https://doc.rust-lang.org/std/primitive.char.html
+        char::from_u32(codepoint).ok_or_else(|| {
+            AsonError::MessageWithRange("Invalid Unicode code point.".to_owned(), codepoint_range)
+        })
     }
 
     fn lex_string(&mut self) -> Result<TokenWithRange, AsonError> {
@@ -1283,10 +1035,10 @@ where
         // |_______// current char, validated
         // ```
 
-        // Save the start position of the string literal (i.e. the first '"')
+        // Save the start position of the string literal (i.e. the opening '"')
         self.push_peek_position_into_stack();
 
-        self.next_char(); // Consumes '"'
+        self.next_char(); // consume '"'
 
         let mut string_buffer = String::new();
 
@@ -1294,88 +1046,29 @@ where
             match self.next_char() {
                 Some(current_char) => {
                     match current_char {
-                        '\\' => {
-                            // save the start position of the escape sequence (i.e. the "\" char)
-                            self.push_last_position_into_stack();
-
-                            // escape chars
-                            match self.next_char() {
-                                Some(escape_type) => {
-                                    match escape_type {
-                                        '\\' => {
-                                            string_buffer.push('\\');
-                                        }
-                                        '\'' => {
-                                            // A single quote does not need to be escaped in a string literal,
-                                            // but it is supported for consistency with char literals.
-                                            string_buffer.push('\'');
-                                        }
-                                        '"' => {
-                                            string_buffer.push('"');
-                                        }
-                                        't' => {
-                                            // horizontal tabulation
-                                            string_buffer.push('\t');
-                                        }
-                                        'r' => {
-                                            // carriage return (CR, ascii 13)
-                                            string_buffer.push('\r');
-                                        }
-                                        'n' => {
-                                            // new line character (line feed, LF, ascii 10)
-                                            string_buffer.push('\n');
-                                        }
-                                        '0' => {
-                                            // null char
-                                            string_buffer.push('\0');
-                                        }
-                                        'u' => {
-                                            if self.peek_char_and_equals(0, '{') {
-                                                // unicode code point, e.g. '\u{2d}', '\u{6587}'
-                                                let ch = self.unescape_unicode_code_point()?;
-                                                string_buffer.push(ch);
-                                            } else {
-                                                return Err(AsonError::MessageWithPosition(
-                                                    "Missing the brace for unicode escape sequence.".to_owned(),
-
-                                                        self.last_position
-                                                ));
-                                            }
-                                        }
-                                        '\r' if self.peek_char_and_equals(0, '\n') => {
-                                            // concatenate string
-                                            self.next_char(); // consume '\n'
-                                            self.consume_all_leading_whitespaces()?;
-                                        }
-                                        '\n' => {
-                                            // concatenate string
-                                            self.consume_all_leading_whitespaces()?;
-                                        }
-                                        _ => {
-                                            return Err(AsonError::MessageWithPosition(
-                                                format!(
-                                                    "Unsupported escape char '{}'.",
-                                                    escape_type
-                                                ),
-                                                self.last_position,
-                                            ));
-                                        }
-                                    }
-                                }
-                                None => {
-                                    // `\` + EOF
-                                    return Err(AsonError::UnexpectedEndOfDocument(
-                                        "Incomplete character escape sequence.".to_owned(),
-                                    ));
-                                }
+                        '\\' => match self.next_char() {
+                            Some('\r') if self.peek_char_and_equals(0, '\n') => {
+                                // Line continuation (concatenated string)
+                                self.next_char(); // consume '\n'
+                                self.consume_all_leading_whitespaces()?;
                             }
-
-                            // discard the saved position of the escape sequence
-                            self.pop_position_from_stack();
-                        }
+                            Some('\n') => {
+                                // Line continuation (concatenated string)
+                                self.consume_all_leading_whitespaces()?;
+                            }
+                            Some(escape_type) => {
+                                let c = self.unescape_char(escape_type)?;
+                                string_buffer.push(c);
+                            }
+                            None => {
+                                // `\` + EOF
+                                return Err(AsonError::UnexpectedEndOfDocument(
+                                    "Incomplete escape sequence.".to_owned(),
+                                ));
+                            }
+                        },
                         '"' => {
-                            // encounter the closing double quote, which
-                            // means the end of the string literal.
+                            // The closing double quote, i.e., the end of the string literal.
                             break;
                         }
                         _ => {
@@ -1410,15 +1103,11 @@ where
 
         loop {
             match self.peek_char(0) {
-                Some(current_char) => {
-                    match current_char {
-                        ' ' | '\t' => {
-                            self.next_char(); // consume ' ' or '\t'
-                        }
-                        _ => {
-                            break;
-                        }
-                    }
+                Some(' ' | '\t') => {
+                    self.next_char(); // consume ' ' or '\t'
+                }
+                Some(_) => {
+                    break;
                 }
                 None => {
                     // EOF
@@ -1453,7 +1142,24 @@ where
             hash_count += 1;
         }
 
-        self.next_char(); // consume the '"'
+        // consume the opening '"'
+        match self.next_char() {
+            Some('"') => {}
+            Some(current_char) => {
+                return Err(AsonError::MessageWithPosition(
+                    format!(
+                        "Expect '\"' after the hash symbols of the raw string, found '{}'.",
+                        current_char
+                    ),
+                    self.last_position,
+                ));
+            }
+            None => {
+                return Err(AsonError::UnexpectedEndOfDocument(
+                    "Incomplete raw string.".to_owned(),
+                ));
+            }
+        }
 
         let mut string_buffer = String::new();
 
@@ -1462,11 +1168,11 @@ where
                 Some(current_char) => {
                     match current_char {
                         '"' => {
-                            // encounter the closing double quote.
-                            // it means the end of the string literal
-                            // if it is followed by the correct number of hash symbols.
+                            // A closing double quote ends the string literal
+                            // only if it is followed by the same number of hash symbols
+                            // as the opening delimiter.
 
-                            // count the number of hash symbols following the closing double quote
+                            // count the number of hash symbols following the double quote
                             let mut closing_hash_count = 0;
                             while closing_hash_count < hash_count
                                 && self.peek_char_and_equals(closing_hash_count, '#')
@@ -1475,7 +1181,7 @@ where
                             }
 
                             if closing_hash_count != hash_count {
-                                // push the '"' back into the string buffer
+                                // Not the end of the string, so the '"' is part of the content.
                                 string_buffer.push('"');
                             } else {
                                 // consume the hash symbols
@@ -1519,9 +1225,9 @@ where
         // ||_______________________// validated
         // |________________________// current char, validated
         //
-        // note:
-        // - the '\n' of the first line is necessary.
-        // - the closed `"""` must be started with a new line.
+        // Note:
+        // - The opening `"""` must be immediately followed by a line break.
+        // - The closing `"""` must be on a new line (it may be indented).
         // ```
 
         self.push_peek_position_into_stack();
@@ -1537,12 +1243,13 @@ where
             self.next_char(); // consume '\n'
         } else {
             return Err(AsonError::MessageWithPosition(
-                "The content of auto-trimmed string should start on a new line.".to_owned(),
+                "The content of an auto-trimmed string must start on a new line.".to_owned(),
                 self.last_position,
             ));
         }
 
-        let mut lines = vec![];
+        // Each line includes its trailing line break.
+        let mut lines: Vec<Vec<char>> = vec![];
         let mut current_line = vec![];
 
         loop {
@@ -1551,30 +1258,19 @@ where
                     match current_char {
                         '\n' => {
                             current_line.push('\n');
-                            lines.push(current_line);
-
-                            current_line = vec![];
-                        }
-                        '\r' if self.peek_char_and_equals(0, '\n') => {
-                            self.next_char(); // consume '\n'
-
-                            current_line.push('\r');
-                            current_line.push('\n');
-                            lines.push(current_line);
-
-                            current_line = vec![];
+                            lines.push(std::mem::take(&mut current_line));
                         }
                         '"' if current_line.iter().all(|&c| c == ' ' || c == '\t')
                             && self.peek_char_and_equals(0, '"')
                             && self.peek_char_and_equals(1, '"') =>
                         {
-                            // it is the end of string
+                            // The closing `"""`
                             self.next_char(); // consume '"'
                             self.next_char(); // consume '"'
                             break;
                         }
                         _ => {
-                            // ordinary char
+                            // ordinary char, including the '\r' of "\r\n"
                             current_line.push(current_char);
                         }
                     }
@@ -1590,63 +1286,37 @@ where
 
         let range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
-        if lines.is_empty() {
-            return Ok(TokenWithRange::new(Token::String(String::new()), range));
-        }
+        let count_leading_whitespaces =
+            |line: &[char]| line.iter().take_while(|&&c| c == ' ' || c == '\t').count();
 
-        // Calculate leading spaces of each line.
-        //
-        // The empty lines would be excluded
-        let numbers: Vec<usize> = lines
+        // Empty lines and blank lines (lines containing only whitespace)
+        // are ignored when calculating the minimum indentation.
+        let is_blank = |line: &[char]| {
+            line.iter()
+                .all(|&c| c == ' ' || c == '\t' || c == '\r' || c == '\n')
+        };
+
+        let min_indent = lines
             .iter()
-            .filter(|line| {
-                let is_empty = (line.len() == 1 && line[0] == '\n')
-                    || (line.len() == 2 && line[0] == '\r' && line[1] == '\n');
-                !is_empty
-            })
-            .map(|line| {
-                let mut count = 0;
-                while count < line.len() {
-                    if !(line[count] == ' ' || line[count] == '\t') {
-                        break;
-                    }
-                    count += 1;
-                }
-                count
-            })
-            .collect();
+            .filter(|line| !is_blank(line))
+            .map(|line| count_leading_whitespaces(line))
+            .min()
+            .unwrap_or(0);
 
-        let min_number = *numbers.iter().min().unwrap_or(&0);
-
-        // Trim leading spaces for each line
-        lines
-            .iter_mut()
-            .filter(|line| {
-                let is_empty = (line.len() == 1 && line[0] == '\n')
-                    || (line.len() == 2 && line[0] == '\r' && line[1] == '\n');
-                !is_empty
-            })
-            .for_each(|line| {
-                line.drain(0..min_number);
-            });
-
-        // trim the ending '\n' or "\r\n"
-        let last_index = lines.len() - 1;
-        let last_line = &mut lines[last_index];
-
-        if matches!(last_line.last(), Some('\n')) {
-            last_line.pop();
+        let mut content = String::new();
+        for line in &lines {
+            // A blank line may be shorter than the minimum indentation.
+            let start = min_indent.min(count_leading_whitespaces(line));
+            content.extend(&line[start..]);
         }
 
-        if matches!(last_line.last(), Some('\r')) {
-            last_line.pop();
+        // The line break before the closing `"""` is not part of the content.
+        if content.ends_with('\n') {
+            content.pop();
+            if content.ends_with('\r') {
+                content.pop();
+            }
         }
-
-        let content = lines
-            .iter()
-            .map(|line| line.iter().collect::<String>())
-            .collect::<Vec<String>>()
-            .join("");
 
         Ok(TokenWithRange::new(Token::String(content), range))
     }
@@ -1662,7 +1332,7 @@ where
         self.push_peek_position_into_stack();
 
         self.next_char(); // consume the char 'd'
-        self.next_char(); // consume left quote
+        self.next_char(); // consume the opening quote
 
         let mut date_buffer = String::new();
 
@@ -1671,7 +1341,7 @@ where
                 Some(current_char) => {
                     match current_char {
                         '"' => {
-                            // it is the end of the date time string
+                            // The closing quote
                             break;
                         }
                         '0'..='9' | '-' | ':' | ' ' | 't' | 'T' | 'z' | 'Z' | '+' => {
@@ -1680,7 +1350,7 @@ where
                         }
                         _ => {
                             return Err(AsonError::MessageWithPosition(
-                                format!("Invalid char '{}' for datetime.", current_char),
+                                format!("Invalid char '{}' for DateTime.", current_char),
                                 self.last_position,
                             ));
                         }
@@ -1689,7 +1359,7 @@ where
                 None => {
                     // d"...EOF
                     return Err(AsonError::UnexpectedEndOfDocument(
-                        "Incomplete datetime.".to_owned(),
+                        "Incomplete DateTime.".to_owned(),
                     ));
                 }
             }
@@ -1697,34 +1367,34 @@ where
 
         let date_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
-        let len = date_buffer.len();
-
-        if len == 10 {
-            // YYYY-MM-DD
-            date_buffer.push_str("T00:00:00Z");
-        } else if len == 19 {
-            // YYYY-MM-DD HH:mm:ss
-            date_buffer.push('Z');
-        } else if len == 20 || len == 25 {
-            // RFC 3339
-            // YYYY-MM-DDTHH:mm:ssZ
-            // YYYY-MM-DDTHH:mm:ss+08:00
-        } else {
-            return Err(AsonError::MessageWithRange(
-                format!(
-                    "Invalid date time string: {}, the required format is: \"YYYY-MM-DD HH:mm:ss\"",
-                    date_buffer
-                ),
-                date_range,
-            ));
+        // Complete the omitted parts so that the string can be parsed as RFC 3339.
+        match date_buffer.len() {
+            10 => {
+                // YYYY-MM-DD
+                date_buffer.push_str("T00:00:00Z");
+            }
+            19 => {
+                // YYYY-MM-DD HH:mm:ss
+                date_buffer.push('Z');
+            }
+            20 | 25 => {
+                // YYYY-MM-DDTHH:mm:ssZ
+                // YYYY-MM-DDTHH:mm:ss+08:00
+            }
+            _ => {
+                return Err(AsonError::MessageWithRange(
+                    format!(
+                        "Invalid DateTime \"{}\", the expected format is \"YYYY-MM-DD\", \"YYYY-MM-DD HH:mm:ss\" or \"YYYY-MM-DDTHH:mm:ss(Z|+HH:MM|-HH:MM)\".",
+                        date_buffer
+                    ),
+                    date_range,
+                ));
+            }
         }
 
         let rfc3339 = DateTime::parse_from_rfc3339(&date_buffer).map_err(|_| {
             AsonError::MessageWithRange(
-                format!(
-                    "Can not convert the string \"{}\" to datetime.",
-                    date_buffer
-                ),
+                format!("Cannot convert \"{}\" to DateTime.", date_buffer),
                 date_range,
             )
         })?;
@@ -1740,109 +1410,57 @@ where
         // |________________// current char, validated
         // ```
 
-        let consume_zero_or_more_whitespaces = |iter: &mut Self| -> Result<usize, AsonError> {
-            // Exit when encountering a non-whitespace character or EOF.
-            let mut amount: usize = 0;
-
-            while let Some(' ' | '\t' | '\r' | '\n') = iter.peek_char(0) {
-                amount += 1;
-                iter.next_char();
-            }
-
-            Ok(amount)
-        };
-
-        let consume_one_or_more_whitespaces = |iter: &mut Self| -> Result<usize, AsonError> {
-            let mut amount: usize = 0;
-
-            loop {
-                match iter.peek_char(0) {
-                    Some(current_char) => {
-                        match current_char {
-                            ' ' | '\t' | '\r' | '\n' => {
-                                // consume whitespace
-                                iter.next_char();
-                                amount += 1;
-                            }
-                            _ => {
-                                if amount > 0 {
-                                    break;
-                                } else {
-                                    return Err(AsonError::MessageWithPosition(
-                                        "Expect a whitespace between the hexadecimal byte data digits."
-                                            .to_owned(),
-                                        iter.last_position
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                    None => {
-                        // h"...EOF
-                        return Err(AsonError::UnexpectedEndOfDocument(
-                            "Incomplete hexadecimal byte data.".to_owned(),
-                        ));
-                    }
-                }
-            }
-
-            Ok(amount)
-        };
-
         self.push_peek_position_into_stack();
 
         self.next_char(); // consume char 'h'
-        self.next_char(); // consume quote '"'
+        self.next_char(); // consume the opening quote
 
         let mut bytes: Vec<u8> = Vec::new();
-        let mut hex_number_with_two_digits: [char; 2] = ['0', '0'];
 
-        consume_zero_or_more_whitespaces(self)?;
+        // Bytes must be separated by whitespace, so a byte can only start
+        // at the beginning of the data or after whitespace.
+        let mut after_whitespace = true;
 
-        // Collect hexadecimal byte data
         loop {
-            if self.peek_char_and_equals(0, '"') {
-                break;
-            }
-
-            // read two hex digits
-            for digit in &mut hex_number_with_two_digits {
-                match self.next_char() {
-                    Some(current_char) => match current_char {
-                        'a'..='f' | 'A'..='F' | '0'..='9' => {
-                            *digit = current_char;
-                        }
-                        _ => {
-                            return Err(AsonError::MessageWithPosition(
-                                format!(
-                                    "Invalid digit '{}' for hexadecimal byte data.",
-                                    current_char
-                                ),
-                                self.last_position,
-                            ));
-                        }
-                    },
-                    None => {
-                        return Err(AsonError::UnexpectedEndOfDocument(
-                            "Incomplete hexadecimal byte data.".to_owned(),
+            match self.next_char() {
+                Some('"') => {
+                    // The closing quote
+                    break;
+                }
+                Some(' ' | '\t' | '\r' | '\n') => {
+                    after_whitespace = true;
+                }
+                Some(high_char) => {
+                    if !after_whitespace {
+                        return Err(AsonError::MessageWithPosition(
+                            "Expect whitespace between two bytes of the hexadecimal byte data."
+                                .to_owned(),
+                            self.last_position,
                         ));
                     }
+
+                    let high = self.hex_digit_value(high_char)?;
+
+                    let low = match self.next_char() {
+                        Some(low_char) => self.hex_digit_value(low_char)?,
+                        None => {
+                            return Err(AsonError::UnexpectedEndOfDocument(
+                                "Incomplete hexadecimal byte data.".to_owned(),
+                            ));
+                        }
+                    };
+
+                    bytes.push((high << 4) | low);
+                    after_whitespace = false;
+                }
+                None => {
+                    // h"...EOF
+                    return Err(AsonError::UnexpectedEndOfDocument(
+                        "Incomplete hexadecimal byte data.".to_owned(),
+                    ));
                 }
             }
-
-            let byte_string = String::from_iter(hex_number_with_two_digits);
-            let byte_value = u8::from_str_radix(&byte_string, 16).unwrap();
-            bytes.push(byte_value);
-
-            if self.peek_char_and_equals(0, '"') {
-                break;
-            }
-
-            // Consume at least one whitespace character.
-            consume_one_or_more_whitespaces(self)?;
         }
-
-        self.next_char(); // consume '"'
 
         let bytes_range = Range::new(&self.pop_position_from_stack(), &self.last_position);
 
@@ -1852,28 +1470,36 @@ where
         ))
     }
 
+    /// Converts the hexadecimal digit most recently consumed to its value.
+    fn hex_digit_value(&self, c: char) -> Result<u8, AsonError> {
+        match c.to_digit(16) {
+            Some(v) => Ok(v as u8),
+            None => Err(AsonError::MessageWithPosition(
+                format!("Invalid digit '{}' for hexadecimal byte data.", c),
+                self.last_position,
+            )),
+        }
+    }
+
     fn lex_line_comment(&mut self) {
         // ```diagram
         // //.....?[\r]\n
         // ^^     ^__// to here ('?' = any char or EOF)
         // ||________// validated
         // |_________// current char, validated
-        //
         // ```
-
-        // Note that trailing '\n' or '\r\n' does not belong to the line comment.
 
         self.next_char(); // consume the 1st '/'
         self.next_char(); // consume the 2nd '/'
 
         while let Some(current_char) = self.peek_char(0) {
-            // Ignore all chars until encountering '\n' or '\r\n'.
-            // Do not consume '\n' or '\r\n' because they do not belong to the line comment token.
+            // Ignore all chars until '\n' or "\r\n".
+            // The line break itself does not belong to the line comment, so it is not consumed.
             match current_char {
                 '\n' => {
                     break;
                 }
-                '\r' if self.peek_char_and_equals(0, '\n') => {
+                '\r' if self.peek_char_and_equals(1, '\n') => {
                     break;
                 }
                 _ => {
@@ -1919,8 +1545,8 @@ where
                             }
                         }
                         _ => {
-                            // ignore all chars except "/*" and "*/"
-                            // note that line comments within block comments are ignored also.
+                            // Ignore all chars except "/*" and "*/".
+                            // Note that "//" has no special meaning within block comments.
                         }
                     }
                 }
@@ -1940,6 +1566,18 @@ where
     }
 }
 
+/// Returns `true` if the character ends a number or an identifier token.
+///
+/// Note that '/' is a terminator only when it starts a comment, but it is
+/// accepted here unconditionally, and an invalid '/' is reported by the next `lex()` call.
+fn is_terminator(c: char) -> bool {
+    matches!(
+        c,
+        ' ' | '\t' | '\r' | '\n' | ',' | ':' | '{' | '}' | '[' | ']' | '(' | ')' | '/'
+    )
+}
+
+#[derive(Debug, Clone, Copy)]
 enum NumberType {
     I8,
     I16,
@@ -1955,142 +1593,72 @@ enum NumberType {
 
 impl Display for NumberType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NumberType::I8 => write!(f, "i8"),
-            NumberType::I16 => write!(f, "i16"),
-            NumberType::I32 => write!(f, "i32"),
-            NumberType::I64 => write!(f, "i64"),
-            NumberType::U8 => write!(f, "u8"),
-            NumberType::U16 => write!(f, "u16"),
-            NumberType::U32 => write!(f, "u32"),
-            NumberType::U64 => write!(f, "u64"),
-            NumberType::F32 => write!(f, "f32"),
-            NumberType::F64 => write!(f, "f64"),
-        }
+        let name = match self {
+            NumberType::I8 => "i8",
+            NumberType::I16 => "i16",
+            NumberType::I32 => "i32",
+            NumberType::I64 => "i64",
+            NumberType::U8 => "u8",
+            NumberType::U16 => "u16",
+            NumberType::U32 => "u32",
+            NumberType::U64 => "u64",
+            NumberType::F32 => "f32",
+            NumberType::F64 => "f64",
+        };
+        f.write_str(name)
     }
 }
 
+/// Converts the digits of an integer (without the prefix, sign and underscores)
+/// to a `NumberToken` of the given integer type.
+///
+/// Signed integers are stored as their unsigned counterparts here, and the valid range of
+/// signed integers is checked by the normalizer after the sign has been applied.
 fn convert_integer_number_string_with_data_type(
     number_string: &str,
     radix: u32,
     number_type: NumberType,
     number_range: Range,
 ) -> Result<NumberToken, AsonError> {
-    let prefix_name = match radix {
-        2 => "0b",
-        8 => "0o",
-        16 => "0x",
-        _ => "",
+    let max_value = match number_type {
+        NumberType::I8 | NumberType::U8 => u8::MAX as u64,
+        NumberType::I16 | NumberType::U16 => u16::MAX as u64,
+        NumberType::I32 | NumberType::U32 => u32::MAX as u64,
+        NumberType::I64 | NumberType::U64 => u64::MAX,
+        NumberType::F32 | NumberType::F64 => unreachable!(),
     };
 
+    let v = u64::from_str_radix(number_string, radix)
+        .ok()
+        .filter(|v| *v <= max_value)
+        .ok_or_else(|| {
+            let prefix = match radix {
+                2 => "0b",
+                8 => "0o",
+                16 => "0x",
+                _ => "",
+            };
+
+            AsonError::MessageWithRange(
+                format!(
+                    "Cannot convert \"{}{}\" to type \"{}\" (the value is invalid or out of range).",
+                    prefix, number_string, number_type
+                ),
+                number_range,
+            )
+        })?;
+
+    // The casts below cannot truncate, because `v` has been checked against `max_value`.
     let token = match number_type {
-        NumberType::I8 => {
-            let v = u8::from_str_radix(number_string, radix).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}{}\" to an i8 integer number.",
-                        prefix_name, number_string,
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::I8(v)
-        }
-        NumberType::U8 => {
-            let v = u8::from_str_radix(number_string, radix).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}{}\" to a u8 integer number.",
-                        prefix_name, number_string,
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::U8(v)
-        }
-        NumberType::I16 => {
-            let v = u16::from_str_radix(number_string, radix).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}{}\" to an i16 integer number.",
-                        prefix_name, number_string,
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::I16(v)
-        }
-        NumberType::U16 => {
-            let v = u16::from_str_radix(number_string, radix).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}{}\" to a u16 integer number.",
-                        prefix_name, number_string,
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::U16(v)
-        }
-        NumberType::I32 => {
-            let v = u32::from_str_radix(number_string, radix).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}{}\" to an i32 integer number.",
-                        prefix_name, number_string
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::I32(v)
-        }
-        NumberType::U32 => {
-            let v = u32::from_str_radix(number_string, radix).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}{}\" to a u32 integer number.",
-                        prefix_name, number_string
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::U32(v)
-        }
-        NumberType::I64 => {
-            let v = u64::from_str_radix(number_string, radix).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}{}\" to an i64 integer number.",
-                        prefix_name, number_string
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::I64(v)
-        }
-        NumberType::U64 => {
-            let v = u64::from_str_radix(number_string, radix).map_err(|_| {
-                AsonError::MessageWithRange(
-                    format!(
-                        "Cannot convert \"{}{}\" to a u64 integer number.",
-                        prefix_name, number_string
-                    ),
-                    number_range,
-                )
-            })?;
-
-            NumberToken::U64(v)
-        }
-        NumberType::F32 | NumberType::F64 => {
-            unreachable!()
-        }
+        NumberType::I8 => NumberToken::I8(v as u8),
+        NumberType::U8 => NumberToken::U8(v as u8),
+        NumberType::I16 => NumberToken::I16(v as u16),
+        NumberType::U16 => NumberToken::U16(v as u16),
+        NumberType::I32 => NumberToken::I32(v as u32),
+        NumberType::U32 => NumberToken::U32(v as u32),
+        NumberType::I64 => NumberToken::I64(v),
+        NumberType::U64 => NumberToken::U64(v),
+        NumberType::F32 | NumberType::F64 => unreachable!(),
     };
 
     Ok(token)
@@ -2211,6 +1779,15 @@ mod tests {
         assert_eq!(
             lex_from_str_without_location("(\n,\n)").unwrap(),
             vec![Token::ParenthesisOpen, Token::ParenthesisClose]
+        );
+
+        // A lone '\r' is whitespace.
+        assert_eq!(
+            lex_from_str_without_location("1\r2").unwrap(),
+            vec![
+                Token::Number(NumberToken::I32(1)),
+                Token::Number(NumberToken::I32(2)),
+            ]
         );
 
         // Testing the ranges
@@ -2555,6 +2132,22 @@ mod tests {
             vec![Token::Number(NumberToken::F64(6.626e-34))]
         );
 
+        // Underscores are allowed between the exponent marker and its sign.
+        assert_eq!(
+            lex_from_str_without_location("1e_-5").unwrap(),
+            vec![Token::Number(NumberToken::F64(1e-5))]
+        );
+
+        assert_eq!(
+            lex_from_str_without_location("1E5").unwrap(),
+            vec![Token::Number(NumberToken::F64(1e5))]
+        );
+
+        assert_eq!(
+            lex_from_str_without_location("0x1.8P1").unwrap(),
+            vec![Token::Number(NumberToken::F64(3.0))]
+        );
+
         // err: incomplete floating point number since ends with '.'
         assert!(matches!(
             lex_from_str("123."),
@@ -2633,6 +2226,16 @@ mod tests {
                 }
             ))
         ));
+
+        // err: the decimal point must be followed by digits
+        assert!(lex_from_str("1.e5").is_err());
+
+        // err: leading zeros in the integer part
+        assert!(lex_from_str("00.5").is_err());
+        assert!(lex_from_str("01e5").is_err());
+
+        // err: missing exponent digits
+        assert!(lex_from_str("1e+").is_err());
     }
 
     #[test]
@@ -2874,6 +2477,19 @@ mod tests {
                 ))
             ));
         }
+
+        // err: invalid char after the type suffix
+        assert!(matches!(
+            lex_from_str("1u8abc"),
+            Err(AsonError::MessageWithPosition(
+                _,
+                Position {
+                    index: 3,
+                    line: 0,
+                    column: 3,
+                }
+            ))
+        ));
     }
 
     #[test]
@@ -3295,6 +2911,11 @@ mod tests {
                 }
             ))
         ));
+
+        // err: hexadecimal floating-point numbers require digits on both sides of '.'
+        assert!(lex_from_str("0x1p3").is_err());
+        assert!(lex_from_str("0x1.p3").is_err());
+        assert!(lex_from_str("0x.8p1").is_err());
     }
 
     #[test]
@@ -4593,6 +4214,9 @@ mod tests {
             Err(AsonError::UnexpectedEndOfDocument(_))
         ));
 
+        // err: missing '"' after the hash symbols of a raw string
+        assert!(lex_from_str("r#abc\"#").is_err());
+
         // Testing raw string with multiple hash symbols
         assert_eq!(
             lex_from_str_without_location("r##\"abc\n    xyz\"## r###\"foo\\nbar\"###").unwrap(),
@@ -4697,6 +4321,12 @@ mod tests {
             )
             .unwrap(),
             vec![Token::new_string("one\\\\\\\"\\t\\r\\n\\u{1234}\n\nend"),]
+        );
+
+        // Blank lines are ignored when calculating the minimum indentation.
+        assert_eq!(
+            lex_from_str_without_location("\"\"\"\n    a\n  \n    b\n\"\"\"").unwrap(),
+            vec![Token::new_string("a\n\nb")]
         );
 
         // including (""")
@@ -4894,15 +4524,15 @@ hello
             ))
         ));
 
-        // err: too much digits, no whitespace between two bytes
+        // err: too many digits, no whitespace between two bytes
         assert!(matches!(
             lex_from_str("h\"11 1317\""),
             Err(AsonError::MessageWithPosition(
                 _,
                 Position {
-                    index: 6,
+                    index: 7,
                     line: 0,
-                    column: 6,
+                    column: 7,
                 }
             ))
         ));
@@ -4926,9 +4556,9 @@ hello
             Err(AsonError::MessageWithPosition(
                 _,
                 Position {
-                    index: 3,
+                    index: 4,
                     line: 0,
-                    column: 3,
+                    column: 4,
                 }
             ))
         ));
@@ -5097,6 +4727,23 @@ hello
                 Token::ParenthesisClose,
             ]
         );
+
+        // err: invalid variant
+        assert!(matches!(
+            lex_from_str("Enum::Foo::Bar"),
+            Err(AsonError::MessageWithPosition(
+                _,
+                Position {
+                    index: 9,
+                    line: 0,
+                    column: 9,
+                }
+            ))
+        ));
+
+        // err: invalid variant names
+        assert!(lex_from_str("Color::").is_err());
+        assert!(lex_from_str("Color::1").is_err());
     }
 
     #[test]
@@ -5117,6 +4764,12 @@ hello
                 Token::Number(NumberToken::I32(17)),
                 Token::Number(NumberToken::I32(31)),
             ]
+        );
+
+        // A line comment ends before "\r\n".
+        assert_eq!(
+            lex_from_str_without_location("// abc\r\n1").unwrap(),
+            vec![Token::Number(NumberToken::I32(1))]
         );
 
         // Testing the ranges

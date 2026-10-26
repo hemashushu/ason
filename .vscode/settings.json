@@ -8,5 +8,11 @@
     "search.exclude": {
         "IGNORE": true,
         "target": true
+    },
+    "chat.tools.terminal.autoApprove": {
+        "rustc": true,
+        "cargo clippy": true,
+        "rustfmt": true,
+        "cargo fmt": true
     }
 }

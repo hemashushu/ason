@@ -43,6 +43,7 @@ where
     // - Remove the '+' tokens in front of numbers (includes `+Inf`).
     // - Apply the '-' tokens to numbers (includes `-Inf`).
     // - Check whether the signed number overflows.
+    // - Report an error if a sign is applied to an unsigned number or to `NaN`.
     //
     // Note that the lexer only checks number width; it does not validate the signed integer range,
     // because it lexes the sign token and the number token separately, for example,
@@ -107,6 +108,16 @@ where
                                             // check signed number overflow
                                             Some(Err(AsonError::MessageWithRange(
                                                 format!("The signed i64 number {} overflowed.", v),
+                                                Range::merge(&start_range, next_range),
+                                            )))
+                                        }
+                                        NumberToken::U8(_)
+                                        | NumberToken::U16(_)
+                                        | NumberToken::U32(_)
+                                        | NumberToken::U64(_) => {
+                                            Some(Err(AsonError::MessageWithRange(
+                                                "The plus sign cannot be applied to unsigned numbers."
+                                                    .to_owned(),
                                                 Range::merge(&start_range, next_range),
                                             )))
                                         }
@@ -557,6 +568,26 @@ mod tests {
             // err: unsigned number with minus sign
             assert!(matches!(
                 lex_from_str("-1_u8"),
+                Err(AsonError::MessageWithRange(
+                    _,
+                    Range {
+                        start: Position {
+                            index: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end_inclusive: Position {
+                            index: 4,
+                            line: 0,
+                            column: 4,
+                        }
+                    }
+                ))
+            ));
+
+            // err: unsigned number with plus sign
+            assert!(matches!(
+                lex_from_str("+1_u8"),
                 Err(AsonError::MessageWithRange(
                     _,
                     Range {

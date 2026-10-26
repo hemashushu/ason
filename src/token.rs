@@ -20,37 +20,33 @@ pub enum Token {
 
     Number(NumberToken),
 
-    // ASON only supports certain escaped characters in character and string literals,
-    // which is similar to Rust's character and string literals. The supported escape sequences are:
+    // ASON supports only a few escape sequences in char and string literals,
+    // similar to Rust. The supported escape sequences are:
     //
     // - `\\` (backslash)
     // - `\'` (single quote)
     // - `\"` (double quote)
-    // - `\t` (tab)
+    // - `\t` (horizontal tab)
     // - `\r` (carriage return)
-    // - `\n` (newline)
+    // - `\n` (line feed)
     // - `\0` (null character)
-    // - `\u{...}` (Unicode code point, where `...` is a hexadecimal number)
+    // - `\u{...}` (Unicode code point, where `...` is 1 to 6 hexadecimal digits)
     Char(char),
     String(String),
 
     // ASON has a few keywords:
-    // - `true`
-    // - `false`
-    // - `Inf (Inf_f32, Inf_f64)`
-    // - `NaN (NaN_f32, NaN_f64)`
     //
-    // `true` and `false` are interpreted to `Token::Boolean`,
-    // `NaN` and `Inf` are interpreted to `Token::NumberToken`.
+    // - `true` and `false`, which are lexed into `Token::Boolean`.
+    // - `NaN` (`NaN_f32`, `NaN_f64`) and `Inf` (`Inf_f32`, `Inf_f64`),
+    //   which are lexed into `Token::Number`.
     Boolean(bool),
 
     DateTime(DateTime<FixedOffset>),
 
-    // An identifier is used for an object (or struct) field name.
-    // It is a sequence of letters, digits, and underscores:
-    // - `[a-zA-Z0-9_]`
-    // - '\u{a0}' - '\u{d7ff}'
-    // - '\u{e000}' - '\u{10ffff}'
+    // An identifier is used as the key of an Object field.
+    // It starts with a letter, an underscore, or a Unicode character in the range
+    // '\u{a0}' to '\u{d7ff}' or '\u{e000}' to '\u{10ffff}', followed by any number of
+    // these characters and digits.
     Identifier(String),
 
     // An enumeration consists of a type name and a variant name, for example,
@@ -59,34 +55,33 @@ pub enum Token {
 
     HexadecimalByteData(Vec<u8>),
 
-    // Sign tokens, used for number literals.
-    // Note that they would be removed after normalization.
+    // Sign tokens for numbers.
+    // They are merged into the following number tokens and removed by the normalizer.
     _Plus,  // `+`
     _Minus, // `-`
 }
 
 // Tokens for number literals.
 //
-// Note that the sign token (minus `-` and plus `+`) is not part of the `NumberToken` in
-// the first stage of lexing. For example, `-128` is tokenized into two tokens:
+// In the lexing stage, the sign (`+` or `-`) is a separate token rather than part of
+// `NumberToken`, so numbers can be lexed without worrying about the sign and the valid range.
+// For example, `-128_i8` is lexed into two tokens:
 //
-// - `Token::Minus`
+// - `Token::_Minus`
 // - `Token::Number(NumberToken::I8(128))`
 //
-// Since `128` overflows `i8`, so using `u8` to represent the value part.
-// After normalization, the sign token is merged into the `NumberToken`,
-// so `-128` will be normalized to `Token::Number(NumberToken::I8(128))`.
-// Where `128` is Two's Complement Representation of `-128` in `i8`.
+// Since `128` overflows `i8`, signed integers are stored in their unsigned counterparts.
+// After normalization, the sign is merged into the number token, and `-128_i8` becomes
+// `Token::Number(NumberToken::I8(128))`, where `128` (0x80) is the two's complement
+// representation of `-128` in `i8`.
 //
-// Another example, `-3` is tokenized into two tokens:
-// - `Token::Minus`
+// Another example, `-3` is lexed into two tokens:
+//
+// - `Token::_Minus`
 // - `Token::Number(NumberToken::I32(3))`
 //
-// After normalization, it will be normalized to `Token::Number(NumberToken::I32(253))`.
-// Where `253` is Two's Complement Representation of `-3` in `i32`.
-//
-// The reason for this design is that it simplifies the lexing process, as we can first tokenize
-// the number literal without worrying about the sign and the valid range.
+// After normalization, it becomes `Token::Number(NumberToken::I32(4294967293))`,
+// where `4294967293` (0xFFFF_FFFD) is the two's complement representation of `-3` in `i32`.
 #[derive(Debug, PartialEq)]
 pub enum NumberToken {
     I8(u8),
