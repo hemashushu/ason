@@ -3,7 +3,7 @@ name = "ason"
 version = "3.0.0"
 edition = "2024"
 
-license = "MPL-2.0"
+license-file = "LICENSE.additional"
 description = "ASON is a data serialization format that evolved from JSON, featuring strong numeric typing and native support for enumeration types."
 homepage = "https://github.com/hemashushu/ason"
 repository = "https://github.com/hemashushu/ason"

@@ -13,6 +13,11 @@
         "rustc": true,
         "cargo clippy": true,
         "rustfmt": true,
-        "cargo fmt": true
+        "cargo fmt": true,
+        "cargo build": true,
+        "cargo test": true,
+        "cargo run": true,
+        "cargo check": true,
+        "cargo doc": true
     }
 }

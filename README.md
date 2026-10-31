@@ -499,7 +499,11 @@ When writing auto-trimmed strings, follow these rules:
 
 In short, the syntax of auto-trimmed strings is:
 
-`"""\n...\n optional_whitespace """`
+`"""\n...\n"""`
+
+or
+
+`"""\n...\n any_whitespace """`
 
 where `...` represents the content lines. The two line breaks are mandatory and are not part of the string content.
 
@@ -728,7 +732,7 @@ Names are usually strings, but other types are also allowed. For example, the fo
     4: "Good"
     3: "Fair"
     2: "Poor"
-    1: "Terrible"
+    1: "Try Again"
 ]
 ```
 
@@ -1189,9 +1193,12 @@ In this example, the default value of the `age` field is provided by the `defaul
 
 ## 7 Links
 
-- [ASON Specification](docs/specification.md)
+- [ASON Specification](https://github.com/hemashushu/ason/docs/specification.md)
+- [ASONB Specification](https://github.com/hemashushu/asonb/README.md)
 - [ASON library](https://github.com/hemashushu/ason)
 - [ASONB library](https://github.com/hemashushu/asonb)
+- [ASON Converters (ason2b, ason2j)](https://github.com/hemashushu/ason-converter)
+- [ASON Query (aq)](https://github.com/hemashushu/ason-query)
 
 ## 8 License
 
