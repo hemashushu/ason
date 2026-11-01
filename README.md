@@ -246,8 +246,6 @@ fn main() {
 }
 ```
 
-To write a batch, use `stream_writer.writes(&[o1, o2])` instead of the two separate `write` calls above. `writes` accepts a slice, so a vector can also be passed as `writes(&values)`. It writes elements in order, does nothing for an empty slice, and stops at the first serialization or I/O error. Like `write`, it may leave partial output on error and must be called between `start_list` and `end_list`.
-
 The streaming deserializer reads the root list incrementally from a byte source (e.g., a pipe, a socket, or standard input). The typical flow is:
 
 1. Wrap any `Read` source in a `ason::UTF8CharIterator`, and open a list reader on it.
