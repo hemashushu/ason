@@ -173,6 +173,18 @@ where
         self.serializer.begin_block_element()?;
         value.serialize(&mut self.serializer)
     }
+
+    /// Writes each value in order, stopping at the first error.
+    /// An empty slice writes nothing. Errors may leave partial output.
+    pub fn writes(&mut self, values: &[T]) -> Result<(), AsonError>
+    where
+        T: Serialize,
+    {
+        for value in values {
+            self.write(value)?;
+        }
+        Ok(())
+    }
 }
 
 impl<'a, W> ser::Serializer for &mut Serializer<'a, W>
@@ -1292,6 +1304,78 @@ mod tests {
     }
 ]"#
         )
+    }
+
+    #[test]
+    fn test_serialize_stream_list_batch() {
+        let mut buf = Vec::new();
+        let mut stream = list_stream_writer(&mut buf);
+        stream.start_list().unwrap();
+        stream.writes(&[]).unwrap();
+        stream.write(&11).unwrap();
+        stream.writes(&[13, 17]).unwrap();
+        stream.writes(&[]).unwrap();
+        stream.write(&19).unwrap();
+        let values = vec![23, 29];
+        stream.writes(&values).unwrap();
+        stream.writes(&[]).unwrap();
+        stream.end_list().unwrap();
+
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            ser_to_string(&vec![11, 13, 17, 19, 23, 29]).unwrap(),
+        );
+
+        let mut buf = Vec::new();
+        let mut stream = list_stream_writer::<i32, _>(&mut buf);
+        stream.start_list().unwrap();
+        stream.writes(&[]).unwrap();
+        stream.end_list().unwrap();
+        assert_eq!(buf, b"[]");
+    }
+
+    #[test]
+    fn test_serialize_stream_list_batch_stops_on_error() {
+        struct Value<'a> {
+            id: i32,
+            attempts: &'a std::cell::Cell<usize>,
+        }
+
+        impl Serialize for Value<'_> {
+            fn serialize<Output>(&self, serializer: Output) -> Result<Output::Ok, Output::Error>
+            where
+                Output: serde::Serializer,
+            {
+                self.attempts.set(self.attempts.get() + 1);
+                if self.id == 13 {
+                    return Err(serde::ser::Error::custom("Cannot serialize this value."));
+                }
+                serializer.serialize_i32(self.id)
+            }
+        }
+
+        let attempts = std::cell::Cell::new(0);
+        let values = [
+            Value {
+                id: 11,
+                attempts: &attempts,
+            },
+            Value {
+                id: 13,
+                attempts: &attempts,
+            },
+            Value {
+                id: 17,
+                attempts: &attempts,
+            },
+        ];
+        let mut buf = Vec::new();
+        let mut stream = list_stream_writer(&mut buf);
+        stream.start_list().unwrap();
+        let error = stream.writes(&values).unwrap_err();
+        assert!(error.to_string().contains("Cannot serialize this value."));
+        assert_eq!(attempts.get(), 2);
+        assert_eq!(buf, b"[\n    11\n    ");
     }
 
     #[test]

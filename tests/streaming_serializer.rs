@@ -60,6 +60,40 @@ fn test_stream_serialize_and_deserialize() {
 }
 
 #[test]
+fn test_batch_stream_serialize_and_deserialize() {
+    let values = vec![
+        Object {
+            id: 11,
+            name: "foo".to_owned(),
+        },
+        Object {
+            id: 13,
+            name: "bar".to_owned(),
+        },
+        Object {
+            id: 17,
+            name: "baz".to_owned(),
+        },
+    ];
+    let mut buf = Vec::new();
+    let mut stream = ason::list_stream_writer(&mut buf);
+    stream.start_list().unwrap();
+    stream.writes(&[]).unwrap();
+    stream.write(&values[0]).unwrap();
+    stream.writes(&values[1..]).unwrap();
+    stream.writes(&[]).unwrap();
+    stream.end_list().unwrap();
+
+    assert_eq!(buf, ason::ser_to_string(&values).unwrap().as_bytes());
+    let chars = UTF8CharIterator::new(buf.as_slice());
+    let decoded = ason::list_stream_reader::<Object, _>(chars)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(decoded, values);
+}
+
+#[test]
 fn test_concrete_character_iterators() {
     assert_eq!(
         ason::de_from_char_iterator::<i32, _>("42".chars()).unwrap(),

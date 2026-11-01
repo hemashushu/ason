@@ -233,6 +233,9 @@ fn main() {
     // Serialize the second element.
     stream_writer.write(&o2).unwrap();
 
+    // Serialize multiple elements at once is also supported.
+    // stream_writer.writes(&[o1, o2]).unwrap();
+
     // End the list explicitly.
     stream_writer.end_list().unwrap();
 
@@ -242,6 +245,8 @@ fn main() {
     writeln!(&mut stderr, "Streaming serialization successful!").unwrap();
 }
 ```
+
+To write a batch, use `stream_writer.writes(&[o1, o2])` instead of the two separate `write` calls above. `writes` accepts a slice, so a vector can also be passed as `writes(&values)`. It writes elements in order, does nothing for an empty slice, and stops at the first serialization or I/O error. Like `write`, it may leave partial output on error and must be called between `start_list` and `end_list`.
 
 The streaming deserializer reads the root list incrementally from a byte source (e.g., a pipe, a socket, or standard input). The typical flow is:
 
