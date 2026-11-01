@@ -535,12 +535,22 @@ impl<'de, CharIter: Iterator<Item = char>> de::Deserializer<'de> for &mut Deseri
 
     fn deserialize_newtype_struct<V>(
         self,
-        _name: &'static str,
-        _visitor: V,
+        name: &'static str,
+        visitor: V,
     ) -> Result<V::Value, AsonError>
     where
         V: de::Visitor<'de>,
     {
+        if name == crate::date_time::MARKER {
+            return match self.next_token()? {
+                Some(Token::DateTime(value)) => {
+                    visitor.visit_newtype_struct(de::value::StringDeserializer::<AsonError>::new(
+                        value.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                    ))
+                }
+                other => Err(self.expect_error(other.is_some(), "a \"DateTime\" value")),
+            };
+        }
         // A newtype struct is a tuple struct with a single field, for example `struct NewType(u8);`.
         Err(AsonError::Message(
             "ASON does not support newtype structs.".to_owned(),
@@ -1039,6 +1049,15 @@ mod tests {
 
     #[test]
     fn test_hexadecimal_byte_data() {
+        assert_eq!(de_from_str::<ByteBuf>(r#"h"""#).unwrap(), ByteBuf::new());
+        assert_eq!(
+            de_from_str::<ByteBuf>(r#"h"00 FF""#).unwrap(),
+            ByteBuf::from(vec![0x00, 0xff]),
+        );
+        for text in ["", r#""abc""#, r#"h"0""#, r#"h"gg""#, r#"h"00" true"#] {
+            assert!(de_from_str::<ByteBuf>(text).is_err(), "{text}");
+        }
+        assert!(de_from_str::<Vec<u8>>(r#"h"00 ff""#).is_err());
         assert_eq!(
             de_from_str::<ByteBuf>(r#"h"0d 0f 11 13""#).unwrap(),
             ByteBuf::from(vec![0x0d, 0x0f, 0x11, 0x13])

@@ -363,10 +363,14 @@ where
         self.print_fmt(format_args!("{}::{}", name, variant))
     }
 
-    fn serialize_newtype_struct<T>(self, _name: &'static str, _value: &T) -> Result<(), AsonError>
+    fn serialize_newtype_struct<T>(self, name: &'static str, value: &T) -> Result<(), AsonError>
     where
         T: ?Sized + Serialize,
     {
+        if name == crate::date_time::MARKER {
+            self.print_str("d")?;
+            return value.serialize(self);
+        }
         // A newtype struct is a tuple struct with a single field, for example `struct NewType(u8);`.
         Err(AsonError::Message(
             "ASON does not support newtype structs.".to_owned(),
@@ -756,6 +760,11 @@ mod tests {
 
     #[test]
     fn test_hexadecimal_byte_data() {
+        assert_eq!(ser_to_string(&ByteBuf::new()).unwrap(), r#"h"""#);
+        assert_eq!(
+            ser_to_string(&serde_bytes::Bytes::new(&[0x00, 0xff])).unwrap(),
+            r#"h"00 ff""#,
+        );
         let v0 = vec![11u8, 13, 17, 19];
         let v0b = ByteBuf::from(v0);
         assert_eq!(ser_to_string(&v0b).unwrap(), r#"h"0b 0d 11 13""#);

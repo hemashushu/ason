@@ -1,0 +1,173 @@
+// Copyright (c) 2026 Hemashushu <hippospark@gmail.com>, All rights reserved.
+//
+// This Source Code Form is subject to the terms of
+// the Mozilla Public License version 2.0 and additional exceptions.
+// For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
+
+//! Use `#[serde(with = "ason::array")]` to map a fixed-length array to an ASON List.
+//! Byte arrays also map to Lists; use `serde_bytes` to select Byte Data instead.
+
+use std::marker::PhantomData;
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+
+pub fn serialize<T, S, const N: usize>(value: &[T; N], serializer: S) -> Result<S::Ok, S::Error>
+where
+    T: Serialize,
+    S: Serializer,
+{
+    value.as_slice().serialize(serializer)
+}
+
+pub fn deserialize<'de, T, D, const N: usize>(deserializer: D) -> Result<[T; N], D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    struct Visitor<T, const N: usize>(PhantomData<T>);
+
+    impl<'de, T: Deserialize<'de>, const N: usize> de::Visitor<'de> for Visitor<T, N> {
+        type Value = [T; N];
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "a List with exactly {N} elements")
+        }
+
+        fn visit_seq<A: de::SeqAccess<'de>>(
+            self,
+            mut sequence: A,
+        ) -> Result<Self::Value, A::Error> {
+            let mut values = Vec::new();
+            for index in 0..N {
+                let value = sequence
+                    .next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(index, &self))?;
+                values.push(value);
+            }
+            if sequence.next_element::<de::IgnoredAny>()?.is_some() {
+                return Err(de::Error::invalid_length(N.saturating_add(1), &self));
+            }
+            values
+                .try_into()
+                .map_err(|values: Vec<T>| de::Error::invalid_length(values.len(), &self))
+        }
+    }
+
+    deserializer.deserialize_seq(Visitor::<T, N>(PhantomData))
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(bound(serialize = "T: Serialize", deserialize = "T: Deserialize<'de>"))]
+    struct Record<T, const N: usize> {
+        #[serde(with = "crate::array")]
+        values: [T; N],
+    }
+
+    fn assert_round_trip<T, const N: usize>(values: [T; N])
+    where
+        T: std::fmt::Debug + PartialEq + Serialize + serde::de::DeserializeOwned,
+    {
+        let record = Record { values };
+        let text = crate::ser_to_string(&record).unwrap();
+        assert_eq!(crate::de_from_str::<Record<T, N>>(&text).unwrap(), record);
+    }
+
+    #[test]
+    fn test_array_field_round_trip() {
+        let record = Record {
+            values: [11, 13, 17, 19],
+        };
+        let text = crate::ser_to_string(&record).unwrap();
+        assert_eq!(
+            text,
+            "{\n    values: [\n        11\n        13\n        17\n        19\n    ]\n}"
+        );
+        assert_eq!(crate::de_from_str::<Record<i32, 4>>(&text).unwrap(), record);
+        for text in [
+            "{values: [11, 13, 17, 19,]}",
+            "{values: [11 13 17 19]}",
+            "{values: [11\n13\n17\n19]}",
+        ] {
+            assert_eq!(crate::de_from_str::<Record<i32, 4>>(text).unwrap(), record);
+        }
+    }
+
+    #[test]
+    fn test_empty_and_large_arrays() {
+        let record = Record::<i32, 0> { values: [] };
+        assert_eq!(
+            crate::ser_to_string(&record).unwrap(),
+            "{\n    values: []\n}"
+        );
+        assert_round_trip::<i32, 0>([]);
+        assert_round_trip([42u16; 64]);
+        assert_round_trip([true]);
+        assert_round_trip([0u8, 255]);
+    }
+
+    #[test]
+    fn test_non_copy_and_nested_elements() {
+        #[derive(Debug, PartialEq, Serialize, Deserialize)]
+        struct Item {
+            name: String,
+        }
+
+        assert_round_trip(["foo".to_owned(), "bar".to_owned()]);
+        assert_round_trip([
+            Item {
+                name: "foo".to_owned(),
+            },
+            Item {
+                name: "bar".to_owned(),
+            },
+        ]);
+        assert_round_trip([Record { values: [11, 13] }, Record { values: [17, 19] }]);
+
+        let record = Record {
+            values: [[11, 13], [17, 19]],
+        };
+        let text = crate::ser_to_string(&record).unwrap();
+        assert!(text.contains("(11 13)"));
+        assert_eq!(
+            crate::de_from_str::<Record<[i32; 2], 2>>(&text).unwrap(),
+            record
+        );
+    }
+
+    #[test]
+    fn test_array_length_mismatch() {
+        for text in [
+            "{values: []}",
+            "{values: [11 13 17]}",
+            "{values: [11 13 17 19 23]}",
+            "{values: [11 13 17 19 {extra: [23]}]}",
+        ] {
+            let error = crate::de_from_str::<Record<i32, 4>>(text).unwrap_err();
+            assert!(error.to_string().contains("exactly 4 elements"), "{error}");
+        }
+        let error = crate::de_from_str::<Record<i32, 0>>("{values: [true]}").unwrap_err();
+        assert!(error.to_string().contains("exactly 0 elements"), "{error}");
+    }
+
+    #[test]
+    fn test_array_invalid_input() {
+        for text in [
+            "{values: (11 13 17 19)}",
+            "{values: h\"00 01 02 03\"}",
+            "{values: [11 13 true 19]}",
+            "{values: [11 13",
+            "{values: [11 13 17 19",
+            "{values: [11 13 17 19]} true",
+            "{values: [11 13 17 19)}",
+        ] {
+            assert!(
+                crate::de_from_str::<Record<i32, 4>>(text).is_err(),
+                "{text}"
+            );
+        }
+    }
+}

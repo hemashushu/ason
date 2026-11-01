@@ -32,11 +32,15 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
 - [6 Mapping between Rust Data Types and ASON Types](#6-mapping-between-rust-data-types-and-ason-types)
   - [6.1 Structs](#61-structs)
   - [6.2 Vecs](#62-vecs)
-  - [6.3 HashMaps](#63-hashmaps)
-  - [6.4 Tuples](#64-tuples)
-  - [6.5 Enums](#65-enums)
-  - [6.6 Unsupported Data Types](#66-unsupported-data-types)
-  - [6.7 Default Values](#67-default-values)
+  - [6.3 Tuples](#63-tuples)
+  - [6.4 Array](#64-array)
+  - [6.5 HashMaps](#65-hashmaps)
+  - [6.6 Enums](#66-enums)
+  - [6.7 Byte Data](#67-byte-data)
+  - [6.8 DateTime](#68-datetime)
+  - [6.9 Default Values](#69-default-values)
+  - [6.10 Unsupported Data Types](#610-unsupported-data-types)
+  - [6.11 ASONB Compatibility](#611-asonb-compatibility)
 - [7 Links](#7-links)
 - [8 License](#8-license)
 
@@ -93,7 +97,7 @@ JSON has a simple syntax and has been around for decades, but it struggles to me
 - **No Null Value:** ASON uses the `Option` enumeration to represent optional values, eliminating the error-prone `null` value.
 - **Easy to Write:** ASON supports comments, unquoted object keys, trailing commas, and whitespace as an alternative to commas for separating elements. These features make documents easier to write and edit.
 
-In addition to the text format, ASON has a binary counterpart called [ASONB (ASON Binary)](https://github.com/hemashushu/asonb). ASONB supports incremental updates, streaming, and high-performance access, making it suitable for a wide range of applications, from data storage to data processing pipelines.
+In addition to the text format, ASON has a binary counterpart called [ASONB (ASON Binary)](https://github.com/hemashushu/asonb). ASONB supports streaming, appendable root multi-chunk Strings, Byte Data, and Lists, and memory-mapped access. Incremental updates are limited, and performance benefits depend on the data and encoding choices.
 
 ASON is designed to resemble JSON, so JSON users can learn and adopt it easily. Although ASON is not compatible with JSON, converting between the two is straightforward. ASON is also simple to parse, which makes it easy to implement in other languages and helps ensure its longevity as software ecosystems evolve.
 
@@ -117,10 +121,13 @@ or add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ason = "3.0"
+ason = "3.1"
+serde = { version = "1.0", features = ["derive"] }
 ```
 
 The `ason` crate provides [Serde](https://github.com/serde-rs/serde)-based APIs for serialization and deserialization as well as streaming APIs.
+
+Unlike ASONB serialization, ASON serialization does not require a `Schema` trait or an embedded document schema. Deserialization requires an owned target (`DeserializeOwned`), so strings and byte payloads cannot be borrowed from the input as they can with ASONB's contiguous slice APIs.
 
 ### 4.1 Deserialization and Serialization
 
@@ -140,6 +147,8 @@ Consider the following ASON document:
 This document contains an Object with three fields: `name`, `version`, and `dependencies`, where `dependencies` is a List of strings. It maps directly to the following Rust struct:
 
 ```rust
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Package {
     name: String,
@@ -180,11 +189,13 @@ To serialize the `Package` value back to an ASON string, use `ason::ser_to_strin
 let document2 = ason::ser_to_string(&package).unwrap();
 ```
 
+Single-document deserialization rejects tokens after the root value and checks for EOF, which can block on a live source. Use the streaming API for a live List. Serialization errors may leave partial output in the writer; writes are not transactional.
+
 ### 4.2 Streaming Deserialization and Serialization
 
 For pipes, sockets, and standard I/O, ASON also supports streaming. In streaming mode, elements are written and read one at a time, instead of the whole document being built or loaded in memory at once. This is useful when the producer does not know the full list in advance, or when the consumer wants to start processing before the whole document has arrived.
 
-Currently, streaming is supported only for documents whose root value is a List.
+Currently, the Serde streaming APIs support only documents whose root value is a List. ASON uses `[` and `]` rather than ASONB's multi-chunk binary framing. The closing `]` is required; EOF before it is an error. A stream reader returns an error once and then stops, and does not check for trailing content after `]`.
 
 The streaming serializer lets you open a list writer, write elements as needed, and then close the list explicitly:
 
@@ -277,7 +288,8 @@ fn main() {
     );
 
     // Read the remaining elements until the end of the list.
-    while stream_reader.next().is_some() {
+    while let Some(result) = stream_reader.next() {
+        let _object: Object = result.unwrap();
         // ...
     }
 
@@ -931,14 +943,18 @@ The following Rust data types are supported:
 - `bool`
 - `char`
 - `String`
-- Arrays, such as `[i32; 4]` (serialized as Tuples, see section 6.6)
+- `serde_bytes::Bytes`, `serde_bytes::ByteBuf`, `serde_bytes::ByteArray<N>`, and fields using `#[serde(with = "serde_bytes")]` (Byte Data, see section 6.7)
+- `ason::date_time::DateTime` and chrono fields using `#[serde(with = "ason::date_time")]` (DateTime, see section 6.8)
+- Arrays, such as `[i32; 4]` (Tuples by default; explicit mappings are described in section 6.4)
 - `Vec`
 - Tuples
 - Structs
 - `HashMap`
 - Enums
 
-See section 6.6 for the Rust data types that are not supported.
+`usize` and `isize` use `u64` and `i64`, respectively, following Serde's mapping. Slices serialize as Lists, and ownership wrappers such as `Box<T>` serialize their contents. `Option<T>` and `Result<T, E>` use Enumerations with their usual variant names.
+
+See section 6.10 for unsupported Rust data types and section 6.11 for differences from ASONB.
 
 ### 6.1 Structs
 
@@ -1014,6 +1030,8 @@ Here is an ASON document for an instance of `User`:
 }
 ```
 
+Fixed-length arrays have a different default mapping from `Vec<T>`; see section 6.4 for the default and explicit array mappings.
+
 The elements of a vector can also be compound data, such as structs. The following code adds a field named `addresses` to the struct `User`:
 
 ```rust
@@ -1050,30 +1068,7 @@ Here is an ASON document for an instance of the `User` struct above:
 }
 ```
 
-### 6.3 HashMaps
-
-Rust's `HashMap` corresponds to ASON Map. For example, the following is a `HashMap` with key type `String` and value type `i32`:
-
-```rust
-let mut m1 = HashMap::<String, i32>::new();
-m1.insert("foo".to_owned(), 11);
-m1.insert("bar".to_owned(), 22);
-m1.insert("baz".to_owned(), 33);
-```
-
-The corresponding ASON document for `m1` is:
-
-```json5
-[
-    "foo": 11
-    "bar": 22
-    "baz": 33
-]
-```
-
-Note that the order of the entries depends on the iteration order of the `HashMap`, which is not guaranteed.
-
-### 6.4 Tuples
+### 6.3 Tuples
 
 Rust tuples correspond to ASON Tuples.
 
@@ -1101,7 +1096,82 @@ The corresponding ASON document for `orders` is:
 
 In some programming languages, tuples and vectors are not clearly distinguished, but in Rust they are completely different data types: a vector requires all its elements to be of the same type, while a tuple has a fixed number of elements, each with its own type. ASON's Tuple follows the same convention.
 
-### 6.5 Enums
+### 6.4 Array
+
+Rust fixed-length arrays `[T; N]` have the following mappings:
+
+| Field type                     | Default Serde mapping | `#[serde(with = "serde_bytes")]` | `#[serde(with = "ason::array")]` |
+|--------------------------------|-----------------------|--------------------------------|---------------------------------|
+| `[u8; N]`                      | Tuple of `u8` values  | Byte Data     | List of `u8` values |
+| `[T; N]` where `T` is not `u8` | Tuple of `T` values   | Not supported | List of `T` values  |
+
+The array mapping is:
+
+- Default: Serde treats arrays as tuples, not sequences. For example, `[11, 13, 17, 19]` of type `[i32; 4]` becomes `(11 13 17 19)`, and `*b"abc"` of type `[u8; 3]` becomes `(97_u8 98_u8 99_u8)`. Deserialization expects a Tuple with exactly `N` elements. This is also ASONB's default array mapping. The Serde version used by this crate supplies default array implementations for lengths through 32; empty arrays cannot use this mapping because ASON does not support empty Tuples.
+
+- With `serde_bytes`: Apply `#[serde(with = "serde_bytes")]` to a `[u8; N]` field to read and write Byte Data, such as `h"61 62 63"`. Deserialization requires exactly `N` bytes. For a root value, use `serde_bytes::ByteArray<N>`. Adding the dependency alone does not change an array's mapping, and this adapter does not apply to non-byte arrays.
+
+- With `ason::array`: Apply `#[serde(with = "ason::array")]` to a `[T; N]` field to read and write a List. It works for any const-generic length, including zero and lengths greater than 32, provided `T` implements the required Serde traits. Deserialization requires exactly `N` elements; too few or too many elements, wrong element types, and Tuple or Byte Data inputs are errors. Byte arrays also become Lists under this adapter, not Byte Data.
+
+```rust
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct Record {
+    default_bytes: [u8; 3],
+
+    #[serde(with = "serde_bytes")]
+    byte_data: [u8; 3],
+
+    #[serde(with = "ason::array")]
+    byte_list: [u8; 3],
+
+    default_array: [i32; 4],
+
+    #[serde(with = "ason::array")]
+    integer_list: [i32; 4],
+}
+```
+
+For byte fields containing `b"abc"` and integer fields containing `[11, 13, 17, 19]`, the corresponding ASON document is:
+
+```json5
+{
+    default_bytes: (97_u8 98_u8 99_u8)
+    byte_data: h"61 62 63"
+    byte_list: [97_u8 98_u8 99_u8]
+
+    default_array: (11 13 17 19)
+    integer_list: [11 13 17 19]
+}
+```
+
+An adapted `[T; 0]` becomes `[]`, and a byte-adapted `[u8; 0]` becomes `h""`. `ason::array` changes only the annotated array's outer container; nested array elements keep their own Serde mappings. It does not change unannotated arrays or Rust tuples, and works with reader, writer, and streaming APIs.
+
+### 6.5 HashMaps
+
+Rust's `HashMap` corresponds to ASON Map. For example, the following is a `HashMap` with key type `String` and value type `i32`:
+
+```rust
+let mut m1 = HashMap::<String, i32>::new();
+m1.insert("foo".to_owned(), 11);
+m1.insert("bar".to_owned(), 22);
+m1.insert("baz".to_owned(), 33);
+```
+
+The corresponding ASON document for `m1` is:
+
+```json5
+[
+    "foo": 11
+    "bar": 22
+    "baz": 33
+]
+```
+
+Note that the order of the entries depends on the iteration order of the `HashMap`, which is not guaranteed.
+
+### 6.6 Enums
 
 Rust enums correspond to ASON Enumerations. The following code defines an enum named `Color` with four variants: `Transparent`, `Grayscale`, `Rgb`, and `Hsl`.
 
@@ -1149,20 +1219,77 @@ The corresponding ASON document for `colors` is:
 ]
 ```
 
-### 6.6 Unsupported Data Types
+### 6.7 Byte Data
 
-The following Rust data types are not supported:
+`Vec<u8>` is serialized as a List of `u8`, not Byte Data. Use `serde_bytes::Bytes` for serialization of a byte slice, `serde_bytes::ByteBuf` for an owned value, or `#[serde(with = "serde_bytes")]` on a field to select Byte Data.
 
-- Unit (i.e., `()`)
-- Unit structs, such as `struct Foo;`
-- Newtype structs, such as `struct Width(u32);`
-- Tuple structs, such as `struct RGB(u8, u8, u8);`
+```rust
+let data = serde_bytes::ByteBuf::from(vec![0x00, 0x11, 0xff]);
+let text = ason::ser_to_string(&data).unwrap();
+assert_eq!(text, r#"h"00 11 ff""#);
+assert_eq!(ason::de_from_str::<serde_bytes::ByteBuf>(&text).unwrap(), data);
+```
 
-The [serde data model](https://serde.rs/data-model.html) does not include a date-time type, so ASON DateTime values cannot be directly serialized from or deserialized into Rust's `chrono::DateTime`. Serializing a `chrono::DateTime` value produces a regular string.
+For struct fields, use the `serde_bytes` adapter. First add `serde_bytes` crate to your application's dependencies.
 
-In addition, serde treats fixed-length arrays such as `[i32; 4]` as tuples rather than vectors, so the Rust array `[11, 13, 17, 19]` (of type `[i32; 4]`) is serialized as the ASON Tuple `(11, 13, 17, 19)`.
+```toml
+[dependencies]
+serde_bytes = "0.11"
+```
 
-### 6.7 Default Values
+Then, in your Rust code, add
+
+```rust
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct Record {
+    #[serde(with = "serde_bytes")]
+    data: Vec<u8>,
+}
+```
+
+Empty Byte Data is written as `h""`. Deserialization requires an owned target because the lexer owns the byte payload; it cannot borrow a byte slice from the input.
+
+### 6.8 DateTime
+
+Use `ason::date_time::DateTime` for a root value, or `#[serde(with = "ason::date_time")]` on a `chrono::DateTime<chrono::FixedOffset>` field. These explicit mappings follow the same usage pattern as ASONB and preserve the instant and numeric UTC offset.
+
+First, add `chrono` to your application's dependencies; chrono's `serde` feature is not required by this adapter.
+
+```toml
+[dependencies]
+chrono = "0.4"
+```
+
+Ordinary chrono serialization, with chrono's `serde` feature enabled, produces a regular String in both ASON and ASONB. Use the format-specific DateTime adapter to select DateTime instead.
+
+```rust
+let time = chrono::DateTime::parse_from_rfc3339("2024-03-16T16:30:50+08:00").unwrap();
+let value = ason::date_time::DateTime(time);
+let text = ason::ser_to_string(&value).unwrap();
+
+assert_eq!(text, r#"d"2024-03-16T16:30:50+08:00""#);
+assert_eq!(ason::de_from_str::<ason::date_time::DateTime>(&text).unwrap(), value);
+```
+
+For struct fields, use the `ason::date_time` adapter:
+
+```rust
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct Record {
+    #[serde(with = "ason::date_time")]
+    time: chrono::DateTime<chrono::FixedOffset>,
+}
+```
+
+Serialization writes a full date and time, using `Z` for UTC and `+HH:MM` or `-HH:MM` for other offsets. Deserialization also accepts ASON's date-only and timezone-omitted forms, filling omitted parts with midnight and UTC as appropriate. Regular String literals are not accepted as DateTime.
+
+Unlike ASONB, ASON text does not support fractional seconds or offsets with second precision. Serialization rejects these values, and local years outside `0000` through `9999`, rather than silently losing precision. Whole leap seconds accepted by chrono can be represented as `:60`. The wrappers and adapters also work in nested values and with the reader, writer, and streaming APIs.
+
+### 6.9 Default Values
 
 Serde allows you to specify default values for missing struct fields, and ASON supports this feature. For example:
 
@@ -1191,10 +1318,31 @@ In this example, the default value of the `age` field is provided by the `defaul
 }
 ```
 
+### 6.10 Unsupported Data Types
+
+The following Rust data types are not supported:
+
+- Unit (i.e., `()`)
+- Unit structs, such as `struct Foo;`
+- Newtype structs, such as `struct Width(u32);`
+- Tuple structs, such as `struct RGB(u8, u8, u8);`
+
+The dedicated `ason::date_time::DateTime` wrapper is an exception to the newtype limitation. Empty Tuples are also unsupported. Deserialization requires a concrete target type; Serde's `deserialize_any`, including the path used by untagged enums, is not supported.
+
+### 6.11 ASONB Compatibility
+
+The default numeric, List, Map, Tuple, Object, Enumeration, array, and explicit Byte Data mappings follow [ASONB's Rust type mappings](https://github.com/hemashushu/asonb#23-rust-type-mappings), but the libraries are not interchangeable:
+
+- ASONB serialization requires schema information; ASON serialization does not. ASONB supports additional binary-only mappings for unit values, unit structs, tuple structs, newtype structs, and empty Tuples. These do not imply that every such binary value is representable in ASON text.
+- ASON DateTime supports whole seconds and whole-minute offsets within its text range. ASONB additionally preserves nanoseconds and second-precision offsets, but rejects chrono leap-second values. ASON accepts whole leap seconds as `:60`; these cannot be passed unchanged to ASONB's DateTime adapter.
+- `ason::array` explicitly selects List instead of the shared default Tuple mapping. When sharing such a struct with ASONB, its schema must describe the emitted List; the ASONB documentation requires `#[asonb(schema_with = "path")]` for custom adapters not covered by its schema derive.
+- Serde default fields are an ASON deserialization feature. ASONB records fields in the document schema, so omitted fields must also match its schema rules; ASONB rejects value-dependent `skip_serializing_if` in its schema derive.
+- ASONB-to-ASON conversion must reject values outside ASON's syntax or range unless an explicit conversion policy is supplied. Conversion preserves representable values, not comments, source formatting, or binary encoding choices. ASONB fixed-capacity slots require application-defined interpretation before conversion.
+
 ## 7 Links
 
-- [ASON Specification](https://github.com/hemashushu/ason/docs/specification.md)
-- [ASONB Specification](https://github.com/hemashushu/asonb/README.md)
+- [ASON Specification](docs/specification.md)
+- [ASONB Specification](https://github.com/hemashushu/asonb/blob/main/README.md)
 - [ASON library](https://github.com/hemashushu/ason)
 - [ASONB library](https://github.com/hemashushu/asonb)
 - [ASON Converters (ason2b, ason2j)](https://github.com/hemashushu/ason-converter)
