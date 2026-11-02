@@ -22,7 +22,7 @@ pub fn de_from_str<T>(s: &str) -> Result<T, AsonError>
 where
     T: de::DeserializeOwned,
 {
-    de_from_char_iterator(s.chars())
+    de_from_char_iterator(s.chars().map(Ok::<char, AsonError>))
 }
 
 pub fn de_from_reader<T, R: Read>(reader: R) -> Result<T, AsonError>
@@ -35,7 +35,7 @@ where
 fn de_from_char_iterator<T, CharIter>(char_iterator: CharIter) -> Result<T, AsonError>
 where
     T: de::DeserializeOwned,
-    CharIter: Iterator<Item = char>,
+    CharIter: Iterator<Item = Result<char, AsonError>>,
 {
     // `DeserializeOwned` is required because tokens own their data,
     // so nothing can be borrowed from the input. See: https://serde.rs/lifetimes.html
@@ -137,14 +137,14 @@ where
 type UpstreamIterator<CharIter> =
     NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<CharIter>>>;
 
-pub struct Deserializer<CharIter: Iterator<Item = char>> {
+pub struct Deserializer<CharIter: Iterator<Item = Result<char, AsonError>>> {
     upstream: PeekableIterator<Result<TokenWithRange, AsonError>, UpstreamIterator<CharIter>>,
 
     /// The range of the last token consumed by `next_token()`.
     last_range: Range,
 }
 
-impl<CharIter: Iterator<Item = char>> Deserializer<CharIter> {
+impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> {
     fn from_char_iterator(char_iterator: CharIter) -> Self {
         // The processing pipeline:
         // chars -> chars with positions -> tokens -> tokens with signed numbers normalized
@@ -306,7 +306,9 @@ impl<CharIter: Iterator<Item = char>> Deserializer<CharIter> {
     }
 }
 
-impl<'de, CharIter: Iterator<Item = char>> de::Deserializer<'de> for &mut Deserializer<CharIter> {
+impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> de::Deserializer<'de>
+    for &mut Deserializer<CharIter>
+{
     type Error = AsonError;
 
     fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value, AsonError>
@@ -701,13 +703,13 @@ impl<'de, CharIter: Iterator<Item = char>> de::Deserializer<'de> for &mut Deseri
 }
 
 // Accessor for Lists and Tuples.
-struct SeqAccessor<'a, CharIter: Iterator<Item = char>> {
+struct SeqAccessor<'a, CharIter: Iterator<Item = Result<char, AsonError>>> {
     de: &'a mut Deserializer<CharIter>,
     closing_token: Token,
     type_name: &'static str,
 }
 
-impl<'a, CharIter: Iterator<Item = char>> SeqAccessor<'a, CharIter> {
+impl<'a, CharIter: Iterator<Item = Result<char, AsonError>>> SeqAccessor<'a, CharIter> {
     fn new(
         de: &'a mut Deserializer<CharIter>,
         closing_token: Token,
@@ -721,7 +723,9 @@ impl<'a, CharIter: Iterator<Item = char>> SeqAccessor<'a, CharIter> {
     }
 }
 
-impl<'de, CharIter: Iterator<Item = char>> SeqAccess<'de> for SeqAccessor<'_, CharIter> {
+impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> SeqAccess<'de>
+    for SeqAccessor<'_, CharIter>
+{
     type Error = AsonError;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, AsonError>
@@ -746,13 +750,13 @@ impl<'de, CharIter: Iterator<Item = char>> SeqAccess<'de> for SeqAccessor<'_, Ch
 }
 
 // Accessor for Maps and Objects.
-struct MapAccessor<'a, CharIter: Iterator<Item = char>> {
+struct MapAccessor<'a, CharIter: Iterator<Item = Result<char, AsonError>>> {
     de: &'a mut Deserializer<CharIter>,
     closing_token: Token,
     type_name: &'static str,
 }
 
-impl<'a, CharIter: Iterator<Item = char>> MapAccessor<'a, CharIter> {
+impl<'a, CharIter: Iterator<Item = Result<char, AsonError>>> MapAccessor<'a, CharIter> {
     fn new(
         de: &'a mut Deserializer<CharIter>,
         closing_token: Token,
@@ -766,7 +770,9 @@ impl<'a, CharIter: Iterator<Item = char>> MapAccessor<'a, CharIter> {
     }
 }
 
-impl<'de, CharIter: Iterator<Item = char>> MapAccess<'de> for MapAccessor<'_, CharIter> {
+impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> MapAccess<'de>
+    for MapAccessor<'_, CharIter>
+{
     type Error = AsonError;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, AsonError>
@@ -798,12 +804,12 @@ impl<'de, CharIter: Iterator<Item = char>> MapAccess<'de> for MapAccessor<'_, Ch
     }
 }
 
-struct VariantAccessor<'a, CharIter: Iterator<Item = char>> {
+struct VariantAccessor<'a, CharIter: Iterator<Item = Result<char, AsonError>>> {
     de: &'a mut Deserializer<CharIter>,
     variant_name: String,
 }
 
-impl<'a, CharIter: Iterator<Item = char>> VariantAccessor<'a, CharIter> {
+impl<'a, CharIter: Iterator<Item = Result<char, AsonError>>> VariantAccessor<'a, CharIter> {
     fn new(de: &'a mut Deserializer<CharIter>, variant_name: String) -> Self {
         Self { de, variant_name }
     }
@@ -814,7 +820,9 @@ impl<'a, CharIter: Iterator<Item = char>> VariantAccessor<'a, CharIter> {
 //
 // Note that all enum deserialization methods in Serde refer exclusively to the
 // "externally tagged" enum representation.
-impl<'de, CharIter: Iterator<Item = char>> EnumAccess<'de> for VariantAccessor<'_, CharIter> {
+impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> EnumAccess<'de>
+    for VariantAccessor<'_, CharIter>
+{
     type Error = AsonError;
     type Variant = Self;
 
@@ -831,7 +839,9 @@ impl<'de, CharIter: Iterator<Item = char>> EnumAccess<'de> for VariantAccessor<'
 
 // `VariantAccess` is provided to the `Visitor` to give it the ability to see
 // the content of the single variant that it decided to deserialize.
-impl<'de, CharIter: Iterator<Item = char>> VariantAccess<'de> for VariantAccessor<'_, CharIter> {
+impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> VariantAccess<'de>
+    for VariantAccessor<'_, CharIter>
+{
     type Error = AsonError;
 
     // This accessor is only created for variants followed by `(...)` or `{...}`,
@@ -878,8 +888,10 @@ impl<'de, CharIter: Iterator<Item = char>> VariantAccess<'de> for VariantAccesso
 
 #[cfg(test)]
 mod tests {
+    use std::io::{self, Read};
+
     use crate::{
-        de::{de_from_str, list_stream_reader},
+        de::{de_from_reader, de_from_str, list_stream_reader},
         error::AsonError,
     };
     use pretty_assertions::assert_eq;
@@ -887,6 +899,39 @@ mod tests {
     use serde_bytes::ByteBuf;
 
     use std::collections::HashMap;
+
+    struct FailingReader {
+        bytes: &'static [u8],
+    }
+
+    impl Read for FailingReader {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if let Some((&byte, remaining)) = self.bytes.split_first() {
+                buffer[0] = byte;
+                self.bytes = remaining;
+                Ok(1)
+            } else {
+                Err(io::Error::other("test read failure"))
+            }
+        }
+    }
+
+    #[test]
+    fn test_reader_errors_propagate_through_deserializers() {
+        let error = de_from_reader::<Vec<i32>, _>(FailingReader { bytes: b"[1 " }).unwrap_err();
+        assert!(matches!(
+            error,
+            AsonError::Message(message) if message.contains("test read failure")
+        ));
+
+        let mut reader = list_stream_reader::<i32, _>(FailingReader { bytes: b"[1 " }).unwrap();
+        assert_eq!(reader.next().unwrap().unwrap(), 1);
+        assert!(matches!(
+            reader.next().unwrap(),
+            Err(AsonError::Message(message)) if message.contains("test read failure")
+        ));
+        assert!(reader.next().is_none());
+    }
 
     #[test]
     fn test_primitive_values() {
@@ -1175,6 +1220,15 @@ mod tests {
         assert!(matches!(
             de_from_str::<Vec<i32>>(r#"[11,13"#),
             Err(AsonError::UnexpectedEndOfDocument(_))
+        ));
+    }
+
+    #[test]
+    fn test_invalid_utf8_propagates_through_deserializer() {
+        let error = de_from_reader::<String, _>(&b"\"x\xff\""[..]).unwrap_err();
+        assert!(matches!(
+            error,
+            AsonError::Message(message) if message.contains("Invalid UTF-8")
         ));
     }
 

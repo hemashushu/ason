@@ -4,7 +4,7 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::fmt::Display;
+use std::{cell::Cell, fmt::Display};
 
 use chrono::DateTime;
 
@@ -19,9 +19,9 @@ use crate::{
 
 pub struct Lexer<T>
 where
-    T: Iterator<Item = CharWithPosition>,
+    T: Iterator<Item = Result<CharWithPosition, AsonError>>,
 {
-    upstream: PeekableIterator<CharWithPosition, T>,
+    upstream: PeekableIterator<Result<CharWithPosition, AsonError>, T>,
 
     // The position of the last character consumed by `next_char()`.
     last_position: Position,
@@ -30,28 +30,40 @@ where
     // It stores the start positions of tokens while their characters are consumed,
     // so that the `Range` of each token can be built afterwards.
     position_stack: Vec<Position>,
+
+    source_error: Cell<Option<AsonError>>,
+    finished: bool,
 }
 
 impl<T> Lexer<T>
 where
-    T: Iterator<Item = CharWithPosition>,
+    T: Iterator<Item = Result<CharWithPosition, AsonError>>,
 {
-    pub fn new(upstream: PeekableIterator<CharWithPosition, T>) -> Self {
+    pub fn new(upstream: PeekableIterator<Result<CharWithPosition, AsonError>, T>) -> Self {
         Self {
             upstream,
             last_position: Position::default(),
             position_stack: vec![],
+            source_error: Cell::new(None),
+            finished: false,
         }
     }
 
     fn next_char(&mut self) -> Option<char> {
-        match self.upstream.next() {
-            Some(CharWithPosition {
-                character,
-                position,
-            }) => {
-                self.last_position = position;
-                Some(character)
+        match self.upstream.peek(0) {
+            Some(Ok(_)) => match self.upstream.next() {
+                Some(Ok(CharWithPosition {
+                    character,
+                    position,
+                })) => {
+                    self.last_position = position;
+                    Some(character)
+                }
+                _ => unreachable!(),
+            },
+            Some(Err(error)) => {
+                self.source_error.set(Some(error.clone()));
+                None
             }
             None => None,
         }
@@ -59,14 +71,22 @@ where
 
     fn peek_char(&self, offset: usize) -> Option<&char> {
         match self.upstream.peek(offset) {
-            Some(CharWithPosition { character, .. }) => Some(character),
+            Some(Ok(CharWithPosition { character, .. })) => Some(character),
+            Some(Err(error)) => {
+                self.source_error.set(Some(error.clone()));
+                None
+            }
             None => None,
         }
     }
 
     fn peek_position(&self, offset: usize) -> Option<&Position> {
         match self.upstream.peek(offset) {
-            Some(CharWithPosition { position, .. }) => Some(position),
+            Some(Ok(CharWithPosition { position, .. })) => Some(position),
+            Some(Err(error)) => {
+                self.source_error.set(Some(error.clone()));
+                None
+            }
             None => None,
         }
     }
@@ -76,9 +96,14 @@ where
     ///
     /// Returns `false` if there is no character at the given offset.
     fn peek_char_and_equals(&self, offset: usize, expected_char: char) -> bool {
-        matches!(
-            self.upstream.peek(offset),
-            Some(CharWithPosition { character, .. }) if character == &expected_char)
+        match self.upstream.peek(offset) {
+            Some(Ok(CharWithPosition { character, .. })) => character == &expected_char,
+            Some(Err(error)) => {
+                self.source_error.set(Some(error.clone()));
+                false
+            }
+            None => false,
+        }
     }
 
     /// Pushes the current position onto the stack.
@@ -100,18 +125,27 @@ where
 
 impl<T> Iterator for Lexer<T>
 where
-    T: Iterator<Item = CharWithPosition>,
+    T: Iterator<Item = Result<CharWithPosition, AsonError>>,
 {
     type Item = Result<TokenWithRange, AsonError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.lex()
+        if self.finished {
+            return None;
+        }
+
+        let result = self.lex();
+        if let Some(error) = self.source_error.take() {
+            self.finished = true;
+            return Some(Err(error));
+        }
+        result
     }
 }
 
 impl<T> Lexer<T>
 where
-    T: Iterator<Item = CharWithPosition>,
+    T: Iterator<Item = Result<CharWithPosition, AsonError>>,
 {
     fn lex(&mut self) -> Option<Result<TokenWithRange, AsonError>> {
         // ```diagram
@@ -1716,7 +1750,7 @@ mod tests {
 
     /// Helper function to lex tokens from a string
     fn lex_from_str(s: &str) -> Result<Vec<TokenWithRange>, AsonError> {
-        let chars = s.chars();
+        let chars = s.chars().map(Ok::<char, AsonError>);
 
         let char_position_iter = CharsWithPositionIterator::new(chars);
         let peekable_char_position_iter = PeekableIterator::new(char_position_iter);

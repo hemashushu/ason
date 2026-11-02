@@ -60,7 +60,8 @@ pub fn serialize<S: Serializer>(
         .checked_add_signed(TimeDelta::seconds(i64::from(
             value.offset().local_minus_utc(),
         )));
-    if value.timestamp_subsec_nanos() % 1_000_000_000 != 0
+    // if value.timestamp_subsec_nanos() % 1_000_000_000 != 0
+    if !value.timestamp_subsec_nanos().is_multiple_of(1_000_000_000)
         || value.offset().local_minus_utc() % 60 != 0
         || !local.is_some_and(|local| (0..=9999).contains(&local.year()))
     {

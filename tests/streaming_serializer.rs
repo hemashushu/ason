@@ -92,10 +92,7 @@ fn test_batch_stream_serialize_and_deserialize() {
 
 #[test]
 fn test_concrete_reader_types() {
-    assert_eq!(
-        ason::de_from_str::<i32>("42").unwrap(),
-        42
-    );
+    assert_eq!(ason::de_from_str::<i32>("42").unwrap(), 42);
 
     let stream: ason::ListStreamReader<i32, &[u8]> =
         ason::list_stream_reader("[11 13]".as_bytes()).unwrap();

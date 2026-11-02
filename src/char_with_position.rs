@@ -4,6 +4,7 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
+use crate::error::AsonError;
 use crate::position::Position;
 
 /// Represents a character along with its position in the source text.
@@ -28,7 +29,7 @@ impl CharWithPosition {
 /// An iterator that yields each character from the upstream iterator along with its position in the source text.
 pub struct CharsWithPositionIterator<T>
 where
-    T: Iterator<Item = char>,
+    T: Iterator<Item = Result<char, AsonError>>,
 {
     /// The underlying iterator that provides characters.
     upstream: T,
@@ -39,7 +40,7 @@ where
 
 impl<T> CharsWithPositionIterator<T>
 where
-    T: Iterator<Item = char>,
+    T: Iterator<Item = Result<char, AsonError>>,
 {
     pub fn new(upstream: T) -> Self {
         Self {
@@ -51,13 +52,13 @@ where
 
 impl<T> Iterator for CharsWithPositionIterator<T>
 where
-    T: Iterator<Item = char>,
+    T: Iterator<Item = Result<char, AsonError>>,
 {
-    type Item = CharWithPosition;
+    type Item = Result<CharWithPosition, AsonError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.upstream.next() {
-            Some(c) => {
+            Some(Ok(c)) => {
                 // Save the current position to associate with the character being returned.
                 let last_position = self.current_position;
 
@@ -73,8 +74,9 @@ where
                     self.current_position.column += 1;
                 }
 
-                Some(CharWithPosition::new(c, last_position))
+                Some(Ok(CharWithPosition::new(c, last_position)))
             }
+            Some(Err(error)) => Some(Err(error)),
             None => None,
         }
     }
@@ -84,80 +86,81 @@ where
 mod tests {
     use crate::{
         char_with_position::{CharWithPosition, CharsWithPositionIterator},
+        error::AsonError,
         position::Position,
     };
 
     #[test]
     fn test_chars_with_position_iter() {
         {
-            let chars = "a\nmn\nxyz".chars();
+            let chars = "a\nmn\nxyz".chars().map(Ok::<char, AsonError>);
             let mut char_position_iter = CharsWithPositionIterator::new(chars);
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('a', Position::new(0, 0, 0)))
+                Some(Ok(CharWithPosition::new('a', Position::new(0, 0, 0))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('\n', Position::new(1, 0, 1)))
+                Some(Ok(CharWithPosition::new('\n', Position::new(1, 0, 1))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('m', Position::new(2, 1, 0)))
+                Some(Ok(CharWithPosition::new('m', Position::new(2, 1, 0))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('n', Position::new(3, 1, 1)))
+                Some(Ok(CharWithPosition::new('n', Position::new(3, 1, 1))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('\n', Position::new(4, 1, 2)))
+                Some(Ok(CharWithPosition::new('\n', Position::new(4, 1, 2))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('x', Position::new(5, 2, 0)))
+                Some(Ok(CharWithPosition::new('x', Position::new(5, 2, 0))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('y', Position::new(6, 2, 1)))
+                Some(Ok(CharWithPosition::new('y', Position::new(6, 2, 1))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('z', Position::new(7, 2, 2)))
+                Some(Ok(CharWithPosition::new('z', Position::new(7, 2, 2))))
             );
 
             assert!(char_position_iter.next().is_none());
         }
 
         {
-            let chars = "\n\r\n\n".chars();
+            let chars = "\n\r\n\n".chars().map(Ok::<char, AsonError>);
             let mut char_position_iter = CharsWithPositionIterator::new(chars);
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('\n', Position::new(0, 0, 0)))
+                Some(Ok(CharWithPosition::new('\n', Position::new(0, 0, 0))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('\r', Position::new(1, 1, 0)))
+                Some(Ok(CharWithPosition::new('\r', Position::new(1, 1, 0))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('\n', Position::new(2, 1, 1)))
+                Some(Ok(CharWithPosition::new('\n', Position::new(2, 1, 1))))
             );
 
             assert_eq!(
                 char_position_iter.next(),
-                Some(CharWithPosition::new('\n', Position::new(3, 2, 0)))
+                Some(Ok(CharWithPosition::new('\n', Position::new(3, 2, 0))))
             );
 
             assert!(char_position_iter.next().is_none());

@@ -4,13 +4,16 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::io::Read;
+use std::io::{self, BufReader, Read};
+
+use crate::error::AsonError;
 
 pub(super) struct UTF8CharIterator<T>
 where
     T: Read,
 {
-    reader: T,
+    reader: BufReader<T>,
+    finished: bool,
 }
 
 impl<T> UTF8CharIterator<T>
@@ -20,7 +23,10 @@ where
     /// Create a new UTF8CharIterator from a reader.
     /// `BufReader` is also supported, but not required.
     pub(super) fn new(reader: T) -> Self {
-        Self { reader }
+        Self {
+            reader: BufReader::new(reader),
+            finished: false,
+        }
     }
 }
 
@@ -28,103 +34,43 @@ impl<T> UTF8CharIterator<T>
 where
     T: Read,
 {
-    /// Read a UTF-8 character from the stream.
-    /// Ignores invalid UTF-8 sequences and I/O errors.
+    /// Read and validate one UTF-8 character, tolerating short reads.
     #[inline]
-    fn read_char(&mut self) -> Option<char> {
-        // 1 byte:  0_bbb_aaaa
-        // 2 bytes: 110_ccc_bb, 10_bb_aaaa
-        // 3 bytes: 1110_dddd, 10_cccc_bb, 10_bb_aaaa
-        // 4 bytes: 11110_f_ee, 10_ee_dddd, 10_cccc_bb, 10_bb_aaaa
-        // ref:
-        // https://en.wikipedia.org/wiki/UTF-8
+    fn read_char(&mut self) -> Result<Option<char>, AsonError> {
+        let Some(first_byte) = self.read_byte()? else {
+            return Ok(None);
+        };
 
-        let first_byte = self.try_read_byte()?;
-        match first_byte.leading_ones() {
-            0 => {
-                // 0_bbb_aaaa
-                let char = unsafe { char::from_u32_unchecked(first_byte as u32) };
-                Some(char)
-            }
-            2 => {
-                // 110_ccc_bb, 10_bb_aaaa
-                let second_byte = self.try_read_byte()?;
-                let mut code: u32 = 0;
-                code |= ((first_byte & 0b1_1111) as u32) << 6;
-                code |= (second_byte & 0b11_1111) as u32;
-                let char = unsafe { char::from_u32_unchecked(code) };
-                Some(char)
-            }
-            3 => {
-                // 1110_dddd, 10_cccc_bb, 10_bb_aaaa
-                let two_bytes = self.consume_two_bytes()?;
-                let mut code: u32 = 0;
-                code |= ((first_byte & 0b1111) as u32) << 12;
-                code |= ((two_bytes[0] & 0b11_1111) as u32) << 6;
-                code |= (two_bytes[1] & 0b11_1111) as u32;
-                let char = unsafe { char::from_u32_unchecked(code) };
-                Some(char)
-            }
-            4 => {
-                // 11110_f_ee, 10_ee_dddd, 10_cccc_bb, 10_bb_aaaa
-                let three_bytes = self.consume_three_bytes()?;
+        let width = match first_byte {
+            0x00..=0x7f => 1,
+            0xc2..=0xdf => 2,
+            0xe0..=0xef => 3,
+            0xf0..=0xf4 => 4,
+            _ => return Err(AsonError::Message("Invalid UTF-8 leading byte.".into())),
+        };
 
-                let mut code: u32 = 0;
-                code |= ((first_byte & 0b111) as u32) << 18;
-                code |= ((three_bytes[0] & 0b11_1111) as u32) << 12;
-                code |= ((three_bytes[1] & 0b11_1111) as u32) << 6;
-                code |= (three_bytes[2] & 0b11_1111) as u32;
-                let char = unsafe { char::from_u32_unchecked(code) };
-                Some(char)
-            }
-            _ => {
-                // A byte between 0x80 and 0xBF is not a valid starting byte for UTF-8.
-                //
-                // P.S. 0x80 to 0xFF are not standard ASCII,
-                // but often used in extended ASCII encodings like ISO-8859-1 (Latin-1), Windows-1252, etc.
-                //
-                // ```rust
-                // panic!(
-                //     "Invalid UTF-8 sequence, character code: 0x{:x}, at position: {}.",
-                //     first_byte, position
-                // );
-                // ```
-
-                // Ignore invalid UTF-8 sequences.
-                Some(first_byte as char)
-            }
+        let mut bytes = [0; 4];
+        bytes[0] = first_byte;
+        for byte in bytes.iter_mut().take(width).skip(1) {
+            *byte = self
+                .read_byte()?
+                .ok_or_else(|| AsonError::Message("Incomplete UTF-8 sequence at EOF.".into()))?;
         }
+
+        let text = std::str::from_utf8(&bytes[..width])
+            .map_err(|error| AsonError::Message(format!("Invalid UTF-8: {error}")))?;
+        Ok(text.chars().next())
     }
 
-    #[inline]
-    fn try_read_byte(&mut self) -> Option<u8> {
-        let mut buf = [0_u8; 1];
-        let len = self.reader.read(&mut buf).unwrap_or(0);
-        if len == 0 { None } else { Some(buf[0]) }
-    }
-
-    #[inline]
-    fn consume_two_bytes(&mut self) -> Option<[u8; 2]> {
-        let mut buf = [0_u8; 2];
-        let len = self.reader.read(&mut buf).unwrap_or(0);
-        if len < 2 {
-            // Incomplete UTF-8 character stream.
-            None
-        } else {
-            Some(buf)
-        }
-    }
-
-    #[inline]
-    fn consume_three_bytes(&mut self) -> Option<[u8; 3]> {
-        let mut buf = [0_u8; 3];
-        let len = self.reader.read(&mut buf).unwrap_or(0);
-
-        if len < 3 {
-            // Incomplete UTF-8 character stream.
-            None
-        } else {
-            Some(buf)
+    fn read_byte(&mut self) -> Result<Option<u8>, AsonError> {
+        let mut byte = [0];
+        loop {
+            match self.reader.read(&mut byte) {
+                Ok(0) => return Ok(None),
+                Ok(_) => return Ok(Some(byte[0])),
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(AsonError::Message(format!("I/O error: {error}"))),
+            }
         }
     }
 }
@@ -133,20 +79,74 @@ impl<T> Iterator for UTF8CharIterator<T>
 where
     T: Read,
 {
-    type Item = char;
+    type Item = Result<char, AsonError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_char()
+        if self.finished {
+            return None;
+        }
+
+        match self.read_char() {
+            Ok(Some(character)) => Some(Ok(character)),
+            Ok(None) => {
+                self.finished = true;
+                None
+            }
+            Err(error) => {
+                self.finished = true;
+                Some(Err(error))
+            }
+        }
     }
 }
 
+impl<T: Read> std::iter::FusedIterator for UTF8CharIterator<T> {}
+
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::io::{self, Cursor, Read};
 
     use pretty_assertions::assert_eq;
 
+    use crate::error::AsonError;
     use crate::utf8_char_iterator::UTF8CharIterator;
+
+    struct FailingReader {
+        bytes: &'static [u8],
+    }
+
+    impl Read for FailingReader {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if let Some((&byte, remaining)) = self.bytes.split_first() {
+                buffer[0] = byte;
+                self.bytes = remaining;
+                Ok(1)
+            } else {
+                Err(io::Error::other("test read failure"))
+            }
+        }
+    }
+
+    struct ShortInterruptedReader {
+        bytes: &'static [u8],
+        interrupted: bool,
+    }
+
+    impl Read for ShortInterruptedReader {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if !self.interrupted {
+                self.interrupted = true;
+                return Err(io::ErrorKind::Interrupted.into());
+            }
+            if let Some((&byte, remaining)) = self.bytes.split_first() {
+                buffer[0] = byte;
+                self.bytes = remaining;
+                Ok(1)
+            } else {
+                Ok(0)
+            }
+        }
+    }
 
     #[test]
     fn test_utf8_char_iterator() {
@@ -154,9 +154,9 @@ mod tests {
             let bytes = b"abc" as &[u8];
             let mut charstream = UTF8CharIterator::new(bytes);
 
-            assert_eq!(charstream.next(), Some('a'));
-            assert_eq!(charstream.next(), Some('b'));
-            assert_eq!(charstream.next(), Some('c'));
+            assert_eq!(charstream.next(), Some(Ok('a')));
+            assert_eq!(charstream.next(), Some(Ok('b')));
+            assert_eq!(charstream.next(), Some(Ok('c')));
             assert_eq!(charstream.next(), None);
         }
 
@@ -165,12 +165,45 @@ mod tests {
             let bytes = Cursor::new(data);
             let mut charstream = UTF8CharIterator::new(bytes);
 
-            assert_eq!(charstream.next(), Some('a'));
-            assert_eq!(charstream.next(), Some('文'));
-            assert_eq!(charstream.next(), Some('b'));
-            assert_eq!(charstream.next(), Some('😋'));
-            assert_eq!(charstream.next(), Some('c'));
+            assert_eq!(charstream.next(), Some(Ok('a')));
+            assert_eq!(charstream.next(), Some(Ok('文')));
+            assert_eq!(charstream.next(), Some(Ok('b')));
+            assert_eq!(charstream.next(), Some(Ok('😋')));
+            assert_eq!(charstream.next(), Some(Ok('c')));
             assert_eq!(charstream.next(), None);
         }
+    }
+
+    #[test]
+    fn test_invalid_and_incomplete_utf8() {
+        for bytes in [&[0xff][..], &[0xc0, 0x80][..], &[0xe2, 0x82][..]] {
+            let mut chars = UTF8CharIterator::new(bytes);
+            assert!(matches!(chars.next(), Some(Err(AsonError::Message(_)))));
+            assert_eq!(chars.next(), None);
+        }
+    }
+
+    #[test]
+    fn test_io_error_is_not_eof() {
+        let mut chars = UTF8CharIterator::new(FailingReader { bytes: b"a" });
+        assert_eq!(chars.next(), Some(Ok('a')));
+        assert!(matches!(
+            chars.next(),
+            Some(Err(AsonError::Message(message))) if message.contains("test read failure")
+        ));
+        assert_eq!(chars.next(), None);
+    }
+
+    #[test]
+    fn test_short_reads_and_interrupted_reads() {
+        let text = "文😋";
+        let reader = ShortInterruptedReader {
+            bytes: text.as_bytes(),
+            interrupted: false,
+        };
+        let decoded = UTF8CharIterator::new(reader)
+            .collect::<Result<String, _>>()
+            .unwrap();
+        assert_eq!(decoded, text);
     }
 }

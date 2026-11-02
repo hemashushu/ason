@@ -420,7 +420,7 @@ mod tests {
     /// Helper function to lex tokens from a string.
     fn lex_from_str(s: &str) -> Result<Vec<TokenWithRange>, AsonError> {
         // Lex
-        let chars = s.chars();
+        let chars = s.chars().map(Ok::<char, AsonError>);
         let char_position_iter = CharsWithPositionIterator::new(chars);
         let peekable_char_position_iter = PeekableIterator::new(char_position_iter);
         let lexer = Lexer::new(peekable_char_position_iter);
