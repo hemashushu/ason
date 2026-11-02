@@ -106,6 +106,13 @@ where
         }
     }
 
+    fn is_asonb_header(&self) -> bool {
+        ['A', 'S', 'O', 'N', 'B', '\0', '\u{1}']
+            .iter()
+            .enumerate()
+            .all(|(index, expected)| self.peek_char_and_equals(index + 1, *expected))
+    }
+
     /// Pushes the current position onto the stack.
     ///
     /// The current position is the position of the next character,
@@ -290,6 +297,17 @@ where
                 '\'' => {
                     // Char
                     break self.lex_char();
+                }
+                '\0' if self
+                    .peek_position(0)
+                    .is_some_and(|position| position.index == 0)
+                    && self.is_asonb_header() =>
+                {
+                    break Err(AsonError::MessageWithPosition(
+                        "The input looks like ASONB binary data, not ASON text."
+                            .to_owned(),
+                        *self.peek_position(0).unwrap(),
+                    ));
                 }
                 'a'..='z' | 'A'..='Z' | '_' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{10ffff}' => {
                     // Identifier

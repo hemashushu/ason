@@ -934,6 +934,26 @@ mod tests {
     }
 
     #[test]
+    fn test_asonb_input_has_friendly_error() {
+        let input = b"\0ASONB\0\x01";
+        let assert_asonb_error = |error: AsonError| {
+            assert!(matches!(
+                error,
+                AsonError::MessageWithPosition(message, position)
+                    if message.contains("ASONB binary data") && position.index == 0
+            ));
+        };
+
+        assert_asonb_error(de_from_reader::<i32, _>(&input[..]).unwrap_err());
+
+        let error = match list_stream_reader::<i32, _>(&input[..]) {
+            Err(error) => error,
+            Ok(_) => panic!("ASONB data should not be accepted as ASON text"),
+        };
+        assert_asonb_error(error);
+    }
+
+    #[test]
     fn test_primitive_values() {
         // bool
         {
