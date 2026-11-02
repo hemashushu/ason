@@ -6,7 +6,7 @@
 
 use std::io::Read;
 
-pub struct UTF8CharIterator<T>
+pub(super) struct UTF8CharIterator<T>
 where
     T: Read,
 {
@@ -19,7 +19,7 @@ where
 {
     /// Create a new UTF8CharIterator from a reader.
     /// `BufReader` is also supported, but not required.
-    pub fn new(reader: T) -> Self {
+    pub(super) fn new(reader: T) -> Self {
         Self { reader }
     }
 }

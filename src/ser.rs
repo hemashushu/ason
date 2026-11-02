@@ -33,6 +33,14 @@ where
     value.serialize(&mut serializer)
 }
 
+pub fn list_stream_writer<T, W>(writer: &mut W) -> ListStreamWriter<'_, W, T>
+where
+    W: Write,
+{
+    let serializer = Serializer::new(writer);
+    ListStreamWriter::new(serializer)
+}
+
 pub struct Serializer<'a, W>
 where
     W: Write,
@@ -129,14 +137,6 @@ where
         self.is_first_element = false;
         Ok(())
     }
-}
-
-pub fn list_stream_writer<T, W>(writer: &mut W) -> ListStreamWriter<'_, W, T>
-where
-    W: Write,
-{
-    let serializer = Serializer::new(writer);
-    ListStreamWriter::new(serializer)
 }
 
 pub struct ListStreamWriter<'a, W, T>

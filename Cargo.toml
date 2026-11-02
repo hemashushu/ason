@@ -1,6 +1,6 @@
 [package]
 name = "ason"
-version = "3.1.2"
+version = "3.2.0"
 edition = "2024"
 
 license-file = "LICENSE.additional"
@@ -11,10 +11,10 @@ keywords = ["ason", "serde"]
 categories = ["encoding", "parsing"]
 
 [dependencies]
-chrono = "0.4.45"
-serde = { version = "1.0.229", features = ["derive"] }
-serde_bytes = "0.11.19"
-hexfloat2 = "0.2.0"
+chrono = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_bytes = "0.11"
+hexfloat2 = "0.2"
 
 [dev-dependencies]
-pretty_assertions = "1.4.1"
+pretty_assertions = "1.4"

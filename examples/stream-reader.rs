@@ -24,8 +24,7 @@ struct Object {
 
 fn main() {
     let mut input = std::io::stdin().lock();
-    let mut char_iter = ason::UTF8CharIterator::new(&mut input);
-    let mut stream_reader = ason::list_stream_reader(&mut char_iter).unwrap();
+    let mut stream_reader = ason::list_stream_reader(&mut input).unwrap();
 
     // Deserialize the first element.
     let o1: Object = stream_reader.next().unwrap().unwrap();

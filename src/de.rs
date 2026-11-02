@@ -32,7 +32,7 @@ where
     de_from_char_iterator(UTF8CharIterator::new(reader))
 }
 
-pub fn de_from_char_iterator<T, CharIter>(char_iterator: CharIter) -> Result<T, AsonError>
+fn de_from_char_iterator<T, CharIter>(char_iterator: CharIter) -> Result<T, AsonError>
 where
     T: de::DeserializeOwned,
     CharIter: Iterator<Item = char>,
@@ -56,19 +56,13 @@ where
 /// Opens a reader that deserializes the elements of a root List one at a time.
 ///
 /// It returns a `ListStreamReader`, which is an iterator over the deserialized elements.
-/// The input can be an owned character iterator or a mutable reference to one.
-///
-/// - If the source is a `std::io::Read`, use `let mut char_iter = UTF8CharIterator::new(&mut reader)`
-///   to convert it to a character iterator.
-/// - If the source is a string slice, use `let mut chars = s.chars()` to convert it to a character iterator.
-pub fn list_stream_reader<T, CharIter>(
-    char_iterator: CharIter,
-) -> Result<ListStreamReader<T, CharIter>, AsonError>
+/// The input can be any `std::io::Read` source, such as a file, pipe, or byte slice.
+pub fn list_stream_reader<T, R>(reader: R) -> Result<ListStreamReader<T, R>, AsonError>
 where
     T: de::DeserializeOwned,
-    CharIter: Iterator<Item = char>,
+    R: Read,
 {
-    let mut deserializer = Deserializer::from_char_iterator(char_iterator);
+    let mut deserializer = Deserializer::from_char_iterator(UTF8CharIterator::new(reader));
 
     // consume the opening bracket '['
     deserializer.consume_token_and_assert(&Token::BracketOpen, "a \"List\"")?;
@@ -76,12 +70,12 @@ where
     Ok(ListStreamReader::new(deserializer))
 }
 
-pub struct ListStreamReader<T, CharIter>
+pub struct ListStreamReader<T, R>
 where
     T: de::DeserializeOwned,
-    CharIter: Iterator<Item = char>,
+    R: Read,
 {
-    deserializer: Deserializer<CharIter>,
+    deserializer: Deserializer<UTF8CharIterator<R>>,
 
     // Set when the closing bracket ']' has been consumed or an error has occurred,
     // after which the iterator only returns `None`.
@@ -90,12 +84,12 @@ where
     _marker: PhantomData<fn() -> T>,
 }
 
-impl<T, CharIter> ListStreamReader<T, CharIter>
+impl<T, R> ListStreamReader<T, R>
 where
     T: de::DeserializeOwned,
-    CharIter: Iterator<Item = char>,
+    R: Read,
 {
-    fn new(deserializer: Deserializer<CharIter>) -> Self {
+    fn new(deserializer: Deserializer<UTF8CharIterator<R>>) -> Self {
         Self {
             deserializer,
             finished: false,
@@ -104,10 +98,10 @@ where
     }
 }
 
-impl<T, CharIter> Iterator for ListStreamReader<T, CharIter>
+impl<T, R> Iterator for ListStreamReader<T, R>
 where
     T: de::DeserializeOwned,
-    CharIter: Iterator<Item = char>,
+    R: Read,
 {
     type Item = Result<T, AsonError>;
 
@@ -887,7 +881,6 @@ mod tests {
     use crate::{
         de::{de_from_str, list_stream_reader},
         error::AsonError,
-        utf8_char_iterator::UTF8CharIterator,
     };
     use pretty_assertions::assert_eq;
     use serde::Deserialize;
@@ -1880,8 +1873,7 @@ mod tests {
     fn test_deserialize_stream_list() {
         let s = r#"[11 13]"#;
 
-        let mut chars = s.chars();
-        let mut de = list_stream_reader(&mut chars).unwrap();
+        let mut de = list_stream_reader(s.as_bytes()).unwrap();
 
         assert_eq!(11, de.next().unwrap().unwrap());
         assert_eq!(13, de.next().unwrap().unwrap());
@@ -1905,8 +1897,7 @@ mod tests {
 ]"#;
 
         let data = s.as_bytes();
-        let mut char_iter = UTF8CharIterator::new(data);
-        let mut de = list_stream_reader(&mut char_iter).unwrap();
+        let mut de = list_stream_reader(data).unwrap();
 
         let o1: Object = de.next().unwrap().unwrap();
         assert_eq!(
@@ -1929,15 +1920,13 @@ mod tests {
         assert!(de.next().is_none());
 
         // An error is returned once, and then the iterator stops.
-        let mut chars = r#"[11 "x" 13]"#.chars();
-        let mut de = list_stream_reader::<i32, _>(&mut chars).unwrap();
+        let mut de = list_stream_reader::<i32, _>(r#"[11 "x" 13]"#.as_bytes()).unwrap();
         assert_eq!(11, de.next().unwrap().unwrap());
         assert!(de.next().unwrap().is_err());
         assert!(de.next().is_none());
 
         // A lexing error is returned rather than ending the iteration silently.
-        let mut chars = r#"[11 &]"#.chars();
-        let mut de = list_stream_reader::<i32, _>(&mut chars).unwrap();
+        let mut de = list_stream_reader::<i32, _>(r#"[11 &]"#.as_bytes()).unwrap();
         assert_eq!(11, de.next().unwrap().unwrap());
         assert!(de.next().unwrap().is_err());
         assert!(de.next().is_none());

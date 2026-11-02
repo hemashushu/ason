@@ -22,13 +22,6 @@ mod utf8_char_iterator;
 pub use de::ListStreamReader;
 pub use error::AsonError;
 pub use ser::ListStreamWriter;
-pub use utf8_char_iterator::UTF8CharIterator;
 
-pub use de::de_from_char_iterator;
-pub use de::de_from_reader;
-pub use de::de_from_str;
-pub use de::list_stream_reader;
-
-pub use ser::list_stream_writer;
-pub use ser::ser_to_string;
-pub use ser::ser_to_writer;
+pub use de::{de_from_reader, de_from_str, list_stream_reader};
+pub use ser::{list_stream_writer, ser_to_string, ser_to_writer};

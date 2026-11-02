@@ -4,7 +4,6 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use ason::UTF8CharIterator;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -35,8 +34,7 @@ fn test_stream_serialize_and_deserialize() {
 
     // deserialize
     let mut cursor = std::io::Cursor::new(buf);
-    let mut char_iter = UTF8CharIterator::new(&mut cursor);
-    let mut de = ason::list_stream_reader(&mut char_iter).unwrap();
+    let mut de = ason::list_stream_reader(&mut cursor).unwrap();
 
     let o1: Object = de.next().unwrap().unwrap();
     assert_eq!(
@@ -85,8 +83,7 @@ fn test_batch_stream_serialize_and_deserialize() {
     stream.end_list().unwrap();
 
     assert_eq!(buf, ason::ser_to_string(&values).unwrap().as_bytes());
-    let chars = UTF8CharIterator::new(buf.as_slice());
-    let decoded = ason::list_stream_reader::<Object, _>(chars)
+    let decoded = ason::list_stream_reader::<Object, _>(buf.as_slice())
         .unwrap()
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
@@ -94,28 +91,17 @@ fn test_batch_stream_serialize_and_deserialize() {
 }
 
 #[test]
-fn test_concrete_character_iterators() {
+fn test_concrete_reader_types() {
     assert_eq!(
-        ason::de_from_char_iterator::<i32, _>("42".chars()).unwrap(),
+        ason::de_from_str::<i32>("42").unwrap(),
         42
     );
 
-    let mut chars = "42".chars();
-    assert_eq!(
-        ason::de_from_char_iterator::<i32, _>(&mut chars).unwrap(),
-        42
-    );
-
-    let stream: ason::ListStreamReader<i32, std::str::Chars<'_>> =
-        ason::list_stream_reader("[11 13]".chars()).unwrap();
+    let stream: ason::ListStreamReader<i32, &[u8]> =
+        ason::list_stream_reader("[11 13]".as_bytes()).unwrap();
     assert_eq!(stream.collect::<Result<Vec<_>, _>>().unwrap(), vec![11, 13]);
 
-    let mut chars = "[11 13]".chars();
-    let stream = ason::list_stream_reader::<i32, _>(&mut chars).unwrap();
-    assert_eq!(stream.collect::<Result<Vec<_>, _>>().unwrap(), vec![11, 13]);
-
-    let chars = UTF8CharIterator::new("[11 13]".as_bytes());
-    let stream = ason::list_stream_reader::<i32, _>(chars).unwrap();
+    let stream = ason::list_stream_reader::<i32, _>(std::io::Cursor::new("[11 13]")).unwrap();
     assert_eq!(stream.collect::<Result<Vec<_>, _>>().unwrap(), vec![11, 13]);
 
     assert_eq!(ason::de_from_reader::<i32, _>("42".as_bytes()).unwrap(), 42);

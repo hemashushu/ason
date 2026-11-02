@@ -121,7 +121,7 @@ or add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ason = "3.1"
+ason = "3.2"
 serde = { version = "1.0", features = ["derive"] }
 ```
 
@@ -248,7 +248,7 @@ fn main() {
 
 The streaming deserializer reads the root list incrementally from a byte source (e.g., a pipe, a socket, or standard input). The typical flow is:
 
-1. Wrap any `Read` source in a `ason::UTF8CharIterator`, and open a list reader on it.
+1. Pass any `Read` source directly to `ason::list_stream_reader`.
 2. Call `next()` repeatedly; each call deserializes the next element once it becomes available.
 3. Stop when `next()` returns `None`, which indicates the end of the list.
 
@@ -267,8 +267,7 @@ struct Object {
 
 fn main() {
     let mut input = std::io::stdin().lock();
-    let mut char_iter = ason::UTF8CharIterator::new(&mut input);
-    let mut stream_reader = ason::list_stream_reader(&mut char_iter).unwrap();
+    let mut stream_reader = ason::list_stream_reader(&mut input).unwrap();
 
     // Deserialize the first element.
     let o1: Object = stream_reader.next().unwrap().unwrap();

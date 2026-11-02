@@ -86,7 +86,7 @@ fn test_byte_data_and_date_time_adapters() {
         writer.write(&record).unwrap();
         writer.end_list().unwrap();
         let stream_text = String::from_utf8(output).unwrap();
-        let mut reader = ason::list_stream_reader::<Record, _>(stream_text.chars()).unwrap();
+        let mut reader = ason::list_stream_reader::<Record, _>(stream_text.as_bytes()).unwrap();
         assert_eq!(reader.next().unwrap().unwrap(), record);
         assert_eq!(reader.next().unwrap().unwrap(), record);
         assert!(reader.next().is_none());
@@ -150,7 +150,7 @@ fn test_array_mapping_modes() {
     writer.write(&record).unwrap();
     writer.end_list().unwrap();
     let stream_text = String::from_utf8(output).unwrap();
-    let mut reader = ason::list_stream_reader::<Record, _>(stream_text.chars()).unwrap();
+    let mut reader = ason::list_stream_reader::<Record, _>(stream_text.as_bytes()).unwrap();
     assert_eq!(reader.next().unwrap().unwrap(), record);
     assert!(reader.next().is_none());
 
