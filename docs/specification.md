@@ -614,6 +614,7 @@ Examples:
 ```
 
 An empty Map is written as an empty List `[]`.
+Because `[]` contains no entries that distinguish a List from a Map, the application determines which type to deserialize it as based on the expected target type.
 
 ### 4.3 Tuples
 
@@ -625,7 +626,7 @@ tuple = "(" value { [","] value } [","] ")"
 
 Unlike Lists, Tuples can contain elements of different types. The number and types of the elements define the Tuple's type.
 
-An empty Tuple (`()`) is **not** valid.
+An ASON Tuple must contain at least one element. An empty Tuple (`()`) is invalid.
 
 Elements can be separated by commas, whitespace, or both. Trailing commas are permitted.
 
@@ -638,7 +639,7 @@ Examples:
 
 ### 4.4 Objects
 
-An Object is an ordered sequence of zero or more key-value pairs enclosed in curly braces (`{` and `}`).
+An Object is an ordered sequence of one or more key-value pairs enclosed in curly braces (`{` and `}`). An Object must contain at least one key-value pair.
 
 ```text
 object = "{" { key_value_pair [","] } "}"
@@ -646,6 +647,7 @@ key_value_pair = identifier ":" value
 ```
 
 Keys are identifiers (unquoted). They must **not** be enclosed in double quotes (unlike JSON). If a quoted string is used as a key, it is a parse error.
+Each key must be unique within an Object; repeating a key is invalid.
 
 An identifier follows these rules:
 
@@ -653,7 +655,7 @@ An identifier follows these rules:
 - May continue with letters, digits (`0`-`9`), underscores, or Unicode characters in the same ranges.
 - Must not contain `::`. An identifier containing `::` becomes an Enumeration token (see section 4.5).
 
-An empty Object (`{}`) is valid in ASON, even though some programming languages do not support empty structs. When an empty Object is deserialized into a struct, every field takes its default value.
+The empty-brace form (`{}`) is valid in ASON text as shorthand for omitting every key-value pair and using the default values for all fields. It does not represent an empty Object.
 
 Key-value pairs can be separated by commas, whitespace, or both. Trailing commas are permitted.
 
@@ -697,7 +699,7 @@ Option::Some(123)
 Option::Some("hello")
 ```
 
-- Tuple-like variant, with multiple values in parentheses:
+- Tuple-like variant, with at least two values in parentheses:
 
 ```json5
 Color::RGB(255, 127, 63)
@@ -709,9 +711,7 @@ Color::RGB(255, 127, 63)
 Shape::Rect{width: 200, height: 100}
 ```
 
-A variant with empty parentheses (`Option::Some()`) is **not** valid. If a variant has parentheses, they must contain at least one value.
-
-> Note: Whether a variant is a single-value variant (e.g., `Option::Some(123)`) or a Tuple-like variant (e.g., `Color::RGB(255, 127, 63)`) depends on the number of values in the parentheses: exactly one value makes it a single-value variant, and two or more values make it a Tuple-like variant.
+A variant with empty parentheses (`Option::Some()`) is **not** valid. If a variant has parentheses, they must contain at least one value. Exactly one value makes it a Single-value variant; two or more values make it a Tuple-like variant.
 
 ## 5 Grammar Summary
 

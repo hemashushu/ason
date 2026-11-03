@@ -40,7 +40,6 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
   - [6.8 DateTime](#68-datetime)
   - [6.9 Default Values](#69-default-values)
   - [6.10 Unsupported Data Types](#610-unsupported-data-types)
-  - [6.11 ASONB Compatibility](#611-asonb-compatibility)
 - [7 Links](#7-links)
 - [8 License](#8-license)
 
@@ -632,6 +631,8 @@ A List can contain any number of elements, including none. A List with no elemen
 
 A Tuple is an ordered collection of a fixed number of values, which may be of different types. For example:
 
+An ASON Tuple must contain at least one element. An empty Tuple (`()`) is invalid.
+
 ```json5
 (11, "Alice", true)
 ```
@@ -666,7 +667,9 @@ Tuples differ from Lists in the following ways:
 
 #### 5.2.3 Objects
 
-An Object is a collection of key-value pairs, where each key is an identifier and each value can be of any type.
+An Object is a collection of one or more key-value pairs, where each key is an identifier and each value can be of any type.
+
+An Object must contain at least one key-value pair. The empty-brace form (`{}`) is nevertheless allowed in ASON text as shorthand for omitting every pair and using the default values for all fields; it does not represent an empty Object.
 
 ```json5
 {
@@ -1109,11 +1112,11 @@ Rust fixed-length arrays `[T; N]` have the following mappings:
 
 The array mapping is:
 
-- Default: Serde treats arrays as tuples, not sequences. For example, `[11, 13, 17, 19]` of type `[i32; 4]` becomes `(11 13 17 19)`, and `*b"abc"` of type `[u8; 3]` becomes `(97_u8 98_u8 99_u8)`. Deserialization expects a Tuple with exactly `N` elements. This is also ASONB's default array mapping. The Serde version used by this crate supplies default array implementations for lengths through 32; empty arrays cannot use this mapping because ASON does not support empty Tuples.
+- Default: Serde treats arrays as tuples, not sequences. For example, `[11, 13, 17, 19]` of type `[i32; 4]` becomes `(11 13 17 19)`, and `b"abc"` of type `[u8; 3]` becomes `(97_u8 98_u8 99_u8)`. Deserialization expects a Tuple with exactly `N` elements.
 
-- With `serde_bytes`: Apply `#[serde(with = "serde_bytes")]` to a `[u8; N]` field to read and write Byte Data, such as `h"61 62 63"`. Deserialization requires exactly `N` bytes. For a root value, use `serde_bytes::ByteArray<N>`. Adding the dependency alone does not change an array's mapping, and this adapter does not apply to non-byte arrays.
+- With `serde_bytes`: Apply `#[serde(with = "serde_bytes")]` to a `[u8; N]` field to read and write Byte Data, such as `h"61 62 63"`. Deserialization requires exactly `N` bytes. For a root value, use `serde_bytes::ByteArray<N>`.
 
-- With `ason::array`: Apply `#[serde(with = "ason::array")]` to a `[T; N]` field to read and write a List. It works for any const-generic length, including zero and lengths greater than 32, provided `T` implements the required Serde traits. Deserialization requires exactly `N` elements; too few or too many elements, wrong element types, and Tuple or Byte Data inputs are errors. Byte arrays also become Lists under this adapter, not Byte Data.
+- With `ason::array`: Apply `#[serde(with = "ason::array")]` to a `[T; N]` field to read and write a List.
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -1255,7 +1258,7 @@ Empty Byte Data is written as `h""`. Deserialization requires an owned target be
 
 ### 6.8 DateTime
 
-Use `ason::date_time::DateTime` for a root value, or `#[serde(with = "ason::date_time")]` on a `chrono::DateTime<chrono::FixedOffset>` field. These explicit mappings follow the same usage pattern as ASONB and preserve the instant and numeric UTC offset.
+Use `ason::date_time::DateTime` for a root value, or `#[serde(with = "ason::date_time")]` on a `chrono::DateTime<chrono::FixedOffset>` field.
 
 First, add `chrono` to your application's dependencies; chrono's `serde` feature is not required by this adapter.
 
@@ -1264,7 +1267,7 @@ First, add `chrono` to your application's dependencies; chrono's `serde` feature
 chrono = "0.4"
 ```
 
-Ordinary chrono serialization, with chrono's `serde` feature enabled, produces a regular String in both ASON and ASONB. Use the format-specific DateTime adapter to select DateTime instead.
+Ordinary chrono serialization, with chrono's `serde` feature enabled, produces a regular String. Use the format-specific DateTime adapter to select DateTime instead.
 
 ```rust
 let time = chrono::DateTime::parse_from_rfc3339("2024-03-16T16:30:50+08:00").unwrap();
@@ -1288,8 +1291,6 @@ struct Record {
 ```
 
 Serialization writes a full date and time, using `Z` for UTC and `+HH:MM` or `-HH:MM` for other offsets. Deserialization also accepts ASON's date-only and timezone-omitted forms, filling omitted parts with midnight and UTC as appropriate. Regular String literals are not accepted as DateTime.
-
-Unlike ASONB, ASON text does not support fractional seconds or offsets with second precision. Serialization rejects these values, and local years outside `0000` through `9999`, rather than silently losing precision. Whole leap seconds accepted by chrono can be represented as `:60`. The wrappers and adapters also work in nested values and with the reader, writer, and streaming APIs.
 
 ### 6.9 Default Values
 
@@ -1324,22 +1325,10 @@ In this example, the default value of the `age` field is provided by the `defaul
 
 The following Rust data types are not supported:
 
-- Unit (i.e., `()`)
+- Unit, empty Tuples (i.e., `()`)
 - Unit structs, such as `struct Foo;`
 - Newtype structs, such as `struct Width(u32);`
 - Tuple structs, such as `struct RGB(u8, u8, u8);`
-
-The dedicated `ason::date_time::DateTime` wrapper is an exception to the newtype limitation. Empty Tuples are also unsupported. Deserialization requires a concrete target type; Serde's `deserialize_any`, including the path used by untagged enums, is not supported.
-
-### 6.11 ASONB Compatibility
-
-The default numeric, List, Map, Tuple, Object, Enumeration, array, and explicit Byte Data mappings follow [ASONB's Rust type mappings](https://github.com/hemashushu/asonb#23-rust-type-mappings), but the libraries are not interchangeable:
-
-- ASONB serialization requires schema information; ASON serialization does not. ASONB supports additional binary-only mappings for unit values, unit structs, tuple structs, newtype structs, and empty Tuples. These do not imply that every such binary value is representable in ASON text.
-- ASON DateTime supports whole seconds and whole-minute offsets within its text range. ASONB additionally preserves nanoseconds and second-precision offsets, but rejects chrono leap-second values. ASON accepts whole leap seconds as `:60`; these cannot be passed unchanged to ASONB's DateTime adapter.
-- `ason::array` explicitly selects List instead of the shared default Tuple mapping. When sharing such a struct with ASONB, its schema must describe the emitted List; the ASONB documentation requires `#[asonb(schema_with = "path")]` for custom adapters not covered by its schema derive.
-- Serde default fields are an ASON deserialization feature. ASONB records fields in the document schema, so omitted fields must also match its schema rules; ASONB rejects value-dependent `skip_serializing_if` in its schema derive.
-- ASONB-to-ASON conversion must reject values outside ASON's syntax or range unless an explicit conversion policy is supplied. Conversion preserves representable values, not comments, source formatting, or binary encoding choices. ASONB fixed-capacity slots require application-defined interpretation before conversion.
 
 ## 7 Links
 
