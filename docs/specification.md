@@ -523,6 +523,8 @@ The supported formats are:
 
 The date-time string is parsed according to [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339), with some relaxations. The date and time are separated by `T`, `t`, or a space. A time offset can be appended: `Z` or `z` for [Coordinated Universal Time (UTC)](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) (equivalent to `+00:00`), or a numeric time offset such as `+08:00`. If no time offset is specified, `+00:00` is assumed.
 
+ASON DateTime does not support fractional seconds. If high precision is required, custom Object representations should be used.
+
 An ASON DateTime represents local time (the wall-clock reading) together with its time offset. Converting it to UTC or a Unix timestamp must account for the time offset: UTC is the local time minus the time offset. For example, `d"2024-03-16T16:30:50+08:00"` corresponds to `2024-03-16T08:30:50Z`, not `2024-03-16T16:30:50Z`.
 
 The valid range of a numeric time offset is `-23:59` to `+23:59`, inclusive. The hour component must be between `00` and `23`, and the minute component between `00` and `59`. An out-of-range time offset (such as `+24:00`, `-24:00`, or `+08:60`) is an error.
