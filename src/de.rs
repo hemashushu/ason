@@ -15,6 +15,7 @@ use crate::{
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
     utf8_char_iterator::UTF8CharIterator,
+    value::{Value, VariantValue},
 };
 use serde::de::{self, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess};
 
@@ -30,6 +31,29 @@ where
     T: de::DeserializeOwned,
 {
     de_from_char_iterator(UTF8CharIterator::new(reader))
+}
+
+pub fn de_value_from_str(s: &str) -> Result<Value, AsonError> {
+    de_value_from_char_iterator(s.chars().map(Ok::<char, AsonError>))
+}
+
+pub fn de_value_from_reader<R: Read>(reader: R) -> Result<Value, AsonError> {
+    de_value_from_char_iterator(UTF8CharIterator::new(reader))
+}
+
+fn de_value_from_char_iterator<CharIter>(char_iterator: CharIter) -> Result<Value, AsonError>
+where
+    CharIter: Iterator<Item = Result<char, AsonError>>,
+{
+    let mut deserializer = Deserializer::from_char_iterator(char_iterator);
+    let value = deserializer.deserialize_value()?;
+    match deserializer.next_token()? {
+        Some(_) => Err(AsonError::MessageWithRange(
+            "Unexpected token after the end of the document.".to_owned(),
+            deserializer.last_range,
+        )),
+        None => Ok(value),
+    }
 }
 
 fn de_from_char_iterator<T, CharIter>(char_iterator: CharIter) -> Result<T, AsonError>
@@ -156,6 +180,169 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
             upstream: PeekableIterator::new(normalizer),
             last_range: Range::default(),
         }
+    }
+
+    fn deserialize_value(&mut self) -> Result<Value, AsonError> {
+        match self.next_token()? {
+            Some(Token::Number(number)) => Ok(match number {
+                NumberToken::I8(value) => Value::I8(value as i8),
+                NumberToken::I16(value) => Value::I16(value as i16),
+                NumberToken::I32(value) => Value::I32(value as i32),
+                NumberToken::I64(value) => Value::I64(value as i64),
+                NumberToken::U8(value) => Value::U8(value),
+                NumberToken::U16(value) => Value::U16(value),
+                NumberToken::U32(value) => Value::U32(value),
+                NumberToken::U64(value) => Value::U64(value),
+                NumberToken::F32(value) => Value::F32(value),
+                NumberToken::F64(value) => Value::F64(value),
+            }),
+            Some(Token::Boolean(value)) => Ok(Value::Bool(value)),
+            Some(Token::Char(value)) => Ok(Value::Char(value)),
+            Some(Token::String(value)) => Ok(Value::String(value)),
+            Some(Token::DateTime(value)) => Ok(Value::DateTime(value)),
+            Some(Token::HexadecimalByteData(value)) => Ok(Value::Bytes(value)),
+            Some(Token::BracketOpen) => self.deserialize_list_or_map(),
+            Some(Token::ParenthesisOpen) => {
+                let values = self.deserialize_values_until(Token::ParenthesisClose, "Tuple")?;
+                if values.is_empty() {
+                    return Err(AsonError::MessageWithRange(
+                        "A \"Tuple\" must contain at least one element.".to_owned(),
+                        self.last_range,
+                    ));
+                }
+                Ok(Value::Tuple(values))
+            }
+            Some(Token::BraceOpen) => self.deserialize_object(),
+            Some(Token::Enumeration(name, variant)) => self.deserialize_enumeration(name, variant),
+            other => Err(self.expect_error(other.is_some(), "a value")),
+        }
+    }
+
+    fn deserialize_list_or_map(&mut self) -> Result<Value, AsonError> {
+        if self.peek_token_and_equals(0, &Token::BracketClose)? {
+            self.next_token()?;
+            return Ok(Value::List(Vec::new()));
+        }
+
+        let first = self.deserialize_value()?;
+        if self.peek_token_and_equals(0, &Token::Colon)? {
+            self.consume_colon()?;
+            let mut entries = vec![(first, self.deserialize_value()?)];
+            while !self.peek_token_and_equals(0, &Token::BracketClose)? {
+                if self.peek_token(0)?.is_none() {
+                    return Err(AsonError::UnexpectedEndOfDocument(
+                        "Incomplete Map.".to_owned(),
+                    ));
+                }
+                let key = self.deserialize_value()?;
+                self.consume_colon()?;
+                entries.push((key, self.deserialize_value()?));
+            }
+            self.consume_closing_bracket()?;
+            Ok(Value::Map(entries))
+        } else {
+            let mut values = vec![first];
+            while !self.peek_token_and_equals(0, &Token::BracketClose)? {
+                if self.peek_token(0)?.is_none() {
+                    return Err(AsonError::UnexpectedEndOfDocument(
+                        "Incomplete List.".to_owned(),
+                    ));
+                }
+                values.push(self.deserialize_value()?);
+            }
+            self.consume_closing_bracket()?;
+            Ok(Value::List(values))
+        }
+    }
+
+    fn deserialize_values_until(
+        &mut self,
+        closing_token: Token,
+        type_name: &str,
+    ) -> Result<Vec<Value>, AsonError> {
+        let mut values = Vec::new();
+        while !self.peek_token_and_equals(0, &closing_token)? {
+            if self.peek_token(0)?.is_none() {
+                return Err(AsonError::UnexpectedEndOfDocument(format!(
+                    "Incomplete {type_name}."
+                )));
+            }
+            values.push(self.deserialize_value()?);
+        }
+        self.next_token()?;
+        Ok(values)
+    }
+
+    fn deserialize_object(&mut self) -> Result<Value, AsonError> {
+        let mut fields = Vec::new();
+        let mut names = HashSet::new();
+        while !self.peek_token_and_equals(0, &Token::BraceClose)? {
+            if self.peek_token(0)?.is_none() {
+                return Err(AsonError::UnexpectedEndOfDocument(
+                    "Incomplete Object.".to_owned(),
+                ));
+            }
+            let name = match self.next_token()? {
+                Some(Token::Identifier(name)) => name,
+                other => return Err(self.expect_error(other.is_some(), "an Object key")),
+            };
+            if !names.insert(name.clone()) {
+                return Err(AsonError::MessageWithRange(
+                    format!("Duplicate key \"{}\" in Object.", name),
+                    self.last_range,
+                ));
+            }
+            self.consume_colon()?;
+            fields.push((name, self.deserialize_value()?));
+        }
+        self.consume_closing_brace()?;
+        Ok(Value::Object(fields))
+    }
+
+    fn deserialize_enumeration(
+        &mut self,
+        name: String,
+        variant: String,
+    ) -> Result<Value, AsonError> {
+        let payload = if self.peek_token_and_equals(0, &Token::ParenthesisOpen)? {
+            self.next_token()?;
+            let values = self.deserialize_values_until(Token::ParenthesisClose, "Enumeration")?;
+            match values.len() {
+                0 => {
+                    return Err(AsonError::MessageWithRange(
+                        "An enumeration payload must not be empty.".to_owned(),
+                        self.last_range,
+                    ));
+                }
+                1 => VariantValue::Newtype(Box::new(values.into_iter().next().unwrap())),
+                _ => VariantValue::Tuple(values),
+            }
+        } else if self.peek_token_and_equals(0, &Token::BraceOpen)? {
+            self.next_token()?;
+            let Value::Object(fields) = self.deserialize_object()? else {
+                unreachable!()
+            };
+            VariantValue::Struct(fields)
+        } else {
+            VariantValue::Unit
+        };
+
+        if name == "Option" {
+            return match (variant.as_str(), payload) {
+                ("None", VariantValue::Unit) => Ok(Value::Option(None)),
+                ("Some", VariantValue::Newtype(value)) => Ok(Value::Option(Some(value))),
+                _ => Err(AsonError::MessageWithRange(
+                    "Expect \"Option::None\" or \"Option::Some(...)\".".to_owned(),
+                    self.last_range,
+                )),
+            };
+        }
+
+        Ok(Value::Enumeration {
+            name,
+            variant,
+            payload,
+        })
     }
 
     fn next_token(&mut self) -> Result<Option<Token>, AsonError> {
@@ -989,8 +1176,9 @@ mod tests {
     use std::io::{self, Read};
 
     use crate::{
-        de::{de_from_reader, de_from_str, list_stream_reader},
+        de::{de_from_reader, de_from_str, de_value_from_str, list_stream_reader},
         error::AsonError,
+        value::{Value, VariantValue},
     };
     use pretty_assertions::assert_eq;
     use serde::Deserialize;
@@ -1000,6 +1188,48 @@ mod tests {
 
     struct FailingReader {
         bytes: &'static [u8],
+    }
+
+    #[test]
+    fn test_dynamic_value_deserialization() {
+        assert_eq!(de_value_from_str("-12_i16").unwrap(), Value::I16(-12));
+        assert_eq!(de_value_from_str("2.5_f32").unwrap(), Value::F32(2.5));
+        assert_eq!(
+            de_value_from_str(r#"[1 "two"]"#).unwrap(),
+            Value::List(vec![Value::I32(1), Value::String("two".into())])
+        );
+        assert_eq!(
+            de_value_from_str(r#"["one": 1 "two": 2]"#).unwrap(),
+            Value::Map(vec![
+                (Value::String("one".into()), Value::I32(1)),
+                (Value::String("two".into()), Value::I32(2)),
+            ])
+        );
+        assert_eq!(
+            de_value_from_str("{name: \"Ada\"}").unwrap(),
+            Value::Object(vec![("name".into(), Value::String("Ada".into()))])
+        );
+        assert_eq!(
+            de_value_from_str("(1 \"two\")").unwrap(),
+            Value::Tuple(vec![Value::I32(1), Value::String("two".into())])
+        );
+        assert_eq!(
+            de_value_from_str("Option::None").unwrap(),
+            Value::Option(None)
+        );
+        assert_eq!(
+            de_value_from_str("Option::Some(1)").unwrap(),
+            Value::Option(Some(Box::new(Value::I32(1))))
+        );
+        assert_eq!(
+            de_value_from_str("Action::Take(\"item\" 42)").unwrap(),
+            Value::Enumeration {
+                name: "Action".into(),
+                variant: "Take".into(),
+                payload: VariantValue::Tuple(vec![Value::String("item".into()), Value::I32(42),]),
+            }
+        );
+        assert!(de_value_from_str("Option::Some(1) true").is_err());
     }
 
     impl Read for FailingReader {

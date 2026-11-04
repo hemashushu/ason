@@ -8,7 +8,11 @@ use std::{fmt::Write as _, io::Write, marker::PhantomData};
 
 use serde::{Serialize, ser};
 
-use crate::error::AsonError;
+use crate::{
+    date_time::DateTime,
+    error::AsonError,
+    value::{Value, VariantValue},
+};
 
 pub const DEFAULT_INDENT_CHARS: &str = "    ";
 pub const DEFAULT_NEWLINE_CHARS: &str = "\n";
@@ -31,6 +35,16 @@ where
 {
     let mut serializer = Serializer::new(writer);
     value.serialize(&mut serializer)
+}
+
+pub fn ser_value_to_string(value: &Value) -> Result<String, AsonError> {
+    let mut buffer = Vec::new();
+    ser_value_to_writer(value, &mut buffer)?;
+    Ok(String::from_utf8(buffer).unwrap())
+}
+
+pub fn ser_value_to_writer<W: Write>(value: &Value, writer: &mut W) -> Result<(), AsonError> {
+    Serializer::new(writer).serialize_value(value)
 }
 
 pub fn list_stream_writer<T, W>(writer: &mut W) -> ListStreamWriter<'_, W, T>
@@ -137,6 +151,99 @@ where
         self.is_first_element = false;
         Ok(())
     }
+
+    fn serialize_value(&mut self, value: &Value) -> Result<(), AsonError> {
+        match value {
+            Value::I8(value) => value.serialize(self),
+            Value::I16(value) => value.serialize(self),
+            Value::I32(value) => value.serialize(self),
+            Value::I64(value) => value.serialize(self),
+            Value::U8(value) => value.serialize(self),
+            Value::U16(value) => value.serialize(self),
+            Value::U32(value) => value.serialize(self),
+            Value::U64(value) => value.serialize(self),
+            Value::F32(value) => value.serialize(self),
+            Value::F64(value) => value.serialize(self),
+            Value::Bool(value) => value.serialize(self),
+            Value::Char(value) => value.serialize(self),
+            Value::String(value) => value.serialize(self),
+            Value::DateTime(value) => DateTime(*value).serialize(self),
+            Value::Bytes(value) => serde_bytes::Bytes::new(value).serialize(self),
+            Value::List(values) => {
+                self.begin_block("[")?;
+                for value in values {
+                    self.begin_block_element()?;
+                    self.serialize_value(value)?;
+                }
+                self.end_block("]")
+            }
+            Value::Map(entries) => {
+                self.begin_block("[")?;
+                for (key, value) in entries {
+                    self.begin_block_element()?;
+                    self.serialize_value(key)?;
+                    self.print_str(": ")?;
+                    self.serialize_value(value)?;
+                }
+                self.end_block("]")
+            }
+            Value::Tuple(values) => {
+                self.begin_tuple(values.len())?;
+                for value in values {
+                    self.begin_tuple_element()?;
+                    self.serialize_value(value)?;
+                }
+                self.end_tuple()
+            }
+            Value::Object(fields) => {
+                self.begin_block("{")?;
+                for (name, value) in fields {
+                    self.begin_block_element()?;
+                    self.print_fmt(format_args!("{name}: "))?;
+                    self.serialize_value(value)?;
+                }
+                self.end_block("}")
+            }
+            Value::Enumeration {
+                name,
+                variant,
+                payload,
+            } => {
+                self.print_fmt(format_args!("{name}::{variant}"))?;
+                match payload {
+                    VariantValue::Unit => Ok(()),
+                    VariantValue::Newtype(value) => {
+                        self.print_str("(")?;
+                        self.serialize_value(value)?;
+                        self.print_str(")")
+                    }
+                    VariantValue::Tuple(values) => {
+                        self.begin_tuple(values.len())?;
+                        for value in values {
+                            self.begin_tuple_element()?;
+                            self.serialize_value(value)?;
+                        }
+                        self.end_tuple()
+                    }
+                    VariantValue::Struct(fields) => {
+                        self.begin_block("{")?;
+                        for (name, value) in fields {
+                            self.begin_block_element()?;
+                            self.print_fmt(format_args!("{name}: "))?;
+                            self.serialize_value(value)?;
+                        }
+                        self.end_block("}")
+                    }
+                }
+            }
+            Value::Option(None) => self.print_str("Option::None"),
+            Value::Option(Some(value)) => {
+                self.print_str("Option::Some(")?;
+                self.serialize_value(value)?;
+                self.print_str(")")
+            }
+        }
+    }
 }
 
 pub struct ListStreamWriter<'a, W, T>
@@ -172,6 +279,11 @@ where
     {
         self.serializer.begin_block_element()?;
         value.serialize(&mut self.serializer)
+    }
+
+    pub fn write_value(&mut self, value: &Value) -> Result<(), AsonError> {
+        self.serializer.begin_block_element()?;
+        self.serializer.serialize_value(value)
     }
 
     /// Writes each value in order, stopping at the first error.
@@ -647,7 +759,60 @@ mod tests {
     use serde::Serialize;
     use serde_bytes::ByteBuf;
 
-    use crate::ser::{list_stream_writer, ser_to_string};
+    use crate::{
+        Value, VariantValue, de_value_from_str,
+        ser::{list_stream_writer, ser_to_string, ser_value_to_string},
+    };
+
+    #[test]
+    fn test_dynamic_value_round_trip() {
+        let values = [
+            Value::I8(-1),
+            Value::U64(u64::MAX),
+            Value::F32(1.25),
+            Value::Bool(true),
+            Value::Char('x'),
+            Value::String("text".into()),
+            Value::DateTime(
+                chrono::DateTime::parse_from_rfc3339("2024-03-16T16:30:50+08:00").unwrap(),
+            ),
+            Value::Bytes(vec![0, 0xff]),
+            Value::List(vec![Value::I32(1), Value::I32(2)]),
+            Value::Map(vec![(Value::String("key".into()), Value::I32(3))]),
+            Value::Tuple(vec![Value::I32(1), Value::String("two".into())]),
+            Value::Object(vec![("field".into(), Value::I32(4))]),
+            Value::Option(None),
+            Value::Option(Some(Box::new(Value::String("some".into())))),
+            Value::Enumeration {
+                name: "Action".into(),
+                variant: "Quit".into(),
+                payload: VariantValue::Unit,
+            },
+            Value::Enumeration {
+                name: "Action".into(),
+                variant: "Say".into(),
+                payload: VariantValue::Newtype(Box::new(Value::String("hello".into()))),
+            },
+            Value::Enumeration {
+                name: "Action".into(),
+                variant: "Take".into(),
+                payload: VariantValue::Tuple(vec![Value::String("item".into()), Value::I32(5)]),
+            },
+            Value::Enumeration {
+                name: "Action".into(),
+                variant: "Move".into(),
+                payload: VariantValue::Struct(vec![
+                    ("x".into(), Value::I32(10)),
+                    ("y".into(), Value::I32(20)),
+                ]),
+            },
+        ];
+
+        for value in values {
+            let encoded = ser_value_to_string(&value).unwrap();
+            assert_eq!(de_value_from_str(&encoded).unwrap(), value, "{encoded}");
+        }
+    }
 
     #[test]
     fn test_primitive_values() {

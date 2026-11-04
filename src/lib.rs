@@ -18,10 +18,15 @@ mod range;
 mod ser;
 mod token;
 mod utf8_char_iterator;
+pub mod value;
 
 pub use de::ListStreamReader;
 pub use error::AsonError;
 pub use ser::ListStreamWriter;
 
 pub use de::{de_from_reader, de_from_str, list_stream_reader};
-pub use ser::{list_stream_writer, ser_to_string, ser_to_writer};
+pub use de::{de_value_from_reader, de_value_from_str};
+pub use ser::{
+    list_stream_writer, ser_to_string, ser_to_writer, ser_value_to_string, ser_value_to_writer,
+};
+pub use value::{Value, VariantValue};
