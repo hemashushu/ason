@@ -451,6 +451,7 @@ where
         // Number type suffix, e.g.,
         // "123_i16", "456_u32", "3.14_f64"
         let mut number_type_opt: Option<NumberType> = None;
+        let mut last_was_separator = false;
 
         // Whether '.' has been found.
         // The presence of '.' indicates a floating-point number.
@@ -475,9 +476,18 @@ where
                 '0'..='9' => {
                     // Valid digits for decimal numbers.
                     number_buffer.push(*current_char);
+                    last_was_separator = false;
                     self.next_char(); // consume digit
                 }
                 '_' => {
+                    if found_point && !found_e && number_buffer.ends_with('.') {
+                        return Err(AsonError::MessageWithPosition(
+                            "A numeric separator cannot appear before the first fractional digit."
+                                .to_owned(),
+                            *self.peek_position(0).unwrap(),
+                        ));
+                    }
+                    last_was_separator = true;
                     self.next_char(); // consume '_'
                 }
                 '.' if !found_point && !found_e => {
@@ -486,6 +496,7 @@ where
                     // 271.828
 
                     found_point = true;
+                    last_was_separator = false;
                     number_buffer.push(*current_char);
                     self.next_char(); // consume '.'
                 }
@@ -496,12 +507,20 @@ where
                     // 123e-45
 
                     found_e = true;
+                    last_was_separator = false;
                     number_buffer.push('e');
                     self.next_char(); // consume 'e'
                 }
                 '+' | '-' if number_buffer.ends_with('e') => {
                     // The sign of the exponent.
-                    // Underscores are not pushed into the buffer, so "1e_-5" is accepted too.
+                    if last_was_separator {
+                        return Err(AsonError::MessageWithPosition(
+                            "The exponent sign must immediately follow the exponent marker."
+                                .to_owned(),
+                            *self.peek_position(0).unwrap(),
+                        ));
+                    }
+                    last_was_separator = false;
                     number_buffer.push(*current_char);
                     self.next_char(); // consume '+' or '-'
                 }
@@ -610,6 +629,7 @@ where
         // Number type suffix, e.g.,
         // "0xff_u8", "0x1.8p3_f32"
         let mut number_type_opt: Option<NumberType> = None;
+        let mut last_was_separator = false;
 
         // Whether '.' has been found.
         // The presence of '.' indicates a floating-point number.
@@ -638,15 +658,25 @@ where
                 }
                 '0'..='9' => {
                     number_buffer.push(*current_char);
+                    last_was_separator = false;
                     self.next_char(); // consume digit
                 }
                 'a'..='f' | 'A'..='F' if !found_p => {
                     // The exponent is a decimal number, so hexadecimal letters
                     // are only allowed before 'p'.
                     number_buffer.push(*current_char);
+                    last_was_separator = false;
                     self.next_char(); // consume digit
                 }
                 '_' => {
+                    if found_point && !found_p && number_buffer.ends_with('.') {
+                        return Err(AsonError::MessageWithPosition(
+                            "A numeric separator cannot appear before the first fractional digit."
+                                .to_owned(),
+                            *self.peek_position(0).unwrap(),
+                        ));
+                    }
+                    last_was_separator = true;
                     self.next_char(); // consume '_'
                 }
                 '.' if !found_point && !found_p => {
@@ -655,6 +685,7 @@ where
                     // 0x12.bcp0
 
                     found_point = true;
+                    last_was_separator = false;
                     number_buffer.push(*current_char);
                     self.next_char(); // consume '.'
                 }
@@ -665,11 +696,20 @@ where
                     // 0x1.123p-45
 
                     found_p = true;
+                    last_was_separator = false;
                     number_buffer.push('p');
                     self.next_char(); // consume 'p'
                 }
                 '+' | '-' if number_buffer.ends_with('p') => {
                     // The sign of the exponent.
+                    if last_was_separator {
+                        return Err(AsonError::MessageWithPosition(
+                            "The exponent sign must immediately follow the exponent marker."
+                                .to_owned(),
+                            *self.peek_position(0).unwrap(),
+                        ));
+                    }
+                    last_was_separator = false;
                     number_buffer.push(*current_char);
                     self.next_char(); // consume '+' or '-'
                 }
@@ -2151,6 +2191,32 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn test_lex_matches_rust_numeric_separator_placement() {
+        for text in [
+            "123_",
+            "123__",
+            "1.5_",
+            "1e2_",
+            "0x1_",
+            "0b1_",
+            "0o7_",
+            "0b____1",
+            "1_.2",
+            "1e_5",
+            "1e+_5",
+            "1__u8",
+            "0x1.2p3_",
+            "0x1.2p+_3",
+        ] {
+            assert!(lex_from_str(text).is_ok(), "rejected {text}");
+        }
+
+        for text in ["1._2", "1e_-5", "1e_+5", "0x1._2p3", "0x1.2p_+3"] {
+            assert!(lex_from_str(text).is_err(), "accepted {text}");
+        }
+    }
+
     #[allow(clippy::approx_constant)]
     #[test]
     fn test_lex_decimal_floating_point_number() {
@@ -2184,10 +2250,11 @@ mod tests {
             vec![Token::Number(NumberToken::F64(6.626e-34))]
         );
 
-        // Underscores are allowed between the exponent marker and its sign.
+        // The exponent sign must immediately follow the exponent marker.
+        assert!(lex_from_str("1e_-5").is_err());
         assert_eq!(
-            lex_from_str_without_location("1e_-5").unwrap(),
-            vec![Token::Number(NumberToken::F64(1e-5))]
+            lex_from_str_without_location("1e+_5").unwrap(),
+            vec![Token::Number(NumberToken::F64(1e5))]
         );
 
         assert_eq!(

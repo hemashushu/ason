@@ -343,7 +343,7 @@ ASON supports the following primitive value types:
 
 #### 5.1.1 Digit Separators
 
-To improve readability, underscores can be inserted between any two characters in a numeric literal, and multiple underscores can appear in a row. They are ignored by the parser, but are not allowed within a prefix such as `0x` or in the special values `NaN` and `Inf`. For example: `123_456_789`, `6.626_070_e-34`
+ASON uses Rust-like numeric separator placement. Underscores may repeat or trail a digit sequence; after a base prefix, they may also appear before the first digit. A fractional part must begin with a digit immediately after `.`, and an optional exponent sign must immediately follow `e` or `E`. After the optional sign, underscores may appear before the first exponent digit. ASON's hexadecimal floating-point extension follows the same placement rules, using `p` or `P` for its exponent. For example: `123_456_789`, `123_`, `0b____1`, `1e+_5`. The forms `1._2` and `1e_-5` are invalid. Special values `NaN` and `Inf` use their fixed spellings described below.
 
 #### 5.1.2 Explicit Numeric Types
 

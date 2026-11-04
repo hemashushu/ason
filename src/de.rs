@@ -4,7 +4,7 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
-use std::{io::Read, marker::PhantomData};
+use std::{collections::HashSet, io::Read, marker::PhantomData};
 
 use crate::{
     char_with_position::CharsWithPositionIterator,
@@ -177,6 +177,14 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
         }
     }
 
+    fn peek_token_with_range(&self, offset: usize) -> Result<Option<&TokenWithRange>, AsonError> {
+        match self.upstream.peek(offset) {
+            Some(Ok(token_with_range)) => Ok(Some(token_with_range)),
+            Some(Err(e)) => Err(e.clone()),
+            None => Ok(None),
+        }
+    }
+
     // Peek at the next token and compare it with the expected token.
     // Return false when it does not match or when there are no more tokens.
     // Return an error if lexing fails while peeking.
@@ -244,17 +252,17 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
     // It is used to skip values that are not needed, such as unknown Object fields.
     fn skip_value(&mut self) -> Result<(), AsonError> {
         match self.next_token()? {
-            Some(Token::BracketOpen) => self.skip_until_closing(Token::BracketClose),
-            Some(Token::ParenthesisOpen) => self.skip_until_closing(Token::ParenthesisClose),
-            Some(Token::BraceOpen) => self.skip_until_closing(Token::BraceClose),
+            Some(Token::BracketOpen) => self.skip_bracket_contents(),
+            Some(Token::ParenthesisOpen) => self.skip_sequence(Token::ParenthesisClose, true),
+            Some(Token::BraceOpen) => self.skip_object_contents(),
             Some(Token::Enumeration(..)) => {
                 // A variant may carry a value in parentheses or braces.
                 if self.peek_token_and_equals(0, &Token::ParenthesisOpen)? {
                     self.next_token()?;
-                    self.skip_until_closing(Token::ParenthesisClose)
+                    self.skip_sequence(Token::ParenthesisClose, true)
                 } else if self.peek_token_and_equals(0, &Token::BraceOpen)? {
                     self.next_token()?;
-                    self.skip_until_closing(Token::BraceClose)
+                    self.skip_object_contents()
                 } else {
                     Ok(())
                 }
@@ -271,38 +279,113 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
         }
     }
 
-    // Consume tokens until the closing token that matches an already consumed opening token.
-    fn skip_until_closing(&mut self, closing_token: Token) -> Result<(), AsonError> {
-        // The expected closing tokens of the nested compound values.
-        let mut closing_stack = vec![closing_token];
+    fn skip_sequence(
+        &mut self,
+        closing_token: Token,
+        require_element: bool,
+    ) -> Result<(), AsonError> {
+        let mut element_count = 0;
 
-        while !closing_stack.is_empty() {
-            match self.next_token()? {
-                Some(Token::BracketOpen) => closing_stack.push(Token::BracketClose),
-                Some(Token::ParenthesisOpen) => closing_stack.push(Token::ParenthesisClose),
-                Some(Token::BraceOpen) => closing_stack.push(Token::BraceClose),
-                Some(
-                    token @ (Token::BracketClose | Token::ParenthesisClose | Token::BraceClose),
-                ) => {
-                    if closing_stack.last() == Some(&token) {
-                        closing_stack.pop();
-                    } else {
-                        return Err(AsonError::MessageWithRange(
-                            "Mismatched closing bracket.".to_owned(),
-                            self.last_range,
-                        ));
-                    }
+        loop {
+            if self.peek_token_and_equals(0, &closing_token)? {
+                if require_element && element_count == 0 {
+                    return Err(self.expect_error(true, "at least one value"));
                 }
-                Some(_) => {}
-                None => {
+                self.next_token()?;
+                return Ok(());
+            }
+
+            if self.peek_token(0)?.is_none() {
+                return Err(AsonError::UnexpectedEndOfDocument(
+                    "Incomplete value.".to_owned(),
+                ));
+            }
+
+            self.skip_value()?;
+            element_count += 1;
+        }
+    }
+
+    fn skip_bracket_contents(&mut self) -> Result<(), AsonError> {
+        if self.peek_token_and_equals(0, &Token::BracketClose)? {
+            self.next_token()?;
+            return Ok(());
+        }
+
+        if self.peek_token(0)?.is_none() {
+            return Err(AsonError::UnexpectedEndOfDocument(
+                "Incomplete value.".to_owned(),
+            ));
+        }
+
+        self.skip_value()?;
+
+        if self.peek_token_and_equals(0, &Token::Colon)? {
+            loop {
+                self.consume_colon()?;
+                self.skip_value()?;
+
+                if self.peek_token_and_equals(0, &Token::BracketClose)? {
+                    self.next_token()?;
+                    return Ok(());
+                }
+
+                if self.peek_token(0)?.is_none() {
                     return Err(AsonError::UnexpectedEndOfDocument(
-                        "Incomplete value.".to_owned(),
+                        "Incomplete Map.".to_owned(),
                     ));
                 }
+
+                self.skip_value()?;
             }
         }
 
-        Ok(())
+        loop {
+            if self.peek_token_and_equals(0, &Token::BracketClose)? {
+                self.next_token()?;
+                return Ok(());
+            }
+
+            if self.peek_token(0)?.is_none() {
+                return Err(AsonError::UnexpectedEndOfDocument(
+                    "Incomplete List.".to_owned(),
+                ));
+            }
+
+            self.skip_value()?;
+        }
+    }
+
+    fn skip_object_contents(&mut self) -> Result<(), AsonError> {
+        let mut keys = HashSet::new();
+
+        loop {
+            if self.peek_token_and_equals(0, &Token::BraceClose)? {
+                self.next_token()?;
+                return Ok(());
+            }
+
+            if self.peek_token(0)?.is_none() {
+                return Err(AsonError::UnexpectedEndOfDocument(
+                    "Incomplete Object.".to_owned(),
+                ));
+            }
+
+            let key = match self.next_token()? {
+                Some(Token::Identifier(key)) => key,
+                other => return Err(self.expect_error(other.is_some(), "an Object key")),
+            };
+
+            if !keys.insert(key.clone()) {
+                return Err(AsonError::MessageWithRange(
+                    format!("Duplicate key \"{}\" in Object.", key),
+                    self.last_range,
+                ));
+            }
+
+            self.consume_colon()?;
+            self.skip_value()?;
+        }
     }
 }
 
@@ -754,6 +837,7 @@ struct MapAccessor<'a, CharIter: Iterator<Item = Result<char, AsonError>>> {
     de: &'a mut Deserializer<CharIter>,
     closing_token: Token,
     type_name: &'static str,
+    seen_object_keys: HashSet<String>,
 }
 
 impl<'a, CharIter: Iterator<Item = Result<char, AsonError>>> MapAccessor<'a, CharIter> {
@@ -766,6 +850,7 @@ impl<'a, CharIter: Iterator<Item = Result<char, AsonError>>> MapAccessor<'a, Cha
             de,
             closing_token,
             type_name,
+            seen_object_keys: HashSet::new(),
         }
     }
 }
@@ -789,6 +874,19 @@ impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> MapAccess<'de>
                 "Incomplete \"{}\".",
                 self.type_name
             )));
+        }
+
+        if self.type_name == "Object"
+            && let Some(TokenWithRange {
+                token: Token::Identifier(key),
+                range,
+            }) = self.de.peek_token_with_range(0)?
+            && !self.seen_object_keys.insert(key.clone())
+        {
+            return Err(AsonError::MessageWithRange(
+                format!("Duplicate key \"{}\" in Object.", key),
+                *range,
+            ));
         }
 
         // Deserialize the key of a Map entry or Object field.
@@ -1522,6 +1620,30 @@ mod tests {
                 "accepted reserved Object key {key}"
             );
         }
+    }
+
+    #[test]
+    fn test_object_rejects_duplicate_unknown_keys() {
+        #[derive(Deserialize, Debug, Default, PartialEq)]
+        struct EmptyObject {}
+
+        assert!(de_from_str::<EmptyObject>("{unknown: 1, unknown: 2}").is_err());
+        assert!(de_from_str::<EmptyObject>("{unknown: {nested: 1, nested: 2}}").is_err());
+        assert!(de_from_str::<EmptyObject>("{unknown: [{nested: 1, nested: 2}]}").is_err());
+        assert_eq!(
+            de_from_str::<EmptyObject>("{unknown: [\"first\": 1, \"second\": 2]}").unwrap(),
+            EmptyObject {}
+        );
+
+        #[allow(dead_code)]
+        #[derive(Deserialize, Debug)]
+        enum EnumObject {
+            Variant { value: i32 },
+        }
+
+        assert!(
+            de_from_str::<EnumObject>("EnumObject::Variant{value: 0, extra: 1, extra: 2}").is_err()
+        );
     }
 
     #[test]

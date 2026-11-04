@@ -294,9 +294,12 @@ Rules:
 
 #### 3.1.8 Digit Separators
 
-Underscores (`_`) may be inserted between any two characters in a numeric literal to improve readability, and multiple underscores may appear in a row. They are ignored by the parser. However, underscores are not allowed within a prefix (e.g., `0_xFF` is invalid) or in the special values `NaN` and `Inf` (see section 3.1.11).
+Numeric separators follow Rust's placement rules. In decimal and base-prefixed literals, underscores may appear anywhere after the first digit, including at the end. In a base-prefixed literal, underscores may additionally appear after the prefix and before the first digit; at least one valid digit is still required. Runs of multiple underscores are allowed.
 
-Examples: `123_456_789`, `0xFF_FF`, `0b1010_0101`, `6.626_070_e-34`
+In floating-point literals, the fractional part must begin with a digit immediately after the decimal point. An exponent marker (`e` or `E`) may be followed immediately by an optional sign; underscores may then appear before the first exponent digit and among or after the exponent digits. If there is no sign, underscores may appear between the exponent marker and its first digit. ASON's hexadecimal floating-point extension follows the same placement rules for its mantissa, and uses `p` or `P` as the exponent marker with the same sign and separator placement.
+
+Examples: `123_456_789`, `123_`, `0xFF_FF`, `0b____1`, `6.626_070_e-34`, `1e+_5`.
+The forms `1._2`, `1e_-5`, and `1e_+5` are invalid.
 
 #### 3.1.9 Type Suffixes
 
@@ -829,19 +832,18 @@ number              = [ "+" | "-" ] ( decimal_number
                                     | infinity )
                     | nan ;
 
-(* Underscores may appear between any two characters of a number, except within a prefix
-   and in "NaN" and "Inf", where only a single "_" before the type suffix is allowed. *)
+(* Numeric separators follow the rules in section 3.1.8. *)
 sep                 = { "_" } ;
 
-decimal_number      = integer_part [ sep "." sep digits ] [ sep exponent ]
+decimal_number      = integer_part [ "." digits ] [ exponent ]
                       [ sep ( int_type | float_type ) ] ;
 (* Leading zeros are not allowed. *)
-integer_part        = "0" | non_zero_digit { sep digit } ;
-exponent            = ( "e" | "E" ) sep [ ( "+" | "-" ) sep ] digits ;
+integer_part        = "0" { "_" } | non_zero_digit { digit | "_" } ;
+exponent            = ( "e" | "E" ) [ "+" | "-" ] sep digits ;
 
 hex_integer         = "0" ( "x" | "X" ) sep hex_digits [ sep int_type ] ;
-hex_float           = "0" ( "x" | "X" ) sep hex_digits sep "." sep hex_digits
-                      sep ( "p" | "P" ) sep [ ( "+" | "-" ) sep ] digits
+hex_float           = "0" ( "x" | "X" ) sep hex_digits "." hex_digits
+               ( "p" | "P" ) [ "+" | "-" ] sep digits
                       [ sep float_type ] ;
 octal_integer       = "0" ( "o" | "O" ) sep octal_digits [ sep int_type ] ;
 binary_integer      = "0" ( "b" | "B" ) sep binary_digits [ sep int_type ] ;
@@ -853,10 +855,10 @@ nan                 = "NaN" | "NaN_f32" | "NaN_f64" ;
 int_type            = "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" ;
 float_type          = "f32" | "f64" ;
 
-digits              = digit { sep digit } ;
-hex_digits          = hex_digit { sep hex_digit } ;
-octal_digits        = octal_digit { sep octal_digit } ;
-binary_digits       = binary_digit { sep binary_digit } ;
+digits              = digit { digit | "_" } ;
+hex_digits          = hex_digit { hex_digit | "_" } ;
+octal_digits        = octal_digit { octal_digit | "_" } ;
+binary_digits       = binary_digit { binary_digit | "_" } ;
 
 non_zero_digit      = "1"..."9" ;
 digit               = "0"..."9" ;
@@ -908,7 +910,7 @@ hex_byte            = hex_digit hex_digit ;
 
 (* Compound Values *)
 list                = "[" { value } "]" ;
-map                 = "[" map_key_value_pair { map_key_value_pair } "]" ;
+map                 = "[" { map_key_value_pair } "]" ;
 map_key_value_pair  = value ":" value ;
 tuple               = "(" value { value } ")" ;
 object              = "{" { key_value_pair } "}" ;
