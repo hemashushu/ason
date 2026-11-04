@@ -1502,6 +1502,29 @@ mod tests {
     }
 
     #[test]
+    fn test_object_rejects_reserved_words_as_keys() {
+        #[derive(Deserialize, Debug, Default, PartialEq)]
+        struct EmptyObject {}
+
+        assert_eq!(de_from_str::<EmptyObject>("{}").unwrap(), EmptyObject {});
+        assert_eq!(
+            de_from_str::<EmptyObject>("{ordinary: 1}").unwrap(),
+            EmptyObject {}
+        );
+
+        for key in [
+            "true", "false", "NaN", "NaN_f32", "NaN_f64", "Inf", "+Inf", "-Inf", "Inf_f32",
+            "+Inf_f32", "-Inf_f32", "Inf_f64", "+Inf_f64", "-Inf_f64",
+        ] {
+            let document = format!("{{{key}: 1}}");
+            assert!(
+                de_from_str::<EmptyObject>(&document).is_err(),
+                "accepted reserved Object key {key}"
+            );
+        }
+    }
+
+    #[test]
     fn test_map() {
         let s0 = r#"
         [

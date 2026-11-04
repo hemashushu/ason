@@ -654,6 +654,7 @@ key_value_pair = identifier ":" value
 
 Keys are identifiers (unquoted). They must **not** be enclosed in double quotes (unlike JSON). If a quoted string is used as a key, it is a parse error.
 Each key must be unique within an Object; repeating a key is invalid.
+The boolean keywords `true` and `false`, and the special floating-point literals defined in section 3.1.11, are reserved tokens rather than identifiers and cannot be used as Object keys.
 
 An identifier follows these rules:
 
