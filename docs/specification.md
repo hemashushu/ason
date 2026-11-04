@@ -613,6 +613,8 @@ map_key_value_pair = value ":" value
 
 The keys (on the left of `:`) can be of any type (strings, numbers, etc.), but all keys must be of the same type. Similarly, all values must be of the same type.
 
+Map keys should be unique. However, duplicate keys are syntactically valid, and ASON does not require implementations to check for duplicates. Applications are responsible for checking Map key uniqueness when needed; this library does not perform that check.
+
 Examples:
 
 ```json5
@@ -629,6 +631,7 @@ Examples:
 ```
 
 An empty Map is written as an empty List `[]`.
+
 Because `[]` contains no entries that distinguish a List from a Map, the application determines which type to deserialize it as based on the expected target type.
 
 ### 4.3 Tuples
@@ -662,7 +665,9 @@ key_value_pair = identifier ":" value
 ```
 
 Keys are identifiers (unquoted). They must **not** be enclosed in double quotes (unlike JSON). If a quoted string is used as a key, it is a parse error.
+
 Each key must be unique within an Object; repeating a key is invalid.
+
 The boolean keywords `true` and `false`, and the special floating-point literals defined in section 3.1.11, are reserved tokens rather than identifiers and cannot be used as Object keys.
 
 An identifier follows these rules:
