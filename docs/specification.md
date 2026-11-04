@@ -595,14 +595,14 @@ Examples:
 
 ### 4.2 Maps
 
-A Map (also called a Dictionary) is an ordered sequence of name-value pairs enclosed in square brackets. It is distinguished from a regular List by the colon (`:`) after the first element.
+A Map (also called a Dictionary) is an ordered sequence of key-value pairs enclosed in square brackets. It is distinguished from a regular List by the colon (`:`) after the first element.
 
 ```text
-map = "[" { name_value_pair [","] } "]"
-name_value_pair = value ":" value
+map = "[" { map_key_value_pair [","] } "]"
+map_key_value_pair = value ":" value
 ```
 
-The names (on the left of `:`) can be of any type (strings, numbers, etc.), but all names must be of the same type. Similarly, all values must be of the same type.
+The keys (on the left of `:`) can be of any type (strings, numbers, etc.), but all keys must be of the same type. Similarly, all values must be of the same type.
 
 Examples:
 
@@ -827,8 +827,8 @@ hex_byte            = hex_digit hex_digit ;
 
 (* Compound Values *)
 list                = "[" { value } "]" ;
-map                 = "[" name_value_pair { name_value_pair } "]" ;
-name_value_pair     = value ":" value ;
+map                 = "[" map_key_value_pair { map_key_value_pair } "]" ;
+map_key_value_pair  = value ":" value ;
 tuple               = "(" value { value } ")" ;
 object              = "{" { key_value_pair } "}" ;
 key_value_pair      = identifier ":" value ;

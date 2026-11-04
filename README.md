@@ -731,7 +731,7 @@ ASON Objects differ from JSON Objects in two ways: their keys are identifiers ra
 
 #### 5.2.4 Maps
 
-A Map is a special List in which each value is associated with a name. Such elements are called name-value pairs. The following Map consists of string-string pairs:
+A Map is a special List in which each value is associated with a key. Such elements are called key-value pairs. The following Map consists of string-string pairs:
 
 ```json5
 [
@@ -741,7 +741,7 @@ A Map is a special List in which each value is associated with a name. Such elem
 ]
 ```
 
-Names are usually strings, but other types are also allowed. For example, the following Map consists of integer-string pairs:
+Keys are usually strings, but other types are also allowed. For example, the following Map consists of integer-string pairs:
 
 ```json5
 [
@@ -753,17 +753,17 @@ Names are usually strings, but other types are also allowed. For example, the fo
 ]
 ```
 
-All names in a Map must be of the same type, and so must all values.
+All keys in a Map must be of the same type, and so must all values.
 
 Maps differ from Objects in the following ways:
 
-- The keys of an Object are identifiers, while the names in a Map can be of any type.
-- The number of key-value pairs in an Object is fixed, while the number of name-value pairs in a Map is variable.
+- The keys of an Object are identifiers, while the keys in a Map can be of any type.
+- The number of key-value pairs in an Object is fixed, while the number of key-value pairs in a Map is variable.
 - Objects are enclosed in curly braces (`{...}`), while Maps are enclosed in square brackets (`[...]`).
 
 > Maps are also called _Dictionaries_ in some programming languages.
 
-ASON Maps with string names are similar to JSON Objects, except that they are enclosed in square brackets (`[...]`) instead of curly braces (`{...}`).
+ASON Maps with string keys are similar to JSON Objects, except that they are enclosed in square brackets (`[...]`) instead of curly braces (`{...}`).
 
 #### 5.2.5 Enumerations
 
@@ -849,7 +849,7 @@ However, `{id: 123, name: "Bob"}` and `{id: "001", name: "Alice"}` are not of th
 
 ##### 5.2.6.4 Maps
 
-The type of a Map is determined by the types of its names and values. For example, the following Map:
+The type of a Map is determined by the types of its keys and values. For example, the following Map:
 
 ```json5
 [

@@ -455,7 +455,7 @@ where
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap, AsonError> {
-        // `[name: value, ...]`
+        // `[key: value, ...]`
         self.begin_block("[")?;
         Ok(self)
     }

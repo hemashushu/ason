@@ -791,7 +791,7 @@ impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> MapAccess<'de>
             )));
         }
 
-        // Deserialize the key (the name of a Map entry, or the key of an Object field).
+        // Deserialize the key of a Map entry or Object field.
         seed.deserialize(&mut *self.de).map(Some)
     }
 
