@@ -26,7 +26,6 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
     - [5.2.3 Objects](#523-objects)
     - [5.2.4 Maps](#524-maps)
     - [5.2.5 Enumerations](#525-enumerations)
-    - [5.2.6 Types of Compound Values](#526-types-of-compound-values)
   - [5.3 Comments](#53-comments)
   - [5.4 ASON Documents](#54-ason-documents)
 - [6 Mapping between Rust Data Types and ASON Types](#6-mapping-between-rust-data-types-and-ason-types)
@@ -76,7 +75,7 @@ Here is an example ASON document:
     }
     variant_without_value: Option::None
     variant_with_value: Option::Some(123)
-    variant_with_tuple_like_value: Color::RGB(255, 127, 63)
+    variant_with_tuple_like_value: Color::Rgb(255, 127, 63)
     variant_with_object_like_value: Shape::Rect{
         width: 200
         height: 100
@@ -344,7 +343,7 @@ ASON supports the following primitive value types:
 
 #### 5.1.1 Digit Separators
 
-To improve readability, underscores can be inserted anywhere in a numeric literal (except within a prefix such as `0x`, a suffix such as `u32`, and in the special values `NaN` and `Inf`), including before and after the exponent marker `e`. For example: `123_456_789`, `6.626_070_e-34`
+To improve readability, underscores can be inserted between any two characters in a numeric literal, and multiple underscores can appear in a row. They are ignored by the parser, but are not allowed within a prefix such as `0x` or in the special values `NaN` and `Inf`. For example: `123_456_789`, `6.626_070_e-34`
 
 #### 5.1.2 Explicit Numeric Types
 
@@ -440,7 +439,7 @@ Note that the leading spaces on each line are preserved. To remove them automati
 
 ##### 5.1.6.3 Concatenated Strings
 
-To improve readability, a long string can be split across multiple lines by adding a backslash (`\`) at the end of each line. The line break and the leading whitespace of the next line are removed, so the lines are joined together. For example:
+To improve readability, a long string can be split across multiple lines by adding a backslash (`\`) at the end of each line. The line break and the leading spaces and tabs of the next line are removed, so the lines are joined together. For example:
 
 ```json5
 {
@@ -679,7 +678,7 @@ An Object must contain at least one key-value pair. The empty-brace form (`{}`) 
 }
 ```
 
-Keys are identifiers, which look like strings without quotation marks (`"`). An identifier must start with a letter (`a`-`z`, `A`-`Z`), an underscore (`_`), or a non-ASCII character (such as a CJK character), followed by any combination of these characters and digits (`0`-`9`). For example, `name`, `version`, `_edition`, and `foo_bar123` are all valid identifiers. See [Objects in the ASON Specification](docs/specification.md#44-objects) for the precise rules.
+Keys are identifiers, which look like strings without quotation marks (`"`). An identifier must start with a letter (`a`-`z`, `A`-`Z`), an underscore (`_`), or a Unicode character allowed by ASON's identifier rules, followed by any combination of these characters and digits (`0`-`9`). For example, `name`, `version`, `_edition`, and `foo_bar123` are all valid identifiers. See [Objects in the ASON Specification](docs/specification.md#44-objects) for the precise rules.
 
 Key-value pairs in an Object can be separated by commas, whitespace (including line breaks), or both. The following Objects are all equivalent:
 
@@ -727,7 +726,7 @@ The values in an Object can be of any type, including primitive values and compo
 
 > Objects are also called _Structs_ in some programming languages.
 
-ASON Objects differ from JSON Objects in two ways: their keys are identifiers rather than strings, and their set of keys is fixed by the Object's type, whereas a JSON Object can have any number of key-value pairs.
+ASON Objects differ from JSON Objects in two ways: their keys are identifiers rather than strings, and the set of keys allowed by an Object's type is fixed (though fields with defaults may be omitted), whereas a JSON Object can have any number of key-value pairs.
 
 #### 5.2.4 Maps
 
@@ -758,7 +757,7 @@ All keys in a Map must be of the same type, and so must all values.
 Maps differ from Objects in the following ways:
 
 - The keys of an Object are identifiers, while the keys in a Map can be of any type.
-- The number of key-value pairs in an Object is fixed, while the number of key-value pairs in a Map is variable.
+- The keys allowed by an Object's type are fixed (though fields with defaults may be omitted), while a Map can have a variable number of entries.
 - Objects are enclosed in curly braces (`{...}`), while Maps are enclosed in square brackets (`[...]`).
 
 > Maps are also called _Dictionaries_ in some programming languages.
@@ -795,7 +794,7 @@ When a variant carries multiple values, it is more convenient to use the Object-
 
 ```json5
 // Object-like variant
-Shape::Rectangle{
+Shape::Rect{
     width: 307
     height: 311
 }
@@ -805,65 +804,14 @@ and
 
 ```json5
 // Tuple-like variant
-Color::RGB(255, 127, 63)
+Color::Rgb(255, 127, 63)
 ```
 
-Note the difference between `Option::Some((1, "foo", true))`, which carries a single Tuple value, and `Color::RGB(255, 127, 63)`, which carries three values.
+Note the difference between `Option::Some((1, "foo", true))`, which carries a single Tuple value, and `Color::Rgb(255, 127, 63)`, which carries three values.
 
 > Enumerations are also known as _algebraic data types_, _tagged unions_, or _variants_ in some programming languages.
 
-#### 5.2.6 Types of Compound Values
-
-Like primitive values, compound values have types. When an ASON document is deserialized into values of a programming language, the type of each compound value must match the expected type; otherwise, deserialization fails.
-
-> Since all elements of a List must be of the same type, all compound values in a List must also have the same type.
-
-##### 5.2.6.1 Lists
-
-The type of a List is determined by the type of its elements. For example, a List of integers has the type `[i32]`, and a List of strings has the type `[String]`.
-
-Since the number of elements in a List is variable, the type of a List does not depend on its length. For example, `[11, 13, 17]` and `[101, 103, 107, 109]` are both of type `[i32]`, even though the first List has 3 elements and the second has 4.
-
-The type of an empty List is determined by the context in which it is used.
-
-##### 5.2.6.2 Tuples
-
-The type of a Tuple is determined by the type and order of its elements. For example, the Tuple `(11, "Alice", true)` has the type `(i32, String, bool)`, while the Tuple `("Bob", 3.14)` has the type `(String, f64)`.
-
-##### 5.2.6.3 Objects
-
-The type of an Object is determined by the keys and the corresponding value types. For example, the Object
-
-```json5
-{
-    id: 123
-    name: "Alice"
-}
-```
-
-has the type `{ id: i32, name: String }`.
-
-Some programming languages allow default values for missing fields, so an Object with missing fields can still match a type. For example, `{id: 123}` can be deserialized as type `{ id: i32, name: String }` if the `name` field has a default value.
-
-However, `{id: 123, name: "Bob"}` and `{id: "001", name: "Alice"}` are not of the same type, because their `id` fields have different types.
-
-##### 5.2.6.4 Maps
-
-The type of a Map is determined by the types of its keys and values. For example, the following Map:
-
-```json5
-[
-    "red": 0xff0000
-    "green": 0x00ff00
-    "blue": 0x0000ff
-]
-```
-
-has the type `[String: i32]`.
-
-##### 5.2.6.5 Enumerations
-
-The type of an Enumeration value is determined by its type name. For example, `Option::None` has the type `Option`, and `Shape::Rect{width: 200, height: 100}` has the type `Shape`. Therefore, different variants of the same Enumeration can appear in the same List.
+For how the types of compound values are determined, see [Types of Compound Values in the ASON Specification](docs/specification.md#46-types-of-compound-values).
 
 ### 5.3 Comments
 

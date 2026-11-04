@@ -46,6 +46,12 @@ Syntax examples use ASON unless stated otherwise. The EBNF-like grammar in secti
   - [4.3 Tuples](#43-tuples)
   - [4.4 Objects](#44-objects)
   - [4.5 Enumerations](#45-enumerations)
+  - [4.6 Types of Compound Values](#46-types-of-compound-values)
+    - [4.6.1 Lists](#461-lists)
+    - [4.6.2 Tuples](#462-tuples)
+    - [4.6.3 Objects](#463-objects)
+    - [4.6.4 Maps](#464-maps)
+    - [4.6.5 Enumerations](#465-enumerations)
 - [5 Grammar Summary](#5-grammar-summary)
 - [6 Token Termination](#6-token-termination)
 - [7 Processing Pipeline](#7-processing-pipeline)
@@ -709,7 +715,7 @@ Option::Some("hello")
 - Tuple-like variant, with at least two values in parentheses:
 
 ```json5
-Color::RGB(255, 127, 63)
+Color::Rgb(255, 127, 63)
 ```
 
 - Object-like variant, with key-value pairs in curly braces:
@@ -719,6 +725,80 @@ Shape::Rect{width: 200, height: 100}
 ```
 
 A variant with empty parentheses (`Option::Some()`) is **not** valid. If a variant has parentheses, they must contain at least one value. Exactly one value makes it a Single-value variant; two or more values make it a Tuple-like variant.
+
+### 4.6 Types of Compound Values
+
+Compound values have types. When a compound value is deserialized, it must match the expected target type; otherwise, deserialization fails.
+
+> Since all elements of a List must be of the same type, all compound values in a List must also have the same type.
+
+#### 4.6.1 Lists
+
+The type of a List is determined by the type of its elements. For example, a List of integers has the type `[i32]`, and a List of strings has the type `[String]`.
+
+Since the number of elements in a List is variable, the type of a List does not depend on its length. For example, `[11, 13, 17]` and `[101, 103, 107, 109]` are both of type `[i32]`, even though the first List has 3 elements and the second has 4.
+
+The type of an empty List is determined by the context in which it is used.
+
+#### 4.6.2 Tuples
+
+The type of a Tuple is determined by the type and order of its elements. For example, the Tuple `(11, "Alice", true)` has the type `(i32, String, bool)`, while the Tuple `("Bob", 3.14)` has the type `(String, f64)`.
+
+#### 4.6.3 Objects
+
+The type of an Object is determined by its keys and the corresponding value types. For example, the Object
+
+```json5
+{
+    id: 123
+    name: "Alice"
+}
+```
+
+has the type `{ id: i32, name: String }`.
+
+An Object may omit a field if the expected target type provides a default for it. For example, `{id: 123}` can be deserialized as type `{ id: i32, name: String }` if the `name` field has a default value.
+
+However, `{id: 123, name: "Bob"}` and `{id: "001", name: "Alice"}` are not of the same type, because their `id` fields have different types.
+
+#### 4.6.4 Maps
+
+The type of a Map is determined by the types of its keys and values. For example, the following Map:
+
+```json5
+[
+    "red": 0xff0000
+    "green": 0x00ff00
+    "blue": 0x0000ff
+]
+```
+
+has the type `[String: i32]`.
+
+#### 4.6.5 Enumerations
+
+An Enumeration type is defined by its name and its complete set of variants, including the types of their associated values. An ASON Enumeration value contains the Enumeration name, the selected variant name, and any associated value; it does not include the complete variant set. During deserialization, the target type provides that definition.
+
+The following are schematic type definitions, not ASON values. For example, an `Option` type with a `None` variant and a `Some` variant carrying an `i32` has the type:
+
+```text
+Option {
+  None,
+  Some(i32)
+}
+```
+
+Similarly, a `Shape` type with these three variants has the type:
+
+```text
+Shape {
+  Circle(i32),
+  Square(i32, i32),
+  Rect{width: i32, height: i32}
+}
+```
+
+Values of different variants can appear in the same List when they belong to the same Enumeration type.
 
 ## 5 Grammar Summary
 
