@@ -515,13 +515,17 @@ The supported formats are:
 
 | Format                      | Example                        | Description                                |
 |-----------------------------|--------------------------------|--------------------------------------------|
-| `YYYY-MM-DD`                | `d"2024-03-16"`                | Date only (time defaults to 00:00:00, time zone defaults to UTC) |
-| `YYYY-MM-DD HH:mm:ss`       | `d"2024-03-16 16:30:50"`       | Date and time (time zone defaults to UTC)  |
+| `YYYY-MM-DD`                | `d"2024-03-16"`                | Date only (time defaults to 00:00:00, time offset defaults to +00:00) |
+| `YYYY-MM-DD HH:mm:ss`       | `d"2024-03-16 16:30:50"`       | Date and time (time offset defaults to +00:00) |
 | `YYYY-MM-DDtHH:mm:ss`       | `d"2024-03-16t16:30:50"`       | Date and time with lowercase `t` separator |
 | `YYYY-MM-DDTHH:mm:ssZ`      | `d"2024-03-16T16:30:50Z"`      | Date and time in UTC                       |
-| `YYYY-MM-DDTHH:mm:ss±HH:MM` | `d"2024-03-16T16:30:50+08:00"` | Date and time with time zone offset        |
+| `YYYY-MM-DDTHH:mm:ss±HH:MM` | `d"2024-03-16T16:30:50+08:00"` | Date and time with time offset             |
 
-The date-time string is parsed according to [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339), with some relaxations. The date and time are separated by `T`, `t`, or a space. A time zone designator can be appended: `Z` or `z` for [Coordinated Universal Time (UTC)](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) (equivalent to `+00:00`), or an offset such as `+08:00`. If no time zone is specified, UTC is assumed.
+The date-time string is parsed according to [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339), with some relaxations. The date and time are separated by `T`, `t`, or a space. A time offset can be appended: `Z` or `z` for [Coordinated Universal Time (UTC)](https://en.wikipedia.org/wiki/Coordinated_Universal_Time) (equivalent to `+00:00`), or a numeric time offset such as `+08:00`. If no time offset is specified, `+00:00` is assumed.
+
+An ASON DateTime represents local time (the wall-clock reading) together with its time offset. Converting it to UTC or a Unix timestamp must account for the time offset: UTC is the local time minus the time offset. For example, `d"2024-03-16T16:30:50+08:00"` corresponds to `2024-03-16T08:30:50Z`, not `2024-03-16T16:30:50Z`.
+
+The valid range of a numeric time offset is `-23:59` to `+23:59`, inclusive. The hour component must be between `00` and `23`, and the minute component between `00` and `59`. An out-of-range time offset (such as `+24:00`, `-24:00`, or `+08:60`) is an error.
 
 Characters allowed within the date-time string: digits (`0`-`9`), `-`, `:`, space (` `), `t`, `T`, `z`, `Z`, `+`.
 
@@ -807,11 +811,11 @@ auto_trimmed_string = '"""' newline { content_line } newline { " " | "\t" } '"""
 content_line        = { any_char_except_newline } newline ;
 
 (* DateTime *)
-datetime            = 'd"' date [ ( "T" | "t" | " " ) time [ time_zone ] ] '"' ;
+datetime            = 'd"' date [ ( "T" | "t" | " " ) time [ time_offset ] ] '"' ;
 date                = digit digit digit digit "-" digit digit "-" digit digit ;
 time                = digit digit ":" digit digit ":" digit digit ;
-(* If the time zone is omitted, UTC is assumed. *)
-time_zone           = "Z" | "z" | ( "+" | "-" ) digit digit ":" digit digit ;
+(* If the time offset is omitted, +00:00 is assumed. Numeric offsets range from -23:59 to +23:59. *)
+time_offset         = "Z" | "z" | ( "+" | "-" ) digit digit ":" digit digit ;
 
 (* Byte Data *)
 hex_byte_data       = 'h"' { whitespace }

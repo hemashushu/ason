@@ -4752,6 +4752,32 @@ hello
     }
 
     #[test]
+    fn test_lex_datetime_time_offset() {
+        for (text, seconds) in [
+            (r#"d"2024-03-16T16:30:50-23:59""#, -86_340),
+            (r#"d"2024-03-16T16:30:50+23:59""#, 86_340),
+        ] {
+            let tokens = lex_from_str_without_location(text).unwrap();
+            let [Token::DateTime(value)] = tokens.as_slice() else {
+                panic!("Expected a DateTime token for {text}");
+            };
+            assert_eq!(value.offset().local_minus_utc(), seconds);
+            assert_eq!(value.naive_local().to_string(), "2024-03-16 16:30:50");
+        }
+
+        for offset in [
+            "+24:00", "-24:00", "+24:01", "-24:01", "+23:60", "-23:60", "+08:60", "-08:60",
+            "+99:59", "-99:59",
+        ] {
+            let text = format!("d\"2024-03-16T16:30:50{offset}\"");
+            assert!(
+                matches!(lex_from_str(&text), Err(AsonError::MessageWithRange(_, _))),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
     fn test_lex_variant() {
         assert_eq!(
             lex_from_str_without_location("Option::None").unwrap(),

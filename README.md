@@ -120,8 +120,8 @@ or add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ason = "3.2"
-serde = { version = "1.0", features = ["derive"] }
+ason = "3"
+serde = { version = "1", features = ["derive"] }
 ```
 
 The `ason` crate provides [Serde](https://github.com/serde-rs/serde)-based APIs for serialization and deserialization as well as streaming APIs.
@@ -1334,8 +1334,8 @@ The following Rust data types are not supported:
 
 - [ASON Specification](docs/specification.md)
 - [ASONB Specification](https://github.com/hemashushu/asonb/blob/main/README.md)
-- [ASON library](https://github.com/hemashushu/ason)
-- [ASONB library](https://github.com/hemashushu/asonb)
+- [ASON Rust library](https://github.com/hemashushu/ason)
+- [ASONB Rust library](https://github.com/hemashushu/asonb)
 - [ASON Converters (ason2b, ason2j)](https://github.com/hemashushu/ason-converter)
 - [ASON Query (aq)](https://github.com/hemashushu/ason-query)
 

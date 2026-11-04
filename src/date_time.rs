@@ -107,6 +107,8 @@ mod tests {
             "1969-12-31T23:59:59Z",
             "2024-03-16T16:30:50+08:00",
             "2024-03-16T16:30:50-05:30",
+            "2024-03-16T16:30:50-23:59",
+            "2024-03-16T16:30:50+23:59",
             "2016-12-31T23:59:60Z",
             "9999-12-31T23:59:59Z",
         ] {
@@ -116,6 +118,23 @@ mod tests {
             let decoded = crate::de_from_str::<DateTime>(&encoded).unwrap();
             assert_eq!(decoded, value);
             assert_eq!(decoded.0.offset(), value.0.offset());
+        }
+    }
+
+    #[test]
+    fn test_date_time_local_to_utc() {
+        for (offset, utc) in [
+            ("+08:00", "2024-03-16T08:30:50Z"),
+            ("-05:30", "2024-03-16T22:00:50Z"),
+            ("+23:59", "2024-03-15T16:31:50Z"),
+            ("-23:59", "2024-03-17T16:29:50Z"),
+        ] {
+            let text = format!("d\"2024-03-16T16:30:50{offset}\"");
+            let decoded = crate::de_from_str::<DateTime>(&text).unwrap();
+            let expected = ChronoDateTime::parse_from_rfc3339(utc).unwrap();
+            assert_eq!(decoded.0.naive_local().to_string(), "2024-03-16 16:30:50");
+            assert_eq!(decoded.0.naive_utc(), expected.naive_utc());
+            assert_eq!(decoded.0.timestamp(), expected.timestamp());
         }
     }
 
