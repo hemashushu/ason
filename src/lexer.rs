@@ -14,6 +14,7 @@ use crate::{
     peekable_iterator::PeekableIterator,
     position::Position,
     range::Range,
+    syntax::SyntaxKind,
     token::{NumberToken, Token, TokenWithRange},
 };
 
@@ -32,21 +33,41 @@ where
     position_stack: Vec<Position>,
 
     source_error: Cell<Option<AsonError>>,
+
     finished: bool,
+
+    collect_trivia: bool,
+    trivia: Vec<(SyntaxKind, Range)>,
 }
 
 impl<T> Lexer<T>
 where
     T: Iterator<Item = Result<CharWithPosition, AsonError>>,
 {
-    pub fn new(upstream: PeekableIterator<Result<CharWithPosition, AsonError>, T>) -> Self {
+    pub fn new(
+        upstream: PeekableIterator<Result<CharWithPosition, AsonError>, T>,
+        collect_trivia: bool,
+    ) -> Self {
         Self {
             upstream,
             last_position: Position::default(),
             position_stack: vec![],
             source_error: Cell::new(None),
             finished: false,
+            collect_trivia,
+            trivia: vec![],
         }
+    }
+
+    fn capture_trivia(&mut self, kind: SyntaxKind, start: Position) {
+        if self.collect_trivia {
+            self.trivia
+                .push((kind, Range::new(&start, &self.last_position)));
+        }
+    }
+
+    pub fn take_trivia(&mut self) -> Vec<(SyntaxKind, Range)> {
+        std::mem::take(&mut self.trivia)
     }
 
     fn next_char(&mut self) -> Option<char> {
@@ -169,18 +190,30 @@ where
             match current_char {
                 '/' if self.peek_char_and_equals(1, '/') => {
                     // Line comment
-                    self.lex_line_comment()
+                    let start = *self.peek_position(0).unwrap();
+                    self.lex_line_comment();
+                    self.capture_trivia(SyntaxKind::LineComment, start);
                 }
                 '/' if self.peek_char_and_equals(1, '*') => {
                     // Block comment
+                    let start = *self.peek_position(0).unwrap();
                     if let Err(e) = self.lex_block_comment() {
                         break Err(e);
                     }
+                    self.capture_trivia(SyntaxKind::BlockComment, start);
                 }
                 ' ' | '\t' | '\r' | '\n' | ',' => {
                     // Whitespace (including a lone '\r') and commas only separate tokens,
                     // so they are consumed and discarded.
                     self.next_char();
+                    self.capture_trivia(
+                        if current_char == ',' {
+                            SyntaxKind::Comma
+                        } else {
+                            SyntaxKind::Whitespace
+                        },
+                        self.last_position,
+                    );
                 }
                 ':' => {
                     self.next_char(); // consume ':'
@@ -304,8 +337,7 @@ where
                     && self.is_asonb_header() =>
                 {
                     break Err(AsonError::MessageWithPosition(
-                        "The input looks like ASONB binary data, not ASON text."
-                            .to_owned(),
+                        "The input looks like ASONB binary data, not ASON text.".to_owned(),
                         *self.peek_position(0).unwrap(),
                     ));
                 }
@@ -1812,7 +1844,7 @@ mod tests {
 
         let char_position_iter = CharsWithPositionIterator::new(chars);
         let peekable_char_position_iter = PeekableIterator::new(char_position_iter);
-        let lexer = Lexer::new(peekable_char_position_iter);
+        let lexer = Lexer::new(peekable_char_position_iter, false);
 
         // Collect tokens
         //

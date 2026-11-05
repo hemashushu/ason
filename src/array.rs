@@ -60,6 +60,8 @@ where
 mod tests {
     use serde::{Deserialize, Serialize};
 
+    use crate::{de_from_str, ser_to_string};
+
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     #[serde(bound(serialize = "T: Serialize", deserialize = "T: Deserialize<'de>"))]
     struct Record<T, const N: usize> {
@@ -72,8 +74,8 @@ mod tests {
         T: std::fmt::Debug + PartialEq + Serialize + serde::de::DeserializeOwned,
     {
         let record = Record { values };
-        let text = crate::ser_to_string(&record).unwrap();
-        assert_eq!(crate::de_from_str::<Record<T, N>>(&text).unwrap(), record);
+        let text = ser_to_string(&record).unwrap();
+        assert_eq!(de_from_str::<Record<T, N>>(&text).unwrap(), record);
     }
 
     #[test]
@@ -81,28 +83,25 @@ mod tests {
         let record = Record {
             values: [11, 13, 17, 19],
         };
-        let text = crate::ser_to_string(&record).unwrap();
+        let text = ser_to_string(&record).unwrap();
         assert_eq!(
             text,
             "{\n    values: [\n        11\n        13\n        17\n        19\n    ]\n}"
         );
-        assert_eq!(crate::de_from_str::<Record<i32, 4>>(&text).unwrap(), record);
+        assert_eq!(de_from_str::<Record<i32, 4>>(&text).unwrap(), record);
         for text in [
             "{values: [11, 13, 17, 19,]}",
             "{values: [11 13 17 19]}",
             "{values: [11\n13\n17\n19]}",
         ] {
-            assert_eq!(crate::de_from_str::<Record<i32, 4>>(text).unwrap(), record);
+            assert_eq!(de_from_str::<Record<i32, 4>>(text).unwrap(), record);
         }
     }
 
     #[test]
     fn test_empty_and_large_arrays() {
         let record = Record::<i32, 0> { values: [] };
-        assert_eq!(
-            crate::ser_to_string(&record).unwrap(),
-            "{\n    values: []\n}"
-        );
+        assert_eq!(ser_to_string(&record).unwrap(), "{\n    values: []\n}");
         assert_round_trip::<i32, 0>([]);
         assert_round_trip([42u16; 64]);
         assert_round_trip([true]);
@@ -130,12 +129,9 @@ mod tests {
         let record = Record {
             values: [[11, 13], [17, 19]],
         };
-        let text = crate::ser_to_string(&record).unwrap();
+        let text = ser_to_string(&record).unwrap();
         assert!(text.contains("(11 13)"));
-        assert_eq!(
-            crate::de_from_str::<Record<[i32; 2], 2>>(&text).unwrap(),
-            record
-        );
+        assert_eq!(de_from_str::<Record<[i32; 2], 2>>(&text).unwrap(), record);
     }
 
     #[test]
@@ -146,10 +142,10 @@ mod tests {
             "{values: [11 13 17 19 23]}",
             "{values: [11 13 17 19 {extra: [23]}]}",
         ] {
-            let error = crate::de_from_str::<Record<i32, 4>>(text).unwrap_err();
+            let error = de_from_str::<Record<i32, 4>>(text).unwrap_err();
             assert!(error.to_string().contains("exactly 4 elements"), "{error}");
         }
-        let error = crate::de_from_str::<Record<i32, 0>>("{values: [true]}").unwrap_err();
+        let error = de_from_str::<Record<i32, 0>>("{values: [true]}").unwrap_err();
         assert!(error.to_string().contains("exactly 0 elements"), "{error}");
     }
 
@@ -164,10 +160,7 @@ mod tests {
             "{values: [11 13 17 19]} true",
             "{values: [11 13 17 19)}",
         ] {
-            assert!(
-                crate::de_from_str::<Record<i32, 4>>(text).is_err(),
-                "{text}"
-            );
+            assert!(de_from_str::<Record<i32, 4>>(text).is_err(), "{text}");
         }
     }
 }

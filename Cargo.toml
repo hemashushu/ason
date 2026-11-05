@@ -1,6 +1,6 @@
 [package]
 name = "ason"
-version = "3.3.1"
+version = "3.4.0"
 edition = "2024"
 
 license-file = "LICENSE.additional"

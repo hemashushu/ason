@@ -16,7 +16,7 @@
         Option::None
         Option::Some(42)
     ]
-    list_empty: []
+
     list_nested: [
         [11, 13],
         [23, 29]
@@ -38,4 +38,6 @@
         2,
         3,
     ]
+
+    list_empty: []
 }

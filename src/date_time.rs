@@ -98,6 +98,8 @@ pub fn deserialize<'de, D: Deserializer<'de>>(
 
 #[cfg(test)]
 mod tests {
+    use crate::{de_from_str, ser_to_string};
+
     use super::*;
 
     #[test]
@@ -113,9 +115,9 @@ mod tests {
             "9999-12-31T23:59:59Z",
         ] {
             let value = DateTime(ChronoDateTime::parse_from_rfc3339(text).unwrap());
-            let encoded = crate::ser_to_string(&value).unwrap();
+            let encoded = ser_to_string(&value).unwrap();
             assert_eq!(encoded, format!("d\"{text}\""));
-            let decoded = crate::de_from_str::<DateTime>(&encoded).unwrap();
+            let decoded = de_from_str::<DateTime>(&encoded).unwrap();
             assert_eq!(decoded, value);
             assert_eq!(decoded.0.offset(), value.0.offset());
         }
@@ -130,7 +132,7 @@ mod tests {
             ("-23:59", "2024-03-17T16:29:50Z"),
         ] {
             let text = format!("d\"2024-03-16T16:30:50{offset}\"");
-            let decoded = crate::de_from_str::<DateTime>(&text).unwrap();
+            let decoded = de_from_str::<DateTime>(&text).unwrap();
             let expected = ChronoDateTime::parse_from_rfc3339(utc).unwrap();
             assert_eq!(decoded.0.naive_local().to_string(), "2024-03-16 16:30:50");
             assert_eq!(decoded.0.naive_utc(), expected.naive_utc());
@@ -147,9 +149,9 @@ mod tests {
             r#"d"2024-03-16T00:00:00z""#,
             r#"d"2024-03-16T00:00:00+00:00""#,
         ] {
-            let decoded = crate::de_from_str::<DateTime>(text).unwrap();
+            let decoded = de_from_str::<DateTime>(text).unwrap();
             assert_eq!(
-                crate::ser_to_string(&decoded).unwrap(),
+                ser_to_string(&decoded).unwrap(),
                 r#"d"2024-03-16T00:00:00Z""#,
             );
         }
@@ -169,11 +171,11 @@ mod tests {
             r#"d"2024-03-16" true"#,
             "d\"2024-03-16",
         ] {
-            assert!(crate::de_from_str::<DateTime>(text).is_err(), "{text}");
+            assert!(de_from_str::<DateTime>(text).is_err(), "{text}");
         }
-        assert!(crate::de_from_str::<String>(r#"d"2024-03-16""#).is_err());
+        assert!(de_from_str::<String>(r#"d"2024-03-16""#).is_err());
         assert_eq!(
-            crate::ser_to_string(&"2024-03-16T00:00:00Z").unwrap(),
+            ser_to_string(&"2024-03-16T00:00:00Z").unwrap(),
             r#""2024-03-16T00:00:00Z""#,
         );
     }
@@ -182,7 +184,7 @@ mod tests {
     fn test_date_time_unrepresentable_values() {
         for text in ["2024-03-16T16:30:50.000000001Z", "2016-12-31T23:59:60.5Z"] {
             let value = DateTime(ChronoDateTime::parse_from_rfc3339(text).unwrap());
-            assert!(crate::ser_to_string(&value).is_err(), "{text}");
+            assert!(ser_to_string(&value).is_err(), "{text}");
         }
         for year in [-1, 10000] {
             let local = chrono::NaiveDate::from_ymd_opt(year, 1, 1)
@@ -190,7 +192,7 @@ mod tests {
                 .and_hms_opt(0, 0, 0)
                 .unwrap();
             let value = DateTime(local.and_utc().fixed_offset());
-            assert!(crate::ser_to_string(&value).is_err(), "{year}");
+            assert!(ser_to_string(&value).is_err(), "{year}");
         }
         for offset in [-28_801, 28_801] {
             let value = DateTime(
@@ -198,12 +200,12 @@ mod tests {
                     .unwrap()
                     .with_timezone(&FixedOffset::east_opt(offset).unwrap()),
             );
-            assert!(crate::ser_to_string(&value).is_err());
+            assert!(ser_to_string(&value).is_err());
         }
         let value = DateTime(
             ChronoDateTime::<chrono::Utc>::MAX_UTC
                 .with_timezone(&FixedOffset::east_opt(3600).unwrap()),
         );
-        assert!(crate::ser_to_string(&value).is_err());
+        assert!(ser_to_string(&value).is_err());
     }
 }

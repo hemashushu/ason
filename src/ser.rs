@@ -9,7 +9,7 @@ use std::{fmt::Write as _, io::Write, marker::PhantomData};
 use serde::{Serialize, ser};
 
 use crate::{
-    date_time::DateTime,
+    date_time::{self, DateTime},
     error::AsonError,
     value::{Value, VariantValue},
 };
@@ -491,7 +491,7 @@ where
     where
         T: ?Sized + Serialize,
     {
-        if name == crate::date_time::MARKER {
+        if name == date_time::MARKER {
             self.print_str("d")?;
             return value.serialize(self);
         }

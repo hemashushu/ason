@@ -8,6 +8,7 @@ use std::{collections::HashSet, io::Read, marker::PhantomData};
 
 use crate::{
     char_with_position::CharsWithPositionIterator,
+    date_time,
     error::AsonError,
     lexer::Lexer,
     normalizer::NormalizeSignedNumberIter,
@@ -173,7 +174,7 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
         // The processing pipeline:
         // chars -> chars with positions -> tokens -> tokens with signed numbers normalized
         let char_position_iter = CharsWithPositionIterator::new(char_iterator);
-        let lexer = Lexer::new(PeekableIterator::new(char_position_iter));
+        let lexer = Lexer::new(PeekableIterator::new(char_position_iter), false);
         let normalizer = NormalizeSignedNumberIter::new(PeekableIterator::new(lexer));
 
         Self {
@@ -807,7 +808,7 @@ impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> de::Deserializer<'
     where
         V: de::Visitor<'de>,
     {
-        if name == crate::date_time::MARKER {
+        if name == date_time::MARKER {
             return match self.next_token()? {
                 Some(Token::DateTime(value)) => {
                     visitor.visit_newtype_struct(de::value::StringDeserializer::<AsonError>::new(
