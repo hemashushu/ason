@@ -95,6 +95,59 @@ where
     Ok(ListStreamReader::new(deserializer))
 }
 
+/// Opens a Result containing either a streamed List or a fully deserialized error.
+///
+/// `T` is the List element type. Reading stops after one Result without requiring EOF.
+/// The Ok branch validates its closing parenthesis only when iteration reaches the end.
+pub fn result_stream_reader<T, E, R>(reader: R) -> Result<ResultStreamReader<T, E, R>, AsonError>
+where
+    T: de::DeserializeOwned,
+    E: de::DeserializeOwned,
+    R: Read,
+{
+    let mut deserializer = Deserializer::from_char_iterator(UTF8CharIterator::new(reader));
+    let variant = match deserializer.next_token()? {
+        Some(Token::Enumeration(name, variant)) if name == "Result" => variant,
+        other => {
+            return Err(
+                deserializer.expect_error(other.is_some(), "an enumeration of type \"Result\"")
+            );
+        }
+    };
+
+    if variant != "Ok" && variant != "Err" {
+        return Err(AsonError::MessageWithRange(
+            format!(
+                "Unknown Result variant \"{}\"; expect \"Ok\" or \"Err\".",
+                variant
+            ),
+            deserializer.last_range,
+        ));
+    }
+    deserializer.consume_opening_parenthesis()?;
+
+    if variant == "Err" {
+        let error = E::deserialize(&mut deserializer)?;
+        deserializer.consume_closing_parenthesis()?;
+        Ok(ResultStreamReader::Err(error))
+    } else {
+        deserializer.consume_token_and_assert(&Token::BracketOpen, "a \"List\"")?;
+        let mut stream = ListStreamReader::new(deserializer);
+        stream.wrapped_result = true;
+        Ok(ResultStreamReader::Ok(stream))
+    }
+}
+
+/// A streamed successful List or a fully deserialized business error.
+pub enum ResultStreamReader<T, E, R>
+where
+    T: de::DeserializeOwned,
+    R: Read,
+{
+    Ok(ListStreamReader<T, R>),
+    Err(E),
+}
+
 pub struct ListStreamReader<T, R>
 where
     T: de::DeserializeOwned,
@@ -105,6 +158,8 @@ where
     // Set when the closing bracket ']' has been consumed or an error has occurred,
     // after which the iterator only returns `None`.
     finished: bool,
+
+    wrapped_result: bool,
 
     _marker: PhantomData<fn() -> T>,
 }
@@ -118,6 +173,7 @@ where
         Self {
             deserializer,
             finished: false,
+            wrapped_result: false,
             _marker: PhantomData,
         }
     }
@@ -144,6 +200,13 @@ where
                 // It has been peeked successfully, so consuming it cannot fail.
                 self.finished = true;
                 let _ = self.deserializer.next_token();
+                if self.wrapped_result {
+                    return self
+                        .deserializer
+                        .consume_closing_parenthesis()
+                        .err()
+                        .map(Err);
+                }
                 return None;
             }
             Ok(false) => T::deserialize(&mut self.deserializer),
@@ -1260,6 +1323,33 @@ mod tests {
             Err(AsonError::Message(message)) if message.contains("test read failure")
         ));
         assert!(reader.next().is_none());
+    }
+
+    #[test]
+    fn test_result_stream_reader_io_errors() {
+        for bytes in [b"Result::".as_slice(), b"Result::Err(\"failed\" "] {
+            let error = match super::result_stream_reader::<i32, String, _>(FailingReader { bytes })
+            {
+                Err(error) => error,
+                Ok(_) => panic!("expected a read error"),
+            };
+            assert!(
+                matches!(error, AsonError::Message(message) if message.contains("test read failure"))
+            );
+        }
+
+        for bytes in [b"Result::Ok([1 ".as_slice(), b"Result::Ok([1] "] {
+            let super::ResultStreamReader::Ok(mut stream) =
+                super::result_stream_reader::<i32, String, _>(FailingReader { bytes }).unwrap()
+            else {
+                panic!("expected a streamed List");
+            };
+            assert_eq!(stream.next().unwrap().unwrap(), 1);
+            assert!(
+                matches!(stream.next().unwrap(), Err(AsonError::Message(message)) if message.contains("test read failure"))
+            );
+            assert!(stream.next().is_none());
+        }
     }
 
     #[test]

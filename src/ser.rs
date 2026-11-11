@@ -55,6 +55,48 @@ where
     ListStreamWriter::new(serializer)
 }
 
+/// Creates a writer for a Result containing a streamed List or a business error.
+///
+/// Choose exactly one branch with `start_ok` or `write_err`. Errors may leave partial output.
+pub fn result_stream_writer<T, W>(writer: &mut W) -> ResultStreamWriter<'_, W, T>
+where
+    W: Write,
+{
+    ResultStreamWriter {
+        serializer: Serializer::new(writer),
+        _marker: PhantomData,
+    }
+}
+
+/// A writer whose consuming methods select one Result branch.
+pub struct ResultStreamWriter<'a, W, T>
+where
+    W: Write,
+{
+    serializer: Serializer<'a, W>,
+    _marker: PhantomData<fn(&T)>,
+}
+
+impl<'a, W, T> ResultStreamWriter<'a, W, T>
+where
+    W: Write,
+{
+    /// Starts `Result::Ok([`. Write elements directly, then call `end_list` to write `])`.
+    /// Do not call `start_list` on the returned writer. Dropping it does not close the Result.
+    pub fn start_ok(mut self) -> Result<ListStreamWriter<'a, W, T>, AsonError> {
+        self.serializer.print_str("Result::Ok(")?;
+        let mut stream = ListStreamWriter::new(self.serializer);
+        stream.wrapped_result = true;
+        stream.start_list()?;
+        Ok(stream)
+    }
+
+    /// Writes a complete `Result::Err(...)` using the regular Result serializer.
+    pub fn write_err<E: ?Sized + Serialize>(mut self, error: &E) -> Result<(), AsonError> {
+        ser::Serializer::serialize_newtype_variant(&mut self.serializer, "Result", 1, "Err", error)
+    }
+}
+
 pub struct Serializer<'a, W>
 where
     W: Write,
@@ -251,6 +293,7 @@ where
     W: Write,
 {
     serializer: Serializer<'a, W>,
+    wrapped_result: bool,
     _marker: PhantomData<fn(&T)>,
 }
 
@@ -261,6 +304,7 @@ where
     fn new(serializer: Serializer<'a, W>) -> Self {
         Self {
             serializer,
+            wrapped_result: false,
             _marker: PhantomData,
         }
     }
@@ -270,7 +314,11 @@ where
     }
 
     pub fn end_list(&mut self) -> Result<(), AsonError> {
-        self.serializer.end_block("]")
+        self.serializer.end_block("]")?;
+        if self.wrapped_result {
+            self.serializer.print_str(")")?;
+        }
+        Ok(())
     }
 
     pub fn write(&mut self, value: &T) -> Result<(), AsonError>

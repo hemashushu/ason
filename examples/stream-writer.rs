@@ -10,6 +10,8 @@
 //! cargo build --examples
 //! cd target/debug/examples
 //! ./stream-writer | ./stream-reader
+//! ./stream-writer --result | ./stream-reader --result
+//! ./stream-writer --result --error | ./stream-reader --result
 //! ```
 
 use std::io::Write;
@@ -34,10 +36,21 @@ fn main() {
     };
 
     let mut output = std::io::stdout().lock();
-    let mut stream_writer = ason::list_stream_writer(&mut output);
-
-    // Start the list before serializing elements.
-    stream_writer.start_list().unwrap();
+    let result_mode = std::env::args().any(|arg| arg == "--result");
+    if result_mode && std::env::args().any(|arg| arg == "--error") {
+        ason::result_stream_writer::<Object, _>(&mut output)
+            .write_err("example error")
+            .unwrap();
+        output.flush().unwrap();
+        return;
+    }
+    let mut stream_writer = if result_mode {
+        ason::result_stream_writer(&mut output).start_ok().unwrap()
+    } else {
+        let mut stream = ason::list_stream_writer(&mut output);
+        stream.start_list().unwrap();
+        stream
+    };
 
     // Serialize the first element.
     stream_writer.write(&o1).unwrap();

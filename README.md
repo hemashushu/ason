@@ -39,8 +39,9 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
   - [6.8 DateTime](#68-datetime)
   - [6.9 Default Values](#69-default-values)
   - [6.10 Unsupported Data Types](#610-unsupported-data-types)
-- [7 Links](#7-links)
-- [8 License](#8-license)
+- [7 Utilities](#7-utilities)
+- [8 More information](#8-more-information)
+- [9 License](#9-license)
 
 <!-- /code_chunk_output -->
 
@@ -119,7 +120,7 @@ or add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ason = "3"
+ason = "3.5.0"  # Use the latest version of the ASON crate
 serde = { version = "1", features = ["derive"] }
 ```
 
@@ -193,7 +194,7 @@ Single-document deserialization rejects tokens after the root value and checks f
 
 For pipes, sockets, and standard I/O, ASON also supports streaming. In streaming mode, elements are written and read one at a time, instead of the whole document being built or loaded in memory at once. This is useful when the producer does not know the full list in advance, or when the consumer wants to start processing before the whole document has arrived.
 
-Currently, the Serde streaming APIs support only documents whose root value is a List. ASON uses `[` and `]` rather than ASONB's multi-chunk binary framing. The closing `]` is required; EOF before it is an error. A stream reader returns an error once and then stops, and does not check for trailing content after `]`.
+The Serde streaming APIs support root Lists and Rust `Result` values whose `Ok` payload is a List, such as `Result::Ok([11 13])` or `Result::Err("failed")`. ASON uses `[` and `]` rather than ASONB's multi-chunk binary framing. The closing `]` is required; EOF before it is an error. A stream reader returns an error once and then stops, and does not check for trailing content after the root value.
 
 The streaming serializer lets you open a list writer, write elements as needed, and then close the list explicitly:
 
@@ -304,6 +305,45 @@ The code above is available in the `examples` directory of the project. Build an
 cargo build --examples
 cd target/debug/examples
 ./stream-writer | ./stream-reader
+```
+
+For `Result<Vec<T>, E>`, use `result_stream_writer` and `result_stream_reader`. `T` is the List element type and `E` is the business error type; they need not be the same. The document format is identical to ordinary Result serialization:
+
+```rust
+fn main() -> Result<(), ason::AsonError> {
+    let mut output = Vec::new();
+    let mut stream = ason::result_stream_writer(&mut output).start_ok()?;
+    stream.write(&11)?;
+    stream.writes(&[13, 17])?;
+    stream.end_list()?;
+
+    match ason::result_stream_reader::<i32, String, _>(output.as_slice())? {
+        ason::ResultStreamReader::Ok(stream) => {
+            let values = stream.collect::<Result<Vec<_>, _>>()?;
+            assert_eq!(values, vec![11, 13, 17]);
+        }
+        ason::ResultStreamReader::Err(error) => panic!("{error}"),
+    }
+
+    let mut output = Vec::new();
+    ason::result_stream_writer::<i32, _>(&mut output).write_err("failed")?;
+    assert!(matches!(
+        ason::result_stream_reader::<i32, String, _>(output.as_slice())?,
+        ason::ResultStreamReader::Err(error) if error == "failed"
+    ));
+    Ok(())
+}
+```
+
+`start_ok` consumes the Result writer and returns an already-open `ListStreamWriter`: do not call `start_list` again. `end_list` closes both the List and the Result, writing `])`. Alternatively, `write_err` consumes the Result writer and serializes the complete error branch. Dropping a writer does not close it, and serialization errors may leave partial output.
+
+`result_stream_reader` requires `T: DeserializeOwned`, `E: DeserializeOwned`, and `R: Read`. It returns `Result<ResultStreamReader<T, E, R>, AsonError>`: a business `Err(E)` is a successfully decoded Result, not an `AsonError`. The error payload is decoded in full before returning; successful List elements are decoded incrementally. The closing `)` is required and is checked when iteration reaches the end of the List. Stopping iteration early leaves the remaining elements and closing delimiters unvalidated. Neither branch checks for trailing content or requires EOF after the Result. The APIs do not expose buffered trailing content for reading another document from the same source.
+
+The existing pipe examples also support Result streams:
+
+```sh
+./stream-writer --result | ./stream-reader --result
+./stream-writer --result --error | ./stream-reader --result
 ```
 
 ## 5 Quick Reference
@@ -1278,15 +1318,20 @@ The following Rust data types are not supported:
 - Newtype structs, such as `struct Width(u32);`
 - Tuple structs, such as `struct RGB(u8, u8, u8);`
 
-## 7 Links
+## 7 Utilities
+
+- [ASON Extension for VSCode](https://marketplace.visualstudio.com/items?itemName=Hemashushu.ason-vscode)
+- [ASON Formatter (asonfmt)](https://github.com/hemashushu/ason-formatter)
+- [ASON Converters (ason2b, ason2j)](https://github.com/hemashushu/ason-converter)
+- [ASON Query (aq)](https://github.com/hemashushu/ason-query)
+
+## 8 More information
 
 - [ASON Specification](docs/specification.md)
 - [ASONB Specification](https://github.com/hemashushu/asonb/blob/main/README.md)
 - [ASON Rust library](https://github.com/hemashushu/ason)
 - [ASONB Rust library](https://github.com/hemashushu/asonb)
-- [ASON Converters (ason2b, ason2j)](https://github.com/hemashushu/ason-converter)
-- [ASON Query (aq)](https://github.com/hemashushu/ason-query)
 
-## 8 License
+## 9 License
 
 This project is licensed under the Mozilla Public License 2.0 (MPL-2.0) with additional terms. See [LICENSE](./LICENSE) and [LICENSE.additional](./LICENSE.additional) for details.

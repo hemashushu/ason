@@ -10,6 +10,8 @@
 //! cargo build --examples
 //! cd target/debug/examples
 //! ./stream-writer | ./stream-reader
+//! ./stream-writer --result | ./stream-reader --result
+//! ./stream-writer --result --error | ./stream-reader --result
 //! ```
 
 use std::io::Write;
@@ -24,7 +26,17 @@ struct Object {
 
 fn main() {
     let mut input = std::io::stdin().lock();
-    let mut stream_reader = ason::list_stream_reader(&mut input).unwrap();
+    let mut stream_reader = if std::env::args().any(|arg| arg == "--result") {
+        match ason::result_stream_reader::<Object, String, _>(&mut input).unwrap() {
+            ason::ResultStreamReader::Ok(stream) => stream,
+            ason::ResultStreamReader::Err(error) => {
+                writeln!(std::io::stderr().lock(), "Result::Err: {error}").unwrap();
+                return;
+            }
+        }
+    } else {
+        ason::list_stream_reader(&mut input).unwrap()
+    };
 
     // Deserialize the first element.
     let o1: Object = stream_reader.next().unwrap().unwrap();
@@ -47,8 +59,8 @@ fn main() {
     );
 
     // Read the remaining elements until the end of the list.
-    while !stream_reader.next().is_none() {
-        // ...
+    for result in stream_reader {
+        let _object: Object = result.unwrap();
     }
 
     let mut stderr = std::io::stderr().lock();
