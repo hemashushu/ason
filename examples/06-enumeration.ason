@@ -11,4 +11,10 @@
     variant_single_value_tuple: Option::Some((11, 13))
     variant_single_value_list: Option::Some([17, 19, 23, 29])
     variant_single_value_object: Option::Some({id: 123, name: "foo"})
+
+    // Short-hand variants with single compound value
+    result_ok: Ok(42)
+    result_err: Err("error message")
+    option_some: Some(42)
+    option_none: None
 }
