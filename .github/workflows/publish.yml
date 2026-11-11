@@ -25,33 +25,32 @@ jobs:
       - name: Package
         run: cargo package
 
-      - name: Check whether version exists on crates.io
-        id: version-check
-        shell: bash
-        run: |
-          version="$(cargo metadata --no-deps --format-version 1 | jq -er '.packages[] | select(.name == "ason") | .version')"
-          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "https://crates.io/api/v1/crates/ason/${version}")"
-          case "$status" in
-            200)
-              echo "exists=true" >> "$GITHUB_OUTPUT"
-              echo "ason ${version} already exists on crates.io; skipping publish."
-              ;;
-            404)
-              echo "exists=false" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "Unexpected crates.io API response: HTTP ${status}" >&2
-              exit 1
-              ;;
-          esac
-
       - name: Authenticate with crates.io
         id: auth
         uses: rust-lang/crates-io-auth-action@v1
-        if: steps.version-check.outputs.exists != 'true'
 
       - name: Publish to crates.io
-        run: cargo publish
-        if: steps.version-check.outputs.exists != 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="$(cargo metadata --no-deps --format-version 1 | jq -er '.packages[] | select(.name == "ason") | .version')"
+          status="$(curl --silent --show-error --location --retry 3 \
+            --user-agent "ason-publish-workflow" \
+            --output /dev/null --write-out '%{http_code}' \
+            "https://crates.io/api/v1/crates/ason/${version}")"
+
+          case "$status" in
+            200)
+              echo "ason ${version} is already published; skipping."
+              ;;
+            404)
+              cargo publish
+              ;;
+            *)
+              echo "Failed to check ason ${version} on crates.io: HTTP ${status}" >&2
+              exit 1
+              ;;
+          esac
