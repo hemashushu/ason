@@ -28,7 +28,7 @@ fn main() {
     let mut input = std::io::stdin().lock();
     let mut stream_reader = if std::env::args().any(|arg| arg == "--result") {
         match ason::result_stream_reader::<Object, String, _>(&mut input).unwrap() {
-            ason::ResultStreamReader::Ok(stream) => stream,
+            ason::ResultStreamReader::Ok(stream) => *stream,
             ason::ResultStreamReader::Err(error) => {
                 writeln!(std::io::stderr().lock(), "Result::Err: {error}").unwrap();
                 return;

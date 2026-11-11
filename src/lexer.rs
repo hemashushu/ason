@@ -457,6 +457,8 @@ where
             match identifier_buffer.as_str() {
                 "true" => Token::Boolean(true),
                 "false" => Token::Boolean(false),
+                "Some" | "None" => Token::Enumeration("Option".to_owned(), identifier_buffer),
+                "Ok" | "Err" => Token::Enumeration("Result".to_owned(), identifier_buffer),
                 // The default floating-point type is `f64`.
                 "NaN" | "NaN_f64" => Token::Number(NumberToken::F64(f64::NAN)),
                 "NaN_f32" => Token::Number(NumberToken::F32(f32::NAN)),
@@ -4872,6 +4874,60 @@ hello
             assert!(
                 matches!(lex_from_str(&text), Err(AsonError::MessageWithRange(_, _))),
                 "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_lex_enum_shorthand() {
+        for (short, full, type_name) in [
+            ("Some", "Option::Some", "Option"),
+            ("None", "Option::None", "Option"),
+            ("Ok", "Result::Ok", "Result"),
+            ("Err", "Result::Err", "Result"),
+        ] {
+            assert_eq!(
+                lex_from_str_without_location(short).unwrap(),
+                lex_from_str_without_location(full).unwrap()
+            );
+            assert_eq!(
+                lex_from_str(short).unwrap(),
+                vec![TokenWithRange::new(
+                    Token::new_enumeration(type_name, short),
+                    Range::from_position_and_length(&Position::new(0, 0, 0), short.len())
+                )]
+            );
+        }
+
+        for identifier in [
+            "some",
+            "SOME",
+            "none",
+            "NONE",
+            "ok",
+            "OK",
+            "err",
+            "ERR",
+            "SomeValue",
+            "None_",
+            "Ok1",
+            "Error",
+        ] {
+            assert_eq!(
+                lex_from_str_without_location(identifier).unwrap(),
+                vec![Token::new_identifier(identifier)]
+            );
+        }
+
+        for (input, variant) in [
+            ("Custom::Some", "Some"),
+            ("Custom::None", "None"),
+            ("Custom::Ok", "Ok"),
+            ("Custom::Err", "Err"),
+        ] {
+            assert_eq!(
+                lex_from_str_without_location(input).unwrap(),
+                vec![Token::new_enumeration("Custom", variant)]
             );
         }
     }

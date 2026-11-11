@@ -81,17 +81,17 @@ impl<'a, W, T> ResultStreamWriter<'a, W, T>
 where
     W: Write,
 {
-    /// Starts `Result::Ok([`. Write elements directly, then call `end_list` to write `])`.
+    /// Starts `Ok([`. Write elements directly, then call `end_list` to write `])`.
     /// Do not call `start_list` on the returned writer. Dropping it does not close the Result.
     pub fn start_ok(mut self) -> Result<ListStreamWriter<'a, W, T>, AsonError> {
-        self.serializer.print_str("Result::Ok(")?;
+        self.serializer.print_str("Ok(")?;
         let mut stream = ListStreamWriter::new(self.serializer);
         stream.wrapped_result = true;
         stream.start_list()?;
         Ok(stream)
     }
 
-    /// Writes a complete `Result::Err(...)` using the regular Result serializer.
+    /// Writes a complete `Err(...)` using the regular Result serializer.
     pub fn write_err<E: ?Sized + Serialize>(mut self, error: &E) -> Result<(), AsonError> {
         ser::Serializer::serialize_newtype_variant(&mut self.serializer, "Result", 1, "Err", error)
     }
@@ -130,6 +130,13 @@ where
         self.upstream
             .write_fmt(args)
             .map_err(|e| AsonError::Message(e.to_string()))
+    }
+
+    fn print_enumeration(&mut self, name: &str, variant: &str) -> Result<(), AsonError> {
+        match (name, variant) {
+            ("Option", "Some" | "None") | ("Result", "Ok" | "Err") => self.print_str(variant),
+            _ => self.print_fmt(format_args!("{name}::{variant}")),
+        }
     }
 
     fn print_newline(&mut self) -> Result<(), AsonError> {
@@ -251,7 +258,7 @@ where
                 variant,
                 payload,
             } => {
-                self.print_fmt(format_args!("{name}::{variant}"))?;
+                self.print_enumeration(name, variant)?;
                 match payload {
                     VariantValue::Unit => Ok(()),
                     VariantValue::Newtype(value) => {
@@ -278,9 +285,9 @@ where
                     }
                 }
             }
-            Value::Option(None) => self.print_str("Option::None"),
+            Value::Option(None) => self.print_str("None"),
             Value::Option(Some(value)) => {
-                self.print_str("Option::Some(")?;
+                self.print_str("Some(")?;
                 self.serialize_value(value)?;
                 self.print_str(")")
             }
@@ -500,14 +507,14 @@ where
     }
 
     fn serialize_none(self) -> Result<(), AsonError> {
-        self.print_str("Option::None")
+        self.print_str("None")
     }
 
     fn serialize_some<T>(self, value: &T) -> Result<(), AsonError>
     where
         T: ?Sized + Serialize,
     {
-        self.print_str("Option::Some(")?;
+        self.print_str("Some(")?;
         value.serialize(&mut *self)?;
         self.print_str(")")
     }
@@ -532,7 +539,7 @@ where
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<(), AsonError> {
-        self.print_fmt(format_args!("{}::{}", name, variant))
+        self.print_enumeration(name, variant)
     }
 
     fn serialize_newtype_struct<T>(self, name: &'static str, value: &T) -> Result<(), AsonError>
@@ -565,7 +572,8 @@ where
         // }
         // ```
 
-        self.print_fmt(format_args!("{}::{}(", name, variant))?;
+        self.print_enumeration(name, variant)?;
+        self.print_str("(")?;
         value.serialize(&mut *self)?;
         self.print_str(")")
     }
@@ -609,7 +617,7 @@ where
         // }
         // ```
 
-        self.print_fmt(format_args!("{}::{}", name, variant))?;
+        self.print_enumeration(name, variant)?;
         self.begin_tuple(len)?;
         Ok(self)
     }
@@ -643,7 +651,7 @@ where
         // }
         // ```
 
-        self.print_fmt(format_args!("{}::{}", name, variant))?;
+        self.print_enumeration(name, variant)?;
         self.begin_block("{")?;
         Ok(self)
     }
@@ -1002,10 +1010,48 @@ mod tests {
     #[test]
     fn test_option() {
         let v0: Option<i32> = None;
-        assert_eq!(ser_to_string(&v0).unwrap(), r#"Option::None"#);
+        assert_eq!(ser_to_string(&v0).unwrap(), r#"None"#);
 
         let v1: Option<i32> = Some(123);
-        assert_eq!(ser_to_string(&v1).unwrap(), r#"Option::Some(123)"#);
+        assert_eq!(ser_to_string(&v1).unwrap(), r#"Some(123)"#);
+    }
+
+    #[test]
+    fn test_enum_shorthand_serialization() {
+        for (value, expected) in [(Ok(123), "Ok(123)"), (Err(456), "Err(456)")] {
+            assert_eq!(ser_to_string(&value).unwrap(), expected);
+            let mut buffer = Vec::new();
+            crate::ser_to_writer(&value, &mut buffer).unwrap();
+            assert_eq!(buffer, expected.as_bytes());
+            assert_eq!(
+                crate::de_from_str::<Result<i32, i32>>(expected).unwrap(),
+                value
+            );
+        }
+        assert_eq!(
+            ser_to_string(&Some(Ok::<_, String>(Some(123)))).unwrap(),
+            "Some(Ok(Some(123)))"
+        );
+
+        for (full, expected) in [
+            ("Option::Some(123)", "Some(123)"),
+            ("Option::None", "None"),
+            ("Result::Ok(123)", "Ok(123)"),
+            ("Result::Err(456)", "Err(456)"),
+            ("Custom::Some(123)", "Custom::Some(123)"),
+            ("Custom::None", "Custom::None"),
+            ("Custom::Ok(123)", "Custom::Ok(123)"),
+            ("Custom::Err(456)", "Custom::Err(456)"),
+            ("result::Ok(123)", "result::Ok(123)"),
+            ("Result::ok(123)", "Result::ok(123)"),
+        ] {
+            let value = de_value_from_str(full).unwrap();
+            assert_eq!(ser_value_to_string(&value).unwrap(), expected);
+            let mut buffer = Vec::new();
+            crate::ser_value_to_writer(&value, &mut buffer).unwrap();
+            assert_eq!(buffer, expected.as_bytes());
+            assert_eq!(de_value_from_str(expected).unwrap(), value);
+        }
     }
 
     #[test]
@@ -1166,9 +1212,9 @@ mod tests {
         let s1 = ser_to_string(&m1).unwrap();
         assert!(s1.starts_with('['));
         assert!(s1.ends_with(']'));
-        assert!(s1.contains(r#"223: Option::Some("hello")"#));
-        assert!(s1.contains(r#"227: Option::None"#));
-        assert!(s1.contains(r#"229: Option::Some("world")"#));
+        assert!(s1.contains(r#"223: Some("hello")"#));
+        assert!(s1.contains(r#"227: None"#));
+        assert!(s1.contains(r#"229: Some("world")"#));
     }
 
     #[test]

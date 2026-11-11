@@ -129,6 +129,31 @@ fn test_result_stream_reader() {
 }
 
 #[test]
+fn test_result_stream_reader_enum_shorthand() {
+    for (document, expected) in [("Ok([])", vec![]), ("Ok([11, 13])", vec![11, 13])] {
+        let stream = ason::result_stream_reader::<i32, String, _>(document.as_bytes()).unwrap();
+        let ason::ResultStreamReader::Ok(stream) = stream else {
+            panic!("expected a streamed List");
+        };
+        assert_eq!(stream.collect::<Result<Vec<_>, _>>().unwrap(), expected);
+    }
+
+    let stream =
+        ason::result_stream_reader::<i32, String, _>(b"Err(\"failed\")".as_slice()).unwrap();
+    match stream {
+        ason::ResultStreamReader::Err(error) => assert_eq!(error, "failed"),
+        ason::ResultStreamReader::Ok(_) => panic!("expected a business error"),
+    }
+
+    for invalid in ["ok([1])", "OK([1])", "err(1)", "ERR(1)", "Ok(1)", "Err()"] {
+        assert!(
+            ason::result_stream_reader::<i32, i32, _>(invalid.as_bytes()).is_err(),
+            "{invalid}"
+        );
+    }
+}
+
+#[test]
 fn test_result_stream_writer() {
     for values in [vec![], vec![vec![11, 13], vec![], vec![17]]] {
         let mut buffer = Vec::new();
@@ -138,6 +163,7 @@ fn test_result_stream_writer() {
             stream.write(value).unwrap();
         }
         stream.end_list().unwrap();
+        assert!(buffer.starts_with(b"Ok(["));
         assert_eq!(
             buffer,
             ason::ser_to_string(&Ok::<_, String>(&values))
@@ -200,7 +226,7 @@ fn test_result_stream_writer() {
     ason::result_stream_writer::<i32, _>(&mut buffer)
         .write_err("failed")
         .unwrap();
-    assert_eq!(buffer, b"Result::Err(\"failed\")");
+    assert_eq!(buffer, b"Err(\"failed\")");
 }
 
 #[test]
@@ -269,7 +295,7 @@ fn test_result_stream_writer_io_errors() {
         assert_eq!(buffer, expected.as_bytes()[..capacity]);
     }
 
-    let expected = "Result::Err(\"failed\")";
+    let expected = "Err(\"failed\")";
     for capacity in 0..expected.len() {
         let mut buffer = vec![0; capacity];
         let mut writer = std::io::Cursor::new(buffer.as_mut_slice());

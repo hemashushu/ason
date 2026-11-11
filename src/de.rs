@@ -134,7 +134,7 @@ where
         deserializer.consume_token_and_assert(&Token::BracketOpen, "a \"List\"")?;
         let mut stream = ListStreamReader::new(deserializer);
         stream.wrapped_result = true;
-        Ok(ResultStreamReader::Ok(stream))
+        Ok(ResultStreamReader::Ok(Box::new(stream)))
     }
 }
 
@@ -144,7 +144,7 @@ where
     T: de::DeserializeOwned,
     R: Read,
 {
-    Ok(ListStreamReader<T, R>),
+    Ok(Box<ListStreamReader<T, R>>),
     Err(E),
 }
 
@@ -1556,6 +1556,75 @@ mod tests {
     }
 
     #[test]
+    fn test_enum_shorthand() {
+        for (short, full, expected) in [
+            ("None", "Option::None", None),
+            ("Some(123)", "Option::Some(123)", Some(123)),
+        ] {
+            assert_eq!(de_from_str::<Option<i32>>(short).unwrap(), expected);
+            assert_eq!(
+                de_value_from_str(short).unwrap(),
+                de_value_from_str(full).unwrap()
+            );
+        }
+
+        for (short, full, expected) in [
+            ("Ok(123)", "Result::Ok(123)", Ok(123)),
+            (
+                r#"Err("failed")"#,
+                r#"Result::Err("failed")"#,
+                Err("failed".to_owned()),
+            ),
+        ] {
+            assert_eq!(de_from_str::<Result<i32, String>>(short).unwrap(), expected);
+            assert_eq!(
+                de_value_from_str(short).unwrap(),
+                de_value_from_str(full).unwrap()
+            );
+        }
+
+        let nested = "[Some(Ok(Some(123))), Some(Err(None)), None]";
+        let expected = vec![Some(Ok(Some(123))), Some(Err(None)), None];
+        type Nested = Vec<Option<Result<Option<i32>, Option<String>>>>;
+        assert_eq!(de_from_str::<Nested>(nested).unwrap(), expected);
+        assert_eq!(
+            de_from_reader::<Nested, _>(nested.as_bytes()).unwrap(),
+            expected
+        );
+
+        for invalid in [
+            "some(1)",
+            "SOME(1)",
+            "none",
+            "NONE",
+            "Some",
+            "Some()",
+            "Some(1, 2)",
+            "None(1)",
+        ] {
+            assert!(de_from_str::<Option<i32>>(invalid).is_err(), "{invalid}");
+            assert!(de_value_from_str(invalid).is_err(), "{invalid}");
+        }
+        for invalid in [
+            "ok(1)",
+            "OK(1)",
+            "err(2)",
+            "ERR(2)",
+            "Ok",
+            "Ok()",
+            "Ok(1, 2)",
+            "Err",
+            "Err()",
+            "Err(1, 2)",
+        ] {
+            assert!(
+                de_from_str::<Result<i32, i32>>(invalid).is_err(),
+                "{invalid}"
+            );
+        }
+    }
+
+    #[test]
     fn test_list() {
         assert_eq!(
             de_from_str::<Vec<i32>>(r#"[11,13,17,19]"#).unwrap(),
@@ -1933,7 +2002,7 @@ mod tests {
 
         for key in [
             "true", "false", "NaN", "NaN_f32", "NaN_f64", "Inf", "+Inf", "-Inf", "Inf_f32",
-            "+Inf_f32", "-Inf_f32", "Inf_f64", "+Inf_f64", "-Inf_f64",
+            "+Inf_f32", "-Inf_f32", "Inf_f64", "+Inf_f64", "-Inf_f64", "Some", "None", "Ok", "Err",
         ] {
             let document = format!("{{{key}: 1}}");
             assert!(

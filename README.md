@@ -194,7 +194,7 @@ Single-document deserialization rejects tokens after the root value and checks f
 
 For pipes, sockets, and standard I/O, ASON also supports streaming. In streaming mode, elements are written and read one at a time, instead of the whole document being built or loaded in memory at once. This is useful when the producer does not know the full list in advance, or when the consumer wants to start processing before the whole document has arrived.
 
-The Serde streaming APIs support root Lists and Rust `Result` values whose `Ok` payload is a List, such as `Result::Ok([11 13])` or `Result::Err("failed")`. ASON uses `[` and `]` rather than ASONB's multi-chunk binary framing. The closing `]` is required; EOF before it is an error. A stream reader returns an error once and then stops, and does not check for trailing content after the root value.
+The Serde streaming APIs support root Lists and Rust `Result` values whose `Ok` payload is a List, such as `Ok([11 13])` or `Err("failed")`. Writers emit these shorthand forms; readers also accept `Result::Ok([11 13])` and `Result::Err("failed")`. ASON uses `[` and `]` rather than ASONB's multi-chunk binary framing. The closing `]` is required; EOF before it is an error. A stream reader returns an error once and then stops, and does not check for trailing content after the root value.
 
 The streaming serializer lets you open a list writer, write elements as needed, and then close the list explicitly:
 
@@ -337,7 +337,7 @@ fn main() -> Result<(), ason::AsonError> {
 
 `start_ok` consumes the Result writer and returns an already-open `ListStreamWriter`: do not call `start_list` again. `end_list` closes both the List and the Result, writing `])`. Alternatively, `write_err` consumes the Result writer and serializes the complete error branch. Dropping a writer does not close it, and serialization errors may leave partial output.
 
-`result_stream_reader` requires `T: DeserializeOwned`, `E: DeserializeOwned`, and `R: Read`. It returns `Result<ResultStreamReader<T, E, R>, AsonError>`: a business `Err(E)` is a successfully decoded Result, not an `AsonError`. The error payload is decoded in full before returning; successful List elements are decoded incrementally. The closing `)` is required and is checked when iteration reaches the end of the List. Stopping iteration early leaves the remaining elements and closing delimiters unvalidated. Neither branch checks for trailing content or requires EOF after the Result. The APIs do not expose buffered trailing content for reading another document from the same source.
+`result_stream_reader` requires `T: DeserializeOwned`, `E: DeserializeOwned`, and `R: Read`. It returns `Result<ResultStreamReader<T, E, R>, AsonError>`: a business `Err(E)` is a successfully decoded Result, not an `AsonError`. The `Ok` branch holds a `Box<ListStreamReader<T, R>>` to keep the enum compact. The error payload is decoded in full before returning; successful List elements are decoded incrementally. The closing `)` is required and is checked when iteration reaches the end of the List. Stopping iteration early leaves the remaining elements and closing delimiters unvalidated. Neither branch checks for trailing content or requires EOF after the Result. The APIs do not expose buffered trailing content for reading another document from the same source.
 
 The existing pipe examples also support Result streams:
 
@@ -811,6 +811,26 @@ An Enumeration is a data type that consists of a type name and a set of variants
 ```json5
 Option::None
 Option::Some(11)
+```
+
+In text ASON documents, the following `Option` and `Result` variants also accept shorthand forms:
+
+| Full Form | Shorthand |
+|-----------|-----------|
+| `Option::Some(value)` | `Some(value)` |
+| `Option::None` | `None` |
+| `Result::Ok(value)` | `Ok(value)` |
+| `Result::Err(error)` | `Err(error)` |
+
+Like ordinary Enumeration names, these shorthands are case-sensitive: `some`, `NONE`, `ok`, and `ERR` are not shorthands. The exact bare names `Some`, `None`, `Ok`, and `Err` are reserved and cannot be used as Object keys. Other Enumerations still require their type name, such as `Color::Rgb(...)`. Serialization emits the shorthand forms for these four variants, while deserialization accepts both full and shorthand forms.
+
+Shorthands can be nested and mixed with full forms:
+
+```json5
+Some(Ok([11, 13, 17]))
+Result::Ok(Some(11))
+Err("failed")
+None
 ```
 
 A variant can carry a value of any type, such as a List, an Object, or a Tuple:
