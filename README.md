@@ -196,7 +196,7 @@ For pipes, sockets, and standard I/O, ASON also supports streaming. In streaming
 
 The Serde streaming APIs support root Lists and Rust `Result` values whose `Ok` payload is a List, such as `Ok([11 13])` and `Err("failed")`. Writers emit these shorthand forms; readers also accept `Result::Ok([11 13])` and `Result::Err("failed")`.
 
-The streaming serializer lets you open a list writer, write elements as needed, and then close the list explicitly:
+The streaming serializer lets you open a list writer, write elements individually or in batches, and then close the list explicitly. This example writes four objects to standard output:
 
 ```rust
 use std::io::Write;
@@ -212,12 +212,22 @@ struct Object {
 fn main() {
     let o1 = Object {
         id: 11,
-        name: "foo".to_owned(),
+        name: "Alice".to_string(),
     };
 
     let o2 = Object {
         id: 13,
-        name: "bar".to_owned(),
+        name: "Bob".to_string(),
+    };
+
+    let o3 = Object {
+        id: 17,
+        name: "Charlie".to_string(),
+    };
+
+    let o4 = Object {
+        id: 19,
+        name: "David".to_string(),
     };
 
     let mut output = std::io::stdout().lock();
@@ -232,16 +242,13 @@ fn main() {
     // Serialize the second element.
     stream_writer.write(&o2).unwrap();
 
-    // Serialize multiple elements at once is also supported.
-    // stream_writer.writes(&[o1, o2]).unwrap();
+    // Serialize the third and fourth element.
+    stream_writer.writes(&[o3, o4]).unwrap();
 
     // End the list explicitly.
     stream_writer.end_list().unwrap();
 
     output.flush().unwrap();
-
-    let mut stderr = std::io::stderr().lock();
-    writeln!(&mut stderr, "Streaming serialization successful!").unwrap();
 }
 ```
 
@@ -254,8 +261,6 @@ The streaming deserializer reads the root list incrementally from a source (e.g.
 For example, the following program reads the list of objects written by the serializer above:
 
 ```rust
-use std::io::Write;
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -274,7 +279,7 @@ fn main() {
         o1,
         Object {
             id: 11,
-            name: "foo".to_owned()
+            name: "Alice".to_string()
         }
     );
 
@@ -284,22 +289,35 @@ fn main() {
         o2,
         Object {
             id: 13,
-            name: "bar".to_owned()
+            name: "Bob".to_string()
         }
     );
 
-    // Read the remaining elements until the end of the list.
-    while let Some(result) = stream_reader.next() {
-        let _object: Object = result.unwrap();
-        // ...
+    // Deserialize the remaining elements until the end of the list.
+    let mut objs = vec![];
+    for result in stream_reader {
+        objs.push(result.unwrap());
     }
 
-    let mut stderr = std::io::stderr().lock();
-    writeln!(&mut stderr, "Streaming deserialization successful!").unwrap();
+    assert_eq!(
+        objs,
+        vec![
+            Object {
+                id: 17,
+                name: "Charlie".to_string()
+            },
+            Object {
+                id: 19,
+                name: "David".to_string()
+            }
+        ]
+    );
+
+    println!("Success: received all elements correctly.");
 }
 ```
 
-The code above is available in the `examples` directory of the project. Build and run it with:
+The List streaming examples are available in [stream-writer.rs](examples/stream-writer.rs) and [stream-reader.rs](examples/stream-reader.rs). Build and run them with:
 
 ```sh
 cargo build --examples
@@ -307,31 +325,68 @@ cd target/debug/examples
 ./stream-writer | ./stream-reader
 ```
 
-For `Result<Vec<T>, E>`, use `result_stream_writer` and `result_stream_reader`. `T` is the List element type and `E` is the business error type; they need not be the same. The document format is identical to ordinary Result serialization:
+The reader verifies all four objects and prints `Success: received all elements correctly.`.
+
+For `Result<Vec<T>, E>`, use `result_stream_writer` and `result_stream_reader`. `T` is the List element type and `E` is the business error type; they need not be the same. The document format is identical to ordinary Result serialization.
+
+The following writer streams an `Ok` List containing the same four objects, or writes `Err("Eve")` when run with `--error`:
 
 ```rust
-fn main() -> Result<(), ason::AsonError> {
-    let mut output = Vec::new();
-    let mut stream = ason::result_stream_writer(&mut output).start_ok()?;
-    stream.write(&11)?;
-    stream.writes(&[13, 17])?;
-    stream.end_list()?;
+use std::io::Write;
 
-    match ason::result_stream_reader::<i32, String, _>(output.as_slice())? {
-        ason::ResultStreamReader::Ok(stream) => {
-            let values = stream.collect::<Result<Vec<_>, _>>()?;
-            assert_eq!(values, vec![11, 13, 17]);
-        }
-        ason::ResultStreamReader::Err(error) => panic!("{error}"),
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Object {
+    id: i32,
+    name: String,
+}
+
+fn main() {
+    let mut output = std::io::stdout().lock();
+    if std::env::args().any(|arg| arg == "--error") {
+        ason::result_stream_writer::<Object, _>(&mut output)
+            .write_err("Eve")
+            .unwrap();
+
+        output.flush().unwrap();
+    } else {
+        let o1 = Object {
+            id: 11,
+            name: "Alice".to_string(),
+        };
+
+        let o2 = Object {
+            id: 13,
+            name: "Bob".to_string(),
+        };
+
+        let o3 = Object {
+            id: 17,
+            name: "Charlie".to_string(),
+        };
+
+        let o4 = Object {
+            id: 19,
+            name: "David".to_string(),
+        };
+
+        let mut stream_writer = ason::result_stream_writer(&mut output).start_ok().unwrap();
+
+        // Serialize the first element.
+        stream_writer.write(&o1).unwrap();
+
+        // Serialize the second element.
+        stream_writer.write(&o2).unwrap();
+
+        // Serialize the third and fourth element.
+        stream_writer.writes(&[o3, o4]).unwrap();
+
+        // End the list and the Result explicitly.
+        stream_writer.end_list().unwrap();
+
+        output.flush().unwrap();
     }
-
-    let mut output = Vec::new();
-    ason::result_stream_writer::<i32, _>(&mut output).write_err("failed")?;
-    assert!(matches!(
-        ason::result_stream_reader::<i32, String, _>(output.as_slice())?,
-        ason::ResultStreamReader::Err(error) if error == "failed"
-    ));
-    Ok(())
 }
 ```
 
@@ -339,12 +394,81 @@ fn main() -> Result<(), ason::AsonError> {
 
 `result_stream_reader` requires `T: DeserializeOwned`, `E: DeserializeOwned`, and `R: Read`. It returns `Result<ResultStreamReader<T, E, R>, AsonError>`: a business `Err(E)` is a successfully decoded Result, not an `AsonError`. The `Ok` branch holds a `Box<ListStreamReader<T, R>>` to keep the enum compact. The error payload is decoded in full before returning; successful List elements are decoded incrementally. The closing `)` is required and is checked when iteration reaches the end of the List. Stopping iteration early leaves the remaining elements and closing delimiters unvalidated. Neither branch checks for trailing content or requires EOF after the Result. The APIs do not expose buffered trailing content for reading another document from the same source.
 
-The existing pipe examples also support Result streams:
+The corresponding reader matches on the Result and checks the four objects in the `Ok` branch or the `"Eve"` error in the `Err` branch:
+
+```rust
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Object {
+    id: i32,
+    name: String,
+}
+
+fn main() {
+    let mut input = std::io::stdin().lock();
+    match ason::result_stream_reader::<Object, String, _>(&mut input).unwrap() {
+        ason::ResultStreamReader::Ok(mut stream_reader) => {
+            // Deserialize the first element.
+            let o1: Object = stream_reader.next().unwrap().unwrap();
+            assert_eq!(
+                o1,
+                Object {
+                    id: 11,
+                    name: "Alice".to_string()
+                }
+            );
+
+            // Deserialize the second element.
+            let o2: Object = stream_reader.next().unwrap().unwrap();
+            assert_eq!(
+                o2,
+                Object {
+                    id: 13,
+                    name: "Bob".to_string()
+                }
+            );
+
+            // Deserialize the remaining elements until the end of the list.
+            let mut objs = vec![];
+            for result in stream_reader {
+                objs.push(result.unwrap());
+            }
+
+            assert_eq!(
+                objs,
+                vec![
+                    Object {
+                        id: 17,
+                        name: "Charlie".to_string()
+                    },
+                    Object {
+                        id: 19,
+                        name: "David".to_string()
+                    }
+                ]
+            );
+
+            println!("Success: received \"Result::Ok\"");
+        }
+        ason::ResultStreamReader::Err(error) => {
+            assert_eq!(error, "Eve");
+            println!("Success: received \"Result::Err\"");
+        }
+    };
+}
+```
+
+Separate Result streaming examples are available in [result-writer.rs](examples/result-writer.rs) and [result-reader.rs](examples/result-reader.rs). Build and run them with:
 
 ```sh
-./stream-writer --result | ./stream-reader --result
-./stream-writer --result --error | ./stream-reader --result
+cargo build --examples
+cd target/debug/examples
+./result-writer | ./result-reader
+./result-writer --error | ./result-reader
 ```
+
+The reader prints `Success: received "Result::Ok"` for the first command and `Success: received "Result::Err"` for the second. It handles both branches without additional flags.
 
 ## 5 Quick Reference
 

@@ -10,11 +10,7 @@
 //! cargo build --examples
 //! cd target/debug/examples
 //! ./stream-writer | ./stream-reader
-//! ./stream-writer --result | ./stream-reader --result
-//! ./stream-writer --result --error | ./stream-reader --result
 //! ```
-
-use std::io::Write;
 
 use serde::{Deserialize, Serialize};
 
@@ -26,17 +22,7 @@ struct Object {
 
 fn main() {
     let mut input = std::io::stdin().lock();
-    let mut stream_reader = if std::env::args().any(|arg| arg == "--result") {
-        match ason::result_stream_reader::<Object, String, _>(&mut input).unwrap() {
-            ason::ResultStreamReader::Ok(stream) => *stream,
-            ason::ResultStreamReader::Err(error) => {
-                writeln!(std::io::stderr().lock(), "Result::Err: {error}").unwrap();
-                return;
-            }
-        }
-    } else {
-        ason::list_stream_reader(&mut input).unwrap()
-    };
+    let mut stream_reader = ason::list_stream_reader(&mut input).unwrap();
 
     // Deserialize the first element.
     let o1: Object = stream_reader.next().unwrap().unwrap();
@@ -44,7 +30,7 @@ fn main() {
         o1,
         Object {
             id: 11,
-            name: "foo".to_owned()
+            name: "Alice".to_string()
         }
     );
 
@@ -54,15 +40,29 @@ fn main() {
         o2,
         Object {
             id: 13,
-            name: "bar".to_owned()
+            name: "Bob".to_string()
         }
     );
 
-    // Read the remaining elements until the end of the list.
+    // Deserialize the remaining elements until the end of the list.
+    let mut objs = vec![];
     for result in stream_reader {
-        let _object: Object = result.unwrap();
+        objs.push(result.unwrap());
     }
 
-    let mut stderr = std::io::stderr().lock();
-    writeln!(&mut stderr, "Streaming deserialization successful!").unwrap();
+    assert_eq!(
+        objs,
+        vec![
+            Object {
+                id: 17,
+                name: "Charlie".to_string()
+            },
+            Object {
+                id: 19,
+                name: "David".to_string()
+            }
+        ]
+    );
+
+    println!("Success: received all elements correctly.");
 }

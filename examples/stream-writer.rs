@@ -10,8 +10,6 @@
 //! cargo build --examples
 //! cd target/debug/examples
 //! ./stream-writer | ./stream-reader
-//! ./stream-writer --result | ./stream-reader --result
-//! ./stream-writer --result --error | ./stream-reader --result
 //! ```
 
 use std::io::Write;
@@ -27,30 +25,29 @@ struct Object {
 fn main() {
     let o1 = Object {
         id: 11,
-        name: "foo".to_owned(),
+        name: "Alice".to_string(),
     };
 
     let o2 = Object {
         id: 13,
-        name: "bar".to_owned(),
+        name: "Bob".to_string(),
+    };
+
+    let o3 = Object {
+        id: 17,
+        name: "Charlie".to_string(),
+    };
+
+    let o4 = Object {
+        id: 19,
+        name: "David".to_string(),
     };
 
     let mut output = std::io::stdout().lock();
-    let result_mode = std::env::args().any(|arg| arg == "--result");
-    if result_mode && std::env::args().any(|arg| arg == "--error") {
-        ason::result_stream_writer::<Object, _>(&mut output)
-            .write_err("example error")
-            .unwrap();
-        output.flush().unwrap();
-        return;
-    }
-    let mut stream_writer = if result_mode {
-        ason::result_stream_writer(&mut output).start_ok().unwrap()
-    } else {
-        let mut stream = ason::list_stream_writer(&mut output);
-        stream.start_list().unwrap();
-        stream
-    };
+    let mut stream_writer = ason::list_stream_writer(&mut output);
+
+    // Start the list before serializing elements.
+    stream_writer.start_list().unwrap();
 
     // Serialize the first element.
     stream_writer.write(&o1).unwrap();
@@ -58,11 +55,11 @@ fn main() {
     // Serialize the second element.
     stream_writer.write(&o2).unwrap();
 
+    // Serialize the third and fourth element.
+    stream_writer.writes(&[o3, o4]).unwrap();
+
     // End the list explicitly.
     stream_writer.end_list().unwrap();
 
     output.flush().unwrap();
-
-    let mut stderr = std::io::stderr().lock();
-    writeln!(&mut stderr, "Streaming serialization successful!").unwrap();
 }
