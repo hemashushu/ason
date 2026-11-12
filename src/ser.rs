@@ -11,7 +11,7 @@ use serde::{Serialize, ser};
 use crate::{
     date_time::{self, DateTime},
     error::AsonError,
-    value::{Value, VariantValue},
+    value::{PayloadKind, Value, VariantValue, validate_predefined_enumeration},
 };
 
 pub const DEFAULT_INDENT_CHARS: &str = "    ";
@@ -132,7 +132,13 @@ where
             .map_err(|e| AsonError::Message(e.to_string()))
     }
 
-    fn print_enumeration(&mut self, name: &str, variant: &str) -> Result<(), AsonError> {
+    fn print_enumeration(
+        &mut self,
+        name: &str,
+        variant: &str,
+        kind: PayloadKind,
+    ) -> Result<(), AsonError> {
+        validate_predefined_enumeration(name, variant, kind).map_err(AsonError::Message)?;
         match (name, variant) {
             ("Option", "Some" | "None") | ("Result", "Ok" | "Err") => self.print_str(variant),
             _ => self.print_fmt(format_args!("{name}::{variant}")),
@@ -258,7 +264,7 @@ where
                 variant,
                 payload,
             } => {
-                self.print_enumeration(name, variant)?;
+                self.print_enumeration(name, variant, payload.kind())?;
                 match payload {
                     VariantValue::Unit => Ok(()),
                     VariantValue::Newtype(value) => {
@@ -539,7 +545,7 @@ where
         _variant_index: u32,
         variant: &'static str,
     ) -> Result<(), AsonError> {
-        self.print_enumeration(name, variant)
+        self.print_enumeration(name, variant, PayloadKind::Unit)
     }
 
     fn serialize_newtype_struct<T>(self, name: &'static str, value: &T) -> Result<(), AsonError>
@@ -572,7 +578,7 @@ where
         // }
         // ```
 
-        self.print_enumeration(name, variant)?;
+        self.print_enumeration(name, variant, PayloadKind::Newtype)?;
         self.print_str("(")?;
         value.serialize(&mut *self)?;
         self.print_str(")")
@@ -617,7 +623,7 @@ where
         // }
         // ```
 
-        self.print_enumeration(name, variant)?;
+        self.print_enumeration(name, variant, PayloadKind::Tuple)?;
         self.begin_tuple(len)?;
         Ok(self)
     }
@@ -651,7 +657,7 @@ where
         // }
         // ```
 
-        self.print_enumeration(name, variant)?;
+        self.print_enumeration(name, variant, PayloadKind::Struct)?;
         self.begin_block("{")?;
         Ok(self)
     }
@@ -1043,7 +1049,6 @@ mod tests {
             ("Custom::Ok(123)", "Custom::Ok(123)"),
             ("Custom::Err(456)", "Custom::Err(456)"),
             ("result::Ok(123)", "result::Ok(123)"),
-            ("Result::ok(123)", "Result::ok(123)"),
         ] {
             let value = de_value_from_str(full).unwrap();
             assert_eq!(ser_value_to_string(&value).unwrap(), expected);
@@ -1052,6 +1057,38 @@ mod tests {
             assert_eq!(buffer, expected.as_bytes());
             assert_eq!(de_value_from_str(expected).unwrap(), value);
         }
+    }
+
+    #[test]
+    fn test_predefined_enumeration_validation() {
+        use crate::value::{Value, VariantValue};
+
+        for (name, variant, payload) in [
+            (
+                "Option",
+                "None",
+                VariantValue::Newtype(Box::new(Value::I32(1))),
+            ),
+            ("Option", "Some", VariantValue::Unit),
+            (
+                "Option",
+                "Some",
+                VariantValue::Tuple(vec![Value::I32(1), Value::I32(2)]),
+            ),
+            ("Option", "Foo", VariantValue::Unit),
+            ("Result", "Ok", VariantValue::Unit),
+            ("Result", "Err", VariantValue::Struct(vec![])),
+            ("Result", "Foo", VariantValue::Unit),
+        ] {
+            let value = Value::Enumeration {
+                name: name.to_owned(),
+                variant: variant.to_owned(),
+                payload,
+            };
+            assert!(ser_value_to_string(&value).is_err());
+        }
+
+        assert!(ser_to_string(&Option::<i32>::None).is_ok());
     }
 
     #[test]

@@ -16,7 +16,7 @@ use crate::{
     range::Range,
     token::{NumberToken, Token, TokenWithRange},
     utf8_char_iterator::UTF8CharIterator,
-    value::{Value, VariantValue},
+    value::{Value, VariantValue, validate_predefined_enumeration},
 };
 use serde::de::{self, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess};
 
@@ -391,15 +391,14 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
             VariantValue::Unit
         };
 
+        validate_predefined_enumeration(&name, &variant, payload.kind())
+            .map_err(|message| AsonError::MessageWithRange(message, self.last_range))?;
+
         if name == "Option" {
-            return match (variant.as_str(), payload) {
-                ("None", VariantValue::Unit) => Ok(Value::Option(None)),
-                ("Some", VariantValue::Newtype(value)) => Ok(Value::Option(Some(value))),
-                _ => Err(AsonError::MessageWithRange(
-                    "Expect \"Option::None\" or \"Option::Some(...)\".".to_owned(),
-                    self.last_range,
-                )),
-            };
+            return Ok(Value::Option(match payload {
+                VariantValue::Newtype(value) => Some(value),
+                _ => None,
+            }));
         }
 
         Ok(Value::Enumeration {
@@ -1294,6 +1293,24 @@ mod tests {
             }
         );
         assert!(de_value_from_str("Option::Some(1) true").is_err());
+
+        for text in [
+            "None(1)",
+            "Some",
+            "Some(1, 2)",
+            "Some{a: 1}",
+            "Option::Foo",
+            "Ok",
+            "Ok(1, 2)",
+            "Err",
+            "Err{a: 1}",
+            "Result::Foo(1)",
+            "Result::ok(1)",
+        ] {
+            assert!(de_value_from_str(text).is_err(), "{text}");
+        }
+        assert!(de_value_from_str("Ok(1)").is_ok());
+        assert!(de_value_from_str("Err(\"x\")").is_ok());
     }
 
     impl Read for FailingReader {

@@ -96,9 +96,11 @@ JSON has a simple syntax and has been around for decades, but it struggles to me
 - **No Null Value:** ASON uses the `Option` enumeration to represent optional values, eliminating the error-prone `null` value.
 - **Easy to Write:** ASON supports comments, unquoted object keys, trailing commas, and whitespace as an alternative to commas for separating elements. These features make documents easier to write and edit.
 
-In addition to the text format, ASON has a binary counterpart called [ASONB (ASON Binary)](https://github.com/hemashushu/asonb). ASONB supports streaming, appendable root multi-chunk Strings, Byte Data, and Lists, and memory-mapped access. Incremental updates are limited, and performance benefits depend on the data and encoding choices.
+In addition to the text format, ASON has a binary counterpart called [ASONB (ASON Binary)](https://github.com/hemashushu/asonb). ASONB supports streaming, appendable root multi-chunk Strings, Byte Data, and Lists, and memory-mapped access.
 
 ASON is designed to resemble JSON, so JSON users can learn and adopt it easily. Although ASON is not compatible with JSON, converting between the two is straightforward. ASON is also simple to parse, which makes it easy to implement in other languages and helps ensure its longevity as software ecosystems evolve.
+
+If you need a tool to convert between ASON and JSON, see [ASON Converter](https://github.com/hemashushu/ason-converter).
 
 ## 3 Comparison with Other Data Serialization Formats
 
@@ -126,8 +128,6 @@ serde = { version = "1", features = ["derive"] }
 
 The `ason` crate provides [Serde](https://github.com/serde-rs/serde)-based APIs for serialization and deserialization as well as streaming APIs.
 
-Unlike ASONB serialization, ASON serialization does not require a `Schema` trait or an embedded document schema. Deserialization requires an owned target (`DeserializeOwned`), so strings and byte payloads cannot be borrowed from the input as they can with ASONB's contiguous slice APIs.
-
 ### 4.1 Deserialization and Serialization
 
 Consider the following ASON document:
@@ -143,7 +143,7 @@ Consider the following ASON document:
 }
 ```
 
-This document contains an Object with three fields: `name`, `version`, and `dependencies`, where `dependencies` is a List of strings. It maps directly to the following Rust struct:
+This document contains an Object with three fields: `name`, `version`, and `dependencies`, where `dependencies` is a List of Strings. It maps directly to the following Rust struct:
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -194,7 +194,7 @@ Single-document deserialization rejects tokens after the root value and checks f
 
 For pipes, sockets, and standard I/O, ASON also supports streaming. In streaming mode, elements are written and read one at a time, instead of the whole document being built or loaded in memory at once. This is useful when the producer does not know the full list in advance, or when the consumer wants to start processing before the whole document has arrived.
 
-The Serde streaming APIs support root Lists and Rust `Result` values whose `Ok` payload is a List, such as `Ok([11 13])` or `Err("failed")`. Writers emit these shorthand forms; readers also accept `Result::Ok([11 13])` and `Result::Err("failed")`. ASON uses `[` and `]` rather than ASONB's multi-chunk binary framing. The closing `]` is required; EOF before it is an error. A stream reader returns an error once and then stops, and does not check for trailing content after the root value.
+The Serde streaming APIs support root Lists and Rust `Result` values whose `Ok` payload is a List, such as `Ok([11 13])` and `Err("failed")`. Writers emit these shorthand forms; readers also accept `Result::Ok([11 13])` and `Result::Err("failed")`.
 
 The streaming serializer lets you open a list writer, write elements as needed, and then close the list explicitly:
 
@@ -245,7 +245,7 @@ fn main() {
 }
 ```
 
-The streaming deserializer reads the root list incrementally from a byte source (e.g., a pipe, a socket, or standard input). The typical flow is:
+The streaming deserializer reads the root list incrementally from a source (e.g., a pipe, a socket, or standard input). The typical flow is:
 
 1. Pass any `Read` source directly to `ason::list_stream_reader`.
 2. Call `next()` repeatedly; each call deserializes the next element once it becomes available.
@@ -806,21 +806,37 @@ ASON Maps with string keys are similar to JSON Objects, except that they are enc
 
 #### 5.2.5 Enumerations
 
-An Enumeration is a data type that consists of a type name and a set of variants. Each variant can optionally carry a value. The following example shows an Enumeration type named `Option` with two variants, `None` and `Some`. `None` carries no value, while `Some` carries an integer:
+An Enumeration is a data type that consists of a type name and a set of variants. Each variant can optionally carry a value. The following example shows an Enumeration type named `Shape` with two variants, `Dot` and `Line`. `Dot` carries no value, while `Line` carries an integer:
 
 ```json5
-Option::None
-Option::Some(11)
+Shape::Dot
+Shape::Line(11)
 ```
 
-In text ASON documents, the following `Option` and `Result` variants also accept shorthand forms:
+In text ASON documents, there are two predefined Enumeration types, `Option` and `Result`:
 
-| Full Form | Shorthand |
-|-----------|-----------|
+```rust
+enum Option {
+    Some(...),
+    None,
+}
+
+enum Result {
+    Ok(...),
+    Err(...),
+}
+```
+
+Users cannot redefine these types, including changing the types of their variants or adding new variants.
+
+Furthermore, the variants of `Option` and `Result` also accept shorthand forms:
+
+| Full Form             | Shorthand     |
+|-----------------------|---------------|
 | `Option::Some(value)` | `Some(value)` |
-| `Option::None` | `None` |
-| `Result::Ok(value)` | `Ok(value)` |
-| `Result::Err(error)` | `Err(error)` |
+| `Option::None`        | `None`        |
+| `Result::Ok(value)`   | `Ok(value)`   |
+| `Result::Err(error)`  | `Err(error)`  |
 
 Like ordinary Enumeration names, these shorthands are case-sensitive: `some`, `NONE`, `ok`, and `ERR` are not shorthands. The exact bare names `Some`, `None`, `Ok`, and `Err` are reserved and cannot be used as Object keys. Other Enumerations still require their type name, such as `Color::Rgb(...)`. Serialization emits the shorthand forms for these four variants, while deserialization accepts both full and shorthand forms.
 
@@ -850,7 +866,7 @@ Option::Some({
 Option::Some((1, "foo", true))
 ```
 
-When a variant carries multiple values, it is more convenient to use the Object-like or Tuple-like forms, for example:
+When a variant carries multiple values, it is more convenient to use the Object-like or Tuple-like form, for example:
 
 ```json5
 // Object-like variant

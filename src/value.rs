@@ -42,3 +42,52 @@ pub enum VariantValue {
     Tuple(Vec<Value>),
     Struct(Vec<(String, Value)>),
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum PayloadKind {
+    Unit,
+    Newtype,
+    Tuple,
+    Struct,
+}
+
+impl VariantValue {
+    pub(crate) fn kind(&self) -> PayloadKind {
+        match self {
+            VariantValue::Unit => PayloadKind::Unit,
+            VariantValue::Newtype(_) => PayloadKind::Newtype,
+            VariantValue::Tuple(_) => PayloadKind::Tuple,
+            VariantValue::Struct(_) => PayloadKind::Struct,
+        }
+    }
+}
+
+/// Validates the predefined Enumerations `Option` and `Result`.
+///
+/// `None` must have no payload; `Some`, `Ok` and `Err` must carry exactly one value.
+/// Other type names are not checked.
+pub(crate) fn validate_predefined_enumeration(
+    name: &str,
+    variant: &str,
+    kind: PayloadKind,
+) -> Result<(), String> {
+    let expected = match (name, variant) {
+        ("Option", "None") => PayloadKind::Unit,
+        ("Option", "Some") | ("Result", "Ok" | "Err") => PayloadKind::Newtype,
+        ("Option", _) => return Err("Expect \"Option::None\" or \"Option::Some(...)\".".to_owned()),
+        ("Result", _) => {
+            return Err("Expect \"Result::Ok(...)\" or \"Result::Err(...)\".".to_owned());
+        }
+        _ => return Ok(()),
+    };
+
+    if kind == expected {
+        Ok(())
+    } else if expected == PayloadKind::Unit {
+        Err(format!("\"{name}::{variant}\" must not have a value."))
+    } else {
+        Err(format!(
+            "\"{name}::{variant}\" must have exactly one value."
+        ))
+    }
+}

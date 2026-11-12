@@ -46,6 +46,8 @@ Syntax examples use ASON unless stated otherwise. The EBNF-like grammar in secti
   - [4.3 Tuples](#43-tuples)
   - [4.4 Objects](#44-objects)
   - [4.5 Enumerations](#45-enumerations)
+    - [4.5.1 Predefined Enumerations](#451-predefined-enumerations)
+    - [4.5.2 Variant Shorthands](#452-variant-shorthands)
   - [4.6 Types of Compound Values](#46-types-of-compound-values)
     - [4.6.1 Lists](#461-lists)
     - [4.6.2 Tuples](#462-tuples)
@@ -668,7 +670,7 @@ Keys are identifiers (unquoted). They must **not** be enclosed in double quotes 
 
 Each key must be unique within an Object; repeating a key is invalid.
 
-The boolean keywords `true` and `false`, and the special floating-point literals defined in section 3.1.11, are reserved tokens rather than identifiers and cannot be used as Object keys.
+The boolean keywords `true` and `false`, the special floating-point literals defined in section 3.1.11, and the Enumeration shorthand names `Some`, `None`, `Ok`, and `Err` are reserved tokens rather than identifiers and cannot be used as Object keys.
 
 An identifier follows these rules:
 
@@ -698,6 +700,9 @@ An Enumeration value consists of a type name and a variant name, separated by `:
 
 ```text
 enumeration = type_name "::" variant_name [ variant_body ]
+            | enumeration_shorthand
+enumeration_shorthand = "None"
+                      | ("Some" | "Ok" | "Err") "(" value ")"
 variant_body = "(" value { [","] value } [","] ")"      // single-value or tuple-like
              | "{" { key_value_pair [","] } "}"         // object-like
 ```
@@ -733,6 +738,37 @@ Shape::Rect{width: 200, height: 100}
 ```
 
 A variant with empty parentheses (`Option::Some()`) is **not** valid. If a variant has parentheses, they must contain at least one value. Exactly one value makes it a Single-value variant; two or more values make it a Tuple-like variant.
+
+#### 4.5.1 Predefined Enumerations
+
+Two Enumeration types, `Option` and `Result`, are predefined in text ASON documents:
+
+```rust
+enum Option {
+    Some(...),
+    None,
+}
+
+enum Result {
+    Ok(...),
+    Err(...),
+}
+```
+
+Users cannot redefine these types, including changing the types of their variants or adding new variants.
+
+#### 4.5.2 Variant Shorthands
+
+The variants of `Option` and `Result` also have shorthand forms:
+
+| Full Form             | Shorthand     |
+|-----------------------|---------------|
+| `Option::Some(value)` | `Some(value)` |
+| `Option::None`        | `None`        |
+| `Result::Ok(value)`   | `Ok(value)`   |
+| `Result::Err(error)`  | `Err(error)`  |
+
+Like ordinary Enumeration names, these shorthand names are case-sensitive. Only the exact spellings shown above are valid (`some`, `NONE`, `ok`, and `ERR` are not shorthands), and the bare names `Some`, `None`, `Ok`, and `Err` are reserved and cannot be used as Object keys. Other Enumeration variants require their type name. Shorthands can be nested and combined with fully qualified Enumeration values; for example, `Some(Ok([11, 13, 17]))` and `Result::Ok(Some(11))`. Serialization emits these shorthand forms, while deserialization accepts both shorthand and fully qualified forms.
 
 ### 4.6 Types of Compound Values
 
@@ -922,7 +958,10 @@ object              = "{" { key_value_pair } "}" ;
 key_value_pair      = identifier ":" value ;
 (* No whitespace is allowed around "::". *)
 enumeration         = identifier "::" identifier
-                      [ "(" value { value } ")" | "{" { key_value_pair } "}" ] ;
+                      [ "(" value { value } ")" | "{" { key_value_pair } "}" ]
+                    | enumeration_shorthand ;
+enumeration_shorthand = "None"
+                      | ("Some" | "Ok" | "Err") "(" value ")" ;
 
 (* Identifiers *)
 identifier          = identifier_start { identifier_continue } ;
