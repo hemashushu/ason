@@ -7,7 +7,7 @@
 use crate::error::AsonError;
 use crate::position::Position;
 
-/// Represents a character along with its position in the source text.
+/// A Unicode scalar value and its zero-based position in the source text.
 #[derive(Debug, PartialEq)]
 pub struct CharWithPosition {
     /// The character from the source text.
@@ -18,6 +18,7 @@ pub struct CharWithPosition {
 }
 
 impl CharWithPosition {
+    /// Associates `character` with its source `position`.
     pub fn new(character: char, position: Position) -> Self {
         Self {
             character,
@@ -26,7 +27,10 @@ impl CharWithPosition {
     }
 }
 
-/// An iterator that yields each character from the upstream iterator along with its position in the source text.
+/// Associates each upstream character with its zero-based source position.
+///
+/// Indices and columns count characters rather than bytes. A line feed
+/// advances the line and resets the column; upstream errors are forwarded.
 pub struct CharsWithPositionIterator<T>
 where
     T: Iterator<Item = Result<char, AsonError>>,
@@ -42,6 +46,7 @@ impl<T> CharsWithPositionIterator<T>
 where
     T: Iterator<Item = Result<char, AsonError>>,
 {
+    /// Wraps `upstream`, starting at character index, line, and column zero.
     pub fn new(upstream: T) -> Self {
         Self {
             upstream,

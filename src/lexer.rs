@@ -18,6 +18,12 @@ use crate::{
     token::{NumberToken, Token, TokenWithRange},
 };
 
+/// Converts positioned characters into ASON tokens with inclusive source ranges.
+///
+/// Whitespace, commas, and comments are skipped as tokens. When trivia
+/// collection is enabled, their kinds and ranges can be retrieved separately
+/// with [`Lexer::take_trivia`]. Leading numeric signs remain separate tokens
+/// until the normalization stage.
 pub struct Lexer<T>
 where
     T: Iterator<Item = Result<CharWithPosition, AsonError>>,
@@ -44,6 +50,10 @@ impl<T> Lexer<T>
 where
     T: Iterator<Item = Result<CharWithPosition, AsonError>>,
 {
+    /// Creates a lexer over a lookahead iterator of positioned characters.
+    ///
+    /// Set `collect_trivia` to retain the kinds and ranges of skipped
+    /// whitespace, commas, and comments for [`take_trivia`](Self::take_trivia).
     pub fn new(
         upstream: PeekableIterator<Result<CharWithPosition, AsonError>, T>,
         collect_trivia: bool,
@@ -66,6 +76,10 @@ where
         }
     }
 
+    /// Returns and clears the trivia accumulated since the previous call.
+    ///
+    /// The result is empty when trivia collection is disabled. Ranges use
+    /// inclusive character positions, in the order encountered by the lexer.
     pub fn take_trivia(&mut self) -> Vec<(SyntaxKind, Range)> {
         std::mem::take(&mut self.trivia)
     }
@@ -1827,14 +1841,17 @@ mod tests {
     use super::{Lexer, Token};
 
     impl Token {
+        /// Creates an enumeration token from borrowed names for lexer tests.
         pub fn new_enumeration(type_name: &str, variant_name: &str) -> Self {
             Token::Enumeration(type_name.to_owned(), variant_name.to_owned())
         }
 
+        /// Creates an identifier token from a borrowed string for lexer tests.
         pub fn new_identifier(s: &str) -> Self {
             Token::Identifier(s.to_owned())
         }
 
+        /// Creates a string token from a borrowed string for lexer tests.
         pub fn new_string(s: &str) -> Self {
             Token::String(s.to_owned())
         }

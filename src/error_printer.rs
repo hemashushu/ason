@@ -142,6 +142,26 @@ fn generate_error_text_paragraph(
 }
 
 impl AsonError {
+    /// Formats this error with a source snippet and an indication of its location.
+    ///
+    /// `source_text` should be the same text that produced the error. Located
+    /// errors include a shortened snippet and a caret; an unexpected end of
+    /// document is indicated at the end of the source. A plain `Message`
+    /// error returns just its message. Lines and columns in the formatted
+    /// output start at one.
+    ///
+    /// # Panics
+    ///
+    /// May panic if a stored position is outside `source_text`, or if a
+    /// manually constructed range has invalid endpoints.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let source = "true";
+    /// let error = ason::de_from_str::<i32>(source).unwrap_err();
+    /// assert!(error.with_source(source).contains("true"));
+    /// ```
     pub fn with_source(&self, source_text: &str) -> String {
         let source_text_length = source_text.chars().count();
         let mut chars = source_text.chars();

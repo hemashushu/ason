@@ -6,11 +6,38 @@
 
 //! Use `#[serde(with = "ason::array")]` to map a fixed-length array to an ASON List.
 //! Byte arrays also map to Lists; use `serde_bytes` to select Byte Data instead.
+//! Only the annotated array's outer container is adapted; nested arrays retain
+//! their normal Serde representation.
+//!
+//! ```
+//! use serde::{Deserialize, Serialize};
+//!
+//! #[derive(Debug, PartialEq, Serialize, Deserialize)]
+//! struct Samples {
+//!     #[serde(with = "ason::array")]
+//!     values: [i32; 2],
+//! }
+//!
+//! let samples = Samples { values: [1, 2] };
+//! let text = ason::ser_to_string(&samples)?;
+//! assert!(text.contains("values: ["));
+//! assert_eq!(ason::de_from_str::<Samples>(&text)?, samples);
+//! # Ok::<(), ason::AsonError>(())
+//! ```
 
 use std::marker::PhantomData;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
+/// Serializes a fixed-length array as a Serde sequence.
+///
+/// With ASON this produces a List, including for `[u8; N]`. Intended for
+/// `#[serde(with = "ason::array")]` or `serialize_with` on an array field.
+/// Nested element types keep their own Serde mappings.
+///
+/// # Errors
+///
+/// Propagates an error from the serializer or an element's serialization.
 pub fn serialize<T, S, const N: usize>(value: &[T; N], serializer: S) -> Result<S::Ok, S::Error>
 where
     T: Serialize,
@@ -19,6 +46,16 @@ where
     value.as_slice().serialize(serializer)
 }
 
+/// Deserializes a Serde sequence into a fixed-length array.
+///
+/// With ASON the input must be a List containing exactly `N` elements.
+/// Intended for `#[serde(with = "ason::array")]` or `deserialize_with` on an
+/// array field. A zero-length array accepts an empty List.
+///
+/// # Errors
+///
+/// Returns an error if the input is not a sequence, has a different length,
+/// or contains an element that cannot be deserialized as `T`.
 pub fn deserialize<'de, T, D, const N: usize>(deserializer: D) -> Result<[T; N], D::Error>
 where
     T: Deserialize<'de>,

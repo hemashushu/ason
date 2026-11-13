@@ -196,6 +196,8 @@ For pipes, sockets, and standard I/O, ASON also supports streaming. In streaming
 
 The Serde streaming APIs support root Lists and Rust `Result` values whose `Ok` payload is a List, such as `Ok([11 13])` and `Err("failed")`. Writers emit these shorthand forms; readers also accept `Result::Ok([11 13])` and `Result::Err("failed")`.
 
+Streaming readers buffer and look ahead, so opening or advancing them may block while waiting for more input, even when an element or closing delimiter has already arrived. They may also read beyond the closing delimiter and do not expose buffered trailing content for reading another document. They are not framing APIs for successive documents on the same source.
+
 The streaming serializer lets you open a list writer, write elements individually or in batches, and then close the list explicitly. This example writes four objects to standard output:
 
 ```rust

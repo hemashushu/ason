@@ -8,101 +8,106 @@ use chrono::{DateTime, FixedOffset};
 
 use crate::range::Range;
 
+/// A lexed ASON token, excluding whitespace, comments, and commas.
+///
+/// Numeric signs are separate tokens until the normalization stage. String,
+/// character, DateTime, and byte payloads contain their decoded values.
+/// Character and string literals support escapes including `\\`, `\'`, `\"`,
+/// `\t`, `\r`, `\n`, `\0`, and Unicode escapes of the form `\u{...}`.
 #[derive(Debug, PartialEq)]
 pub enum Token {
-    Colon,            // `:`
-    BraceOpen,        // `{`
-    BraceClose,       // `}`
-    BracketOpen,      // `[`
-    BracketClose,     // `]`
-    ParenthesisOpen,  // `(`
-    ParenthesisClose, // `)`
+    /// A `:` separating a key and value.
+    Colon,
+    /// An opening `{`.
+    BraceOpen,
+    /// A closing `}`.
+    BraceClose,
+    /// An opening `[`.
+    BracketOpen,
+    /// A closing `]`.
+    BracketClose,
+    /// An opening `(`.
+    ParenthesisOpen,
+    /// A closing `)`.
+    ParenthesisClose,
 
+    /// A numeric literal with its ASON numeric type.
     Number(NumberToken),
 
-    // ASON supports only a few escape sequences in char and string literals,
-    // similar to Rust. The supported escape sequences are:
-    //
-    // - `\\` (backslash)
-    // - `\'` (single quote)
-    // - `\"` (double quote)
-    // - `\t` (horizontal tab)
-    // - `\r` (carriage return)
-    // - `\n` (line feed)
-    // - `\0` (null character)
-    // - `\u{...}` (Unicode code point, where `...` is 1 to 6 hexadecimal digits)
+    /// A decoded character literal.
     Char(char),
+    /// A decoded string literal.
     String(String),
 
-    // ASON has a few keywords:
-    //
-    // - `true` and `false`, which are lexed into `Token::Boolean`.
-    // - `NaN` (`NaN_f32`, `NaN_f64`) and `Inf` (`Inf_f32`, `Inf_f64`),
-    //   which are lexed into `Token::Number`.
+    /// A `true` or `false` literal.
     Boolean(bool),
 
+    /// A decoded DateTime literal with a fixed UTC offset.
     DateTime(DateTime<FixedOffset>),
 
-    // An identifier is used as the key of an Object field.
-    // It starts with a letter, an underscore, or a Unicode character in the range
-    // '\u{a0}' to '\u{d7ff}' or '\u{e000}' to '\u{10ffff}', followed by any number of
-    // these characters and digits.
+    /// An identifier, such as the key of an Object field.
+    ///
+    /// Identifiers start with an ASCII letter, underscore, or a Unicode scalar
+    /// in `U+00A0..=U+D7FF` or `U+E000..=U+10FFFF`. Digits are also allowed
+    /// after the first character.
     Identifier(String),
 
-    // An enumeration consists of a type name and a variant name, for example,
-    // `Option::None`, where "Option" is the type name and "None" is the variant name.
+    /// An enumeration's type and variant names, such as `Option` and `None`.
+    ///
+    /// Predefined shorthands such as `Some` and `Err` are expanded to their
+    /// corresponding type and variant names.
     Enumeration(String, String),
 
+    /// Decoded hexadecimal byte data.
     HexadecimalByteData(Vec<u8>),
 
-    // Sign tokens for numbers.
-    // They are merged into the following number tokens and removed by the normalizer.
-    _Plus,  // `+`
-    _Minus, // `-`
+    /// A `+` sign, merged into the following number during normalization.
+    _Plus,
+    /// A `-` sign, merged into the following number during normalization.
+    _Minus,
 }
 
-// Tokens for number literals.
-//
-// In the lexing stage, the sign (`+` or `-`) is a separate token rather than part of
-// `NumberToken`, so numbers can be lexed without worrying about the sign and the valid range.
-// For example, `-128_i8` is lexed into two tokens:
-//
-// - `Token::_Minus`
-// - `Token::Number(NumberToken::I8(128))`
-//
-// Since `128` overflows `i8`, signed integers are stored in their unsigned counterparts.
-// After normalization, the sign is merged into the number token, and `-128_i8` becomes
-// `Token::Number(NumberToken::I8(128))`, where `128` (0x80) is the two's complement
-// representation of `-128` in `i8`.
-//
-// Another example, `-3` is lexed into two tokens:
-//
-// - `Token::_Minus`
-// - `Token::Number(NumberToken::I32(3))`
-//
-// After normalization, it becomes `Token::Number(NumberToken::I32(4294967293))`,
-// where `4294967293` (0xFFFF_FFFD) is the two's complement representation of `-3` in `i32`.
+/// A numeric token preserving its ASON type.
+///
+/// Signed integers use unsigned storage so the lexer can represent their
+/// magnitude before applying a separate sign. After normalization, that
+/// storage contains the signed value's two's-complement bits. For example,
+/// `-128_i8` becomes `I8(128)`, while `-3` becomes `I32(4294967293)`.
 #[derive(Debug, PartialEq)]
 pub enum NumberToken {
+    /// An `i8` magnitude or normalized two's-complement bit pattern.
     I8(u8),
+    /// A `u8` value.
     U8(u8),
+    /// An `i16` magnitude or normalized two's-complement bit pattern.
     I16(u16),
+    /// A `u16` value.
     U16(u16),
+    /// An `i32` magnitude or normalized two's-complement bit pattern.
     I32(u32),
+    /// A `u32` value.
     U32(u32),
+    /// An `i64` magnitude or normalized two's-complement bit pattern.
     I64(u64),
+    /// A `u64` value.
     U64(u64),
+    /// An `f32` value.
     F32(f32),
+    /// An `f64` value.
     F64(f64),
 }
 
+/// A token paired with its inclusive source-character range.
 #[derive(Debug, PartialEq)]
 pub struct TokenWithRange {
+    /// The decoded lexical token.
     pub token: Token,
+    /// The source characters occupied by the token.
     pub range: Range,
 }
 
 impl TokenWithRange {
+    /// Associates `token` with an inclusive source `range`.
     pub fn new(token: Token, range: Range) -> Self {
         Self { token, range }
     }

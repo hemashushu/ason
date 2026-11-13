@@ -20,6 +20,34 @@ use crate::{
 };
 use serde::de::{self, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess};
 
+/// Deserializes one ASON document from a string into a known Serde type.
+///
+/// `T` must own its deserialized data; it cannot borrow strings or bytes from
+/// `s`. ASON numeric types must match the requested Rust types. For a document
+/// whose structure is not known in advance, use [`de_value_from_str`] instead.
+///
+/// After the root value, only whitespace, commas, and comments are accepted.
+///
+/// # Errors
+///
+/// Returns an error for invalid ASON, a value incompatible with `T`, an
+/// unsupported Serde representation, or a token after the root value.
+///
+/// # Examples
+///
+/// ```
+/// use serde::Deserialize;
+///
+/// #[derive(Debug, Deserialize, PartialEq)]
+/// struct Person {
+///     name: String,
+///     age: u8,
+/// }
+///
+/// let person: Person = ason::de_from_str(r#"{ name: "Ada" age: 18_u8 }"#)?;
+/// assert_eq!(person, Person { name: "Ada".into(), age: 18 });
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn de_from_str<T>(s: &str) -> Result<T, AsonError>
 where
     T: de::DeserializeOwned,
@@ -27,6 +55,27 @@ where
     de_from_char_iterator(s.chars().map(Ok::<char, AsonError>))
 }
 
+/// Deserializes one UTF-8 ASON document from a reader into a known Serde type.
+///
+/// The reader is buffered and decoded as UTF-8. As with [`de_from_str`], `T`
+/// must own its data and the document must match its requested types. The
+/// function checks for EOF after the root value, so it can block on a live
+/// reader that remains open. Use [`list_stream_reader`] for a root List that
+/// should be processed incrementally.
+///
+/// # Errors
+///
+/// Returns an error for an I/O or UTF-8 failure, invalid ASON, a value
+/// incompatible with `T`, or a token after the root value.
+///
+/// # Examples
+///
+/// ```
+/// let input = "[1 2 3]".as_bytes();
+/// let values: Vec<i32> = ason::de_from_reader(input)?;
+/// assert_eq!(values, vec![1, 2, 3]);
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn de_from_reader<T, R: Read>(reader: R) -> Result<T, AsonError>
 where
     T: de::DeserializeOwned,
@@ -34,10 +83,53 @@ where
     de_from_char_iterator(UTF8CharIterator::new(reader))
 }
 
+/// Parses one ASON document into an owned, dynamically typed [`Value`] tree.
+///
+/// Unlike [`de_from_str`], this does not deserialize into a caller-supplied
+/// Serde type. Numeric types and compound value kinds are represented by
+/// separate variants of [`Value`]. The ambiguous empty syntax `[]` is parsed
+/// as an empty List, not an empty Map. Comments and original formatting are
+/// not retained.
+///
+/// # Errors
+///
+/// Returns an error for invalid ASON, an invalid predefined enumeration, or a
+/// token after the root value.
+///
+/// # Examples
+///
+/// ```
+/// use ason::Value;
+///
+/// let value = ason::de_value_from_str(r#"{ name: "Ada" age: 18_u8 }"#)?;
+/// assert_eq!(value, Value::Object(vec![
+///     ("name".into(), Value::String("Ada".into())),
+///     ("age".into(), Value::U8(18)),
+/// ]));
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn de_value_from_str(s: &str) -> Result<Value, AsonError> {
     de_value_from_char_iterator(s.chars().map(Ok::<char, AsonError>))
 }
 
+/// Parses one UTF-8 ASON document from a reader into an owned [`Value`] tree.
+///
+/// This is the reader counterpart of [`de_value_from_str`]; no target Serde
+/// type is required. The reader is buffered, and checking for EOF after the
+/// root value can block if a live source stays open.
+///
+/// # Errors
+///
+/// Returns an error for an I/O or UTF-8 failure, invalid ASON, or a token
+/// after the root value.
+///
+/// # Examples
+///
+/// ```
+/// let value = ason::de_value_from_reader("42".as_bytes())?;
+/// assert_eq!(value, ason::Value::I32(42));
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn de_value_from_reader<R: Read>(reader: R) -> Result<Value, AsonError> {
     de_value_from_char_iterator(UTF8CharIterator::new(reader))
 }
@@ -78,10 +170,30 @@ where
     }
 }
 
-/// Opens a reader that deserializes the elements of a root List one at a time.
+/// Opens a root ASON List for incremental deserialization.
 ///
-/// It returns a `ListStreamReader`, which is an iterator over the deserialized elements.
-/// The input can be any `std::io::Read` source, such as a file, pipe, or byte slice.
+/// The opening `[` is consumed when this function is called. The returned
+/// [`ListStreamReader`] yields each element as `Result<T, AsonError>` and
+/// validates the closing `]` only when iteration reaches it. Stopping early
+/// leaves the remainder unvalidated.
+///
+/// The stream does not check for trailing tokens or require EOF after `]`.
+/// Buffering and lookahead can read past the List or block waiting for more
+/// input; buffered trailing bytes are not returned to the caller.
+///
+/// # Errors
+///
+/// Returns an error if the opening List cannot be read. Errors in later
+/// elements or the closing delimiter are returned by the iterator.
+///
+/// # Examples
+///
+/// ```
+/// let stream = ason::list_stream_reader::<i32, _>("[1 2 3]".as_bytes())?;
+/// let values = stream.collect::<Result<Vec<_>, _>>()?;
+/// assert_eq!(values, vec![1, 2, 3]);
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn list_stream_reader<T, R>(reader: R) -> Result<ListStreamReader<T, R>, AsonError>
 where
     T: de::DeserializeOwned,
@@ -95,10 +207,35 @@ where
     Ok(ListStreamReader::new(deserializer))
 }
 
-/// Opens a Result containing either a streamed List or a fully deserialized error.
+/// Reads an ASON Result containing a streamed List or an error value.
 ///
-/// `T` is the List element type. Reading stops after one Result without requiring EOF.
-/// The Ok branch validates its closing parenthesis only when iteration reaches the end.
+/// Accepts `Ok([...])` and `Err(...)`, as well as their `Result::`-qualified
+/// forms. The `Ok` branch yields List elements of type `T` incrementally; the
+/// `Err` payload is fully deserialized as `E` before this function returns.
+/// An `Err(E)` branch is a successfully decoded business error, not an
+/// [`AsonError`].
+///
+/// For `Ok`, the closing `]` and `)` are validated only when the iterator is
+/// exhausted. Neither branch checks trailing tokens or requires EOF, but
+/// buffering and lookahead may read beyond the Result or block for more input.
+/// Buffered trailing bytes are not exposed for reading another document.
+///
+/// # Errors
+///
+/// Returns an error if the Result header, error payload, or opening List
+/// cannot be deserialized. Later List and closing-delimiter errors are
+/// returned by the `Ok` branch's iterator.
+///
+/// # Examples
+///
+/// ```
+/// let result = ason::result_stream_reader::<i32, String, _>("Ok([1 2])".as_bytes())?;
+/// let ason::ResultStreamReader::Ok(items) = result else {
+///     panic!("expected an Ok branch");
+/// };
+/// assert_eq!(items.collect::<Result<Vec<_>, _>>()?, vec![1, 2]);
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn result_stream_reader<T, E, R>(reader: R) -> Result<ResultStreamReader<T, E, R>, AsonError>
 where
     T: de::DeserializeOwned,
@@ -138,16 +275,31 @@ where
     }
 }
 
-/// A streamed successful List or a fully deserialized business error.
+/// A successfully decoded Result with either a streamed List or an error value.
+///
+/// Parsing and I/O failures are returned separately as [`AsonError`] by
+/// [`result_stream_reader`] or by the `Ok` iterator.
 pub enum ResultStreamReader<T, E, R>
 where
     T: de::DeserializeOwned,
     R: Read,
 {
+    /// A List whose elements and closing delimiters are read during iteration.
     Ok(Box<ListStreamReader<T, R>>),
+    /// The fully deserialized error payload of the ASON Result.
     Err(E),
 }
 
+/// An iterator that deserializes a List one element at a time.
+///
+/// Its items are `Result<T, AsonError>`. A parse or I/O error is yielded once,
+/// after which the iterator returns `None`. The closing `]`, and the closing
+/// `)` when this List is inside a Result, are checked only upon reaching the
+/// end. Trailing tokens are not checked, and the buffered reader may read
+/// beyond those delimiters.
+///
+/// Construct this iterator with [`list_stream_reader`] or
+/// [`result_stream_reader`].
 pub struct ListStreamReader<T, R>
 where
     T: de::DeserializeOwned,
@@ -225,6 +377,11 @@ where
 type UpstreamIterator<CharIter> =
     NormalizeSignedNumberIter<Lexer<CharsWithPositionIterator<CharIter>>>;
 
+/// The Serde deserializer backed by ASON's normalized token stream.
+///
+/// The public entry points construct this type internally. Serde operations
+/// that require `deserialize_any` are not supported; use the `de_value_*`
+/// functions when the value's type is not known in advance.
 pub struct Deserializer<CharIter: Iterator<Item = Result<char, AsonError>>> {
     upstream: PeekableIterator<Result<TokenWithRange, AsonError>, UpstreamIterator<CharIter>>,
 

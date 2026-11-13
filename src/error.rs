@@ -8,11 +8,21 @@ use std::fmt::{self, Display};
 
 use crate::{position::Position, range::Range};
 
+/// An error encountered while reading, parsing, or writing ASON.
+///
+/// Errors may contain a source position or an inclusive source range.
+/// Positions count Unicode scalar values and use zero-based lines and columns;
+/// the [`Display`] representation reports lines and columns starting at one.
+/// Use [`AsonError::with_source`] to include an annotated source snippet.
 #[derive(Debug, PartialEq, Clone)]
 pub enum AsonError {
+    /// An error message without a source location.
     Message(String),
+    /// The input ended before the current construct was complete.
     UnexpectedEndOfDocument(String),
+    /// An error message and the position of the relevant character.
     MessageWithPosition(String, Position),
+    /// An error message and the inclusive range of the relevant source text.
     MessageWithRange(String, Range),
 }
 

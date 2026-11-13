@@ -8,6 +8,11 @@ use std::io::{self, BufReader, Read};
 
 use crate::error::AsonError;
 
+/// Decodes a buffered byte reader into UTF-8 characters.
+///
+/// Short reads are accepted and interrupted reads are retried. Invalid UTF-8,
+/// incomplete sequences, and I/O failures are yielded as an error once,
+/// after which the iterator is exhausted.
 pub(super) struct UTF8CharIterator<T>
 where
     T: Read,
@@ -20,8 +25,10 @@ impl<T> UTF8CharIterator<T>
 where
     T: Read,
 {
-    /// Create a new UTF8CharIterator from a reader.
-    /// `BufReader` is also supported, but not required.
+    /// Wraps `reader` in a [`BufReader`] and begins decoding at its current position.
+    ///
+    /// An already buffered reader is accepted but does not require special
+    /// handling; this constructor still adds its own buffer.
     pub(super) fn new(reader: T) -> Self {
         Self {
             reader: BufReader::new(reader),

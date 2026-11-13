@@ -4,15 +4,22 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
+/// A zero-based location in ASON source text.
+///
+/// The index and column count Unicode scalar values, not UTF-8 bytes.
+/// A line feed advances the line and resets the column.
 #[derive(Debug, PartialEq, Clone, Copy, Default)]
 pub struct Position {
-    pub index: usize,  // The absolute character index in the source.
-    pub line: usize,   // The line number in the source (starting from 0).
-    pub column: usize, // The column number within the current line (starting from 0).
+    /// The absolute character index in the source, starting at zero.
+    pub index: usize,
+    /// The line number, starting at zero.
+    pub line: usize,
+    /// The character column within the line, starting at zero.
+    pub column: usize,
 }
 
 impl Position {
-    /// Creates a new Position with the given character index, line, and column.
+    /// Creates a position from zero-based character index, line, and column.
     pub fn new(index: usize, line: usize, column: usize) -> Self {
         Self {
             index,

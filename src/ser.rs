@@ -14,9 +14,29 @@ use crate::{
     value::{PayloadKind, Value, VariantValue, validate_predefined_enumeration},
 };
 
+/// The four spaces used for each level of serialized indentation.
 pub const DEFAULT_INDENT_CHARS: &str = "    ";
+/// The line feed used to format multiline containers.
 pub const DEFAULT_NEWLINE_CHARS: &str = "\n";
 
+/// Serializes a Serde value into an ASON document string.
+///
+/// The result is formatted ASON text, rather than a preservation of any
+/// original source. For a dynamically constructed [`Value`], use
+/// [`ser_value_to_string`] instead.
+///
+/// # Errors
+///
+/// Returns an error if the value uses a Serde representation unsupported by
+/// ASON, or if its contents cannot be represented as ASON.
+///
+/// # Examples
+///
+/// ```
+/// let text = ason::ser_to_string(&vec![1_i32, 2])?;
+/// assert_eq!(ason::de_from_str::<Vec<i32>>(&text)?, vec![1, 2]);
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn ser_to_string<T>(value: &T) -> Result<String, AsonError>
 where
     T: Serialize,
@@ -29,6 +49,25 @@ where
     Ok(s)
 }
 
+/// Serializes a Serde value as UTF-8 ASON text into `writer`.
+///
+/// This writes directly to the supplied [`Write`] implementation and does not
+/// flush it. On failure, a prefix of the document may already have been
+/// written; the operation is not transactional.
+///
+/// # Errors
+///
+/// Returns an error if serialization fails or the writer reports an I/O
+/// failure. Unsupported Serde representations also cause an error.
+///
+/// # Examples
+///
+/// ```
+/// let mut output = Vec::new();
+/// ason::ser_to_writer(&42_i32, &mut output)?;
+/// assert_eq!(output, b"42");
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn ser_to_writer<T, W: Write>(value: &T, writer: &mut W) -> Result<(), AsonError>
 where
     T: Serialize,
@@ -37,16 +76,64 @@ where
     value.serialize(&mut serializer)
 }
 
+/// Serializes a dynamic [`Value`] tree into an ASON document string.
+///
+/// This is the counterpart of [`crate::de_value_from_str`]. The output is
+/// formatted anew, so original comments and spelling are not preserved. Some
+/// manually constructed values, such as an empty Tuple, cannot be serialized.
+///
+/// # Errors
+///
+/// Returns an error for an unsupported or invalid value, including an invalid
+/// predefined enumeration or an unrepresentable DateTime.
+///
+/// # Examples
+///
+/// ```
+/// let value = ason::Value::Option(Some(Box::new(ason::Value::I32(42))));
+/// assert_eq!(ason::ser_value_to_string(&value)?, "Some(42)");
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn ser_value_to_string(value: &Value) -> Result<String, AsonError> {
     let mut buffer = Vec::new();
     ser_value_to_writer(value, &mut buffer)?;
     Ok(String::from_utf8(buffer).unwrap())
 }
 
+/// Serializes a dynamic [`Value`] tree as UTF-8 ASON text into `writer`.
+///
+/// Unlike [`ser_to_writer`], this accepts [`Value`] directly without requiring
+/// a Serde `Serialize` implementation. It does not flush the writer, and an
+/// error can leave partially written output.
+///
+/// # Errors
+///
+/// Returns an error for an unrepresentable value or an I/O failure.
 pub fn ser_value_to_writer<W: Write>(value: &Value, writer: &mut W) -> Result<(), AsonError> {
     Serializer::new(writer).serialize_value(value)
 }
 
+/// Creates a writer for an incrementally serialized root List.
+///
+/// Creation does not write anything. Call [`ListStreamWriter::start_list`],
+/// write elements, and then call [`ListStreamWriter::end_list`]. The caller is
+/// responsible for flushing the underlying writer. Dropping the stream does
+/// not close the List, and errors can leave partial output.
+///
+/// # Examples
+///
+/// ```
+/// let mut output = Vec::new();
+/// let mut stream = ason::list_stream_writer(&mut output);
+/// stream.start_list()?;
+/// stream.write(&1_i32)?;
+/// stream.writes(&[2, 3])?;
+/// stream.end_list()?;
+///
+/// let values: Vec<i32> = ason::de_from_reader(output.as_slice())?;
+/// assert_eq!(values, vec![1, 2, 3]);
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn list_stream_writer<T, W>(writer: &mut W) -> ListStreamWriter<'_, W, T>
 where
     W: Write,
@@ -55,9 +142,25 @@ where
     ListStreamWriter::new(serializer)
 }
 
-/// Creates a writer for a Result containing a streamed List or a business error.
+/// Creates a writer for an ASON Result containing a streamed List or an error.
 ///
-/// Choose exactly one branch with `start_ok` or `write_err`. Errors may leave partial output.
+/// Choose the branch by consuming the returned writer with
+/// [`ResultStreamWriter::start_ok`] or [`ResultStreamWriter::write_err`]. No
+/// output is written until a branch is chosen. The caller must flush the
+/// underlying writer, and errors can leave partial output.
+///
+/// # Examples
+///
+/// ```
+/// let mut output = Vec::new();
+/// let mut stream = ason::result_stream_writer::<i32, _>(&mut output).start_ok()?;
+/// stream.write(&42)?;
+/// stream.end_list()?;
+///
+/// let result: Result<Vec<i32>, String> = ason::de_from_reader(output.as_slice())?;
+/// assert_eq!(result, Ok(vec![42]));
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn result_stream_writer<T, W>(writer: &mut W) -> ResultStreamWriter<'_, W, T>
 where
     W: Write,
@@ -68,7 +171,11 @@ where
     }
 }
 
-/// A writer whose consuming methods select one Result branch.
+/// A writer whose consuming methods select one ASON Result branch.
+///
+/// [`start_ok`](Self::start_ok) opens a List of `T` values, while
+/// [`write_err`](Self::write_err) writes a complete error payload. Dropping
+/// the writer or an unfinished List does not add closing delimiters.
 pub struct ResultStreamWriter<'a, W, T>
 where
     W: Write,
@@ -81,8 +188,16 @@ impl<'a, W, T> ResultStreamWriter<'a, W, T>
 where
     W: Write,
 {
-    /// Starts `Ok([`. Write elements directly, then call `end_list` to write `])`.
-    /// Do not call `start_list` on the returned writer. Dropping it does not close the Result.
+    /// Consumes this writer and starts an `Ok([` List.
+    ///
+    /// The returned List is already open: write elements directly and call
+    /// [`ListStreamWriter::end_list`] to write `])`. Do not call
+    /// `start_list` again. Dropping the List does not close the Result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the opening text cannot be written; partial
+    /// output may already have been produced.
     pub fn start_ok(mut self) -> Result<ListStreamWriter<'a, W, T>, AsonError> {
         self.serializer.print_str("Ok(")?;
         let mut stream = ListStreamWriter::new(self.serializer);
@@ -91,12 +206,23 @@ where
         Ok(stream)
     }
 
-    /// Writes a complete `Err(...)` using the regular Result serializer.
+    /// Consumes this writer and writes a complete `Err(...)` with payload `error`.
+    ///
+    /// The payload uses the regular Serde-to-ASON mapping. This method does
+    /// not flush the underlying writer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the payload cannot be serialized or writing fails.
+    /// The output may contain a partially written Result.
     pub fn write_err<E: ?Sized + Serialize>(mut self, error: &E) -> Result<(), AsonError> {
         ser::Serializer::serialize_newtype_variant(&mut self.serializer, "Result", 1, "Err", error)
     }
 }
 
+/// A Serde serializer that writes formatted ASON text to a [`Write`] destination.
+///
+/// The `ser_to_*` entry points construct this serializer internally.
 pub struct Serializer<'a, W>
 where
     W: Write,
@@ -112,6 +238,9 @@ impl<'a, W> Serializer<'a, W>
 where
     W: Write,
 {
+    /// Creates a serializer that borrows `upstream` as its output destination.
+    ///
+    /// No data is written until a Serde serialization operation is performed.
     pub fn new(upstream: &'a mut W) -> Self {
         Self {
             upstream,
@@ -301,6 +430,13 @@ where
     }
 }
 
+/// A writer for the elements of an ASON List.
+///
+/// For a root List, call [`start_list`](Self::start_list), write zero or more
+/// elements, then call [`end_list`](Self::end_list). A writer returned by
+/// [`ResultStreamWriter::start_ok`] is already open and `end_list` also closes
+/// the surrounding Result. The call order is not enforced automatically, and
+/// dropping the writer does not finish or flush the output.
 pub struct ListStreamWriter<'a, W, T>
 where
     W: Write,
@@ -322,10 +458,26 @@ where
         }
     }
 
+    /// Writes the opening `[` for a root List.
+    ///
+    /// Call this once before writing elements. Do not call it on a writer
+    /// returned by [`ResultStreamWriter::start_ok`], which is already open.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error; part of the opening text may already be written.
     pub fn start_list(&mut self) -> Result<(), AsonError> {
         self.serializer.begin_block("[")
     }
 
+    /// Writes the closing `]`, and `)` as well when the List is inside `Ok`.
+    ///
+    /// Call this once after all elements have been written. It does not flush
+    /// the underlying writer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error; the closing text may be only partially written.
     pub fn end_list(&mut self) -> Result<(), AsonError> {
         self.serializer.end_block("]")?;
         if self.wrapped_result {
@@ -334,6 +486,15 @@ where
         Ok(())
     }
 
+    /// Serializes one `T` as the next List element.
+    ///
+    /// The List must already be open. Values use the normal Serde-to-ASON
+    /// mapping.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the element cannot be serialized or writing fails.
+    /// A separator or part of the element may already have been written.
     pub fn write(&mut self, value: &T) -> Result<(), AsonError>
     where
         T: Serialize,
@@ -342,13 +503,29 @@ where
         value.serialize(&mut self.serializer)
     }
 
+    /// Writes one dynamic [`Value`] as the next List element.
+    ///
+    /// The List must already be open. This method does not require `T` to
+    /// implement `Serialize` and does not check the value against `T`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the value cannot be serialized or writing fails.
+    /// A separator or part of the element may already have been written.
     pub fn write_value(&mut self, value: &Value) -> Result<(), AsonError> {
         self.serializer.begin_block_element()?;
         self.serializer.serialize_value(value)
     }
 
-    /// Writes each value in order, stopping at the first error.
-    /// An empty slice writes nothing. Errors may leave partial output.
+    /// Writes each element of `values` in order to the open List.
+    ///
+    /// An empty slice writes nothing. This is equivalent to calling
+    /// [`write`](Self::write) for each element.
+    ///
+    /// # Errors
+    ///
+    /// Stops at the first serialization or I/O error; previous elements and
+    /// part of the failing element may already have been written.
     pub fn writes(&mut self, values: &[T]) -> Result<(), AsonError>
     where
         T: Serialize,

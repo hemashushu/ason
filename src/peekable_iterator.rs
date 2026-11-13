@@ -4,10 +4,13 @@
 // the Mozilla Public License version 2.0 and additional exceptions.
 // For more details, see the LICENSE, LICENSE.additional, and CONTRIBUTING files.
 
+/// The fixed number of elements buffered for lookahead.
 pub const ROUND_QUEUE_LENGTH: usize = 8;
 
-/// `PeekableIterator` extends `std::iter::Peekable` by allowing
-/// peeking at elements at any specified offset, not just the next one.
+/// An iterator with fixed-size lookahead beyond the next element.
+///
+/// Up to [`ROUND_QUEUE_LENGTH`] positions can be inspected without consuming
+/// them. Constructing the iterator eagerly reads from the upstream iterator.
 pub struct PeekableIterator<T, U>
 where
     T: PartialEq,
@@ -22,8 +25,10 @@ where
     T: PartialEq,
     U: Iterator<Item = T>,
 {
-    /// Creates a new `PeekableIterator` with the specified buffer size.
-    /// The buffer is pre-filled with elements from the upstream iterator.
+    /// Creates an iterator and pre-fills its fixed-size lookahead buffer.
+    ///
+    /// This calls `upstream.next()` [`ROUND_QUEUE_LENGTH`] times, so
+    /// construction can block when the upstream source is live.
     pub fn new(mut upstream: U) -> Self {
         let mut buffer = RoundQueue::new();
 
@@ -36,8 +41,13 @@ where
         Self { upstream, buffer }
     }
 
-    /// Returns a reference to the element at the specified offset in the buffer,
-    /// or None if that position is empty. The offset must be less than the buffer size.
+    /// Borrows the buffered element at `offset`, or returns `None` for an empty slot.
+    ///
+    /// Offset zero refers to the next element without consuming it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `offset` is at least [`ROUND_QUEUE_LENGTH`].
     pub fn peek(&self, offset: usize) -> Option<&T> {
         assert!(offset < ROUND_QUEUE_LENGTH);
         self.buffer.peek(offset)
@@ -78,7 +88,7 @@ impl<T> RoundQueue<T>
 where
     T: PartialEq,
 {
-    /// Creates a new RoundQueue.
+    /// Creates an empty fixed-size circular queue.
     pub fn new() -> Self {
         Self {
             position_read: 0,
@@ -87,8 +97,9 @@ where
         }
     }
 
-    /// Adds a value to the queue at the current write position.
-    /// Advances the write position, wrapping around if necessary.
+    /// Stores `value` at the write position and advances it with wraparound.
+    ///
+    /// An occupied slot is overwritten; this queue does not check capacity.
     pub fn enqueue(&mut self, value: Option<T>) {
         self.data[self.position_write] = value;
 
@@ -98,8 +109,9 @@ where
         }
     }
 
-    /// Removes and returns the value at the current read position.
-    /// Advances the read position, wrapping around if necessary.
+    /// Takes the current read slot and advances the read position with wraparound.
+    ///
+    /// Returns `None` if the slot is empty.
     pub fn dequeue(&mut self) -> Option<T> {
         let value = self.data[self.position_read].take();
 
@@ -111,8 +123,11 @@ where
         value
     }
 
-    /// Returns a reference to the value at the given offset from the current read position,
-    /// or None if the slot is empty. The offset must be less than the queue size.
+    /// Borrows the slot at `offset` from the read position, if it is occupied.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `offset` is at least [`ROUND_QUEUE_LENGTH`].
     pub fn peek(&self, offset: usize) -> Option<&T> {
         assert!(offset < ROUND_QUEUE_LENGTH);
 

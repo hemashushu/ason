@@ -13,9 +13,11 @@ use crate::{
     token::{NumberToken, Token, TokenWithRange},
 };
 
-/// Normalize and check signed numbers in the token stream.
+/// Merges numeric sign tokens and validates signed-number ranges.
 ///
-/// Token `Plus` and `Minus` are removed after normalization.
+/// Successful normalization removes `Token::_Plus` and `Token::_Minus`.
+/// Signs applied to unsigned numbers or NaN, missing operands, and
+/// out-of-range signed integers produce errors.
 pub struct NormalizeSignedNumberIter<T>
 where
     T: Iterator<Item = Result<TokenWithRange, AsonError>>,
@@ -27,6 +29,7 @@ impl<T> NormalizeSignedNumberIter<T>
 where
     T: Iterator<Item = Result<TokenWithRange, AsonError>>,
 {
+    /// Wraps a lookahead token iterator for signed-number normalization.
     pub fn new(upstream: PeekableIterator<Result<TokenWithRange, AsonError>, T>) -> Self {
         Self { upstream }
     }

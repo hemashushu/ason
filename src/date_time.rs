@@ -6,7 +6,18 @@
 
 //! Serde mapping for ASON DateTime literals.
 //! Use `#[serde(with = "ason::date_time")]` on a chrono field, or `DateTime`
-//! for a root value. Only precision supported by ASON text is accepted.
+//! for a root value. Serialization requires a four-digit local year,
+//! whole-second precision, and a whole-minute UTC offset.
+//!
+//! ```
+//! let time = chrono::DateTime::parse_from_rfc3339("2024-03-16T12:00:00+08:00")
+//!     .unwrap();
+//! let value = ason::date_time::DateTime(time);
+//! let text = ason::ser_to_string(&value)?;
+//! assert_eq!(text, r#"d"2024-03-16T12:00:00+08:00""#);
+//! assert_eq!(ason::de_from_str::<ason::date_time::DateTime>(&text)?, value);
+//! # Ok::<(), ason::AsonError>(())
+//! ```
 
 use chrono::{DateTime as ChronoDateTime, Datelike, FixedOffset, SecondsFormat, TimeDelta};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -35,9 +46,17 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// and ordinary ASON newtype structs remain unsupported.
 pub(crate) const MARKER: &str = "$ason::DateTime";
 
-/// A chrono value serialized as an ASON DateTime rather than a String.
+/// A chrono DateTime serialized as an ASON DateTime rather than a String.
+///
+/// Use this owned wrapper for a root value or inside containers. For a chrono
+/// field on a Serde struct, `#[serde(with = "ason::date_time")]` provides the
+/// same mapping without changing the field's type. Serialization requires a
+/// local year in `0000..=9999`, whole seconds, and a whole-minute UTC offset.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DateTime(pub ChronoDateTime<FixedOffset>);
+pub struct DateTime(
+    /// The wrapped chrono DateTime, retaining its fixed UTC offset.
+    pub ChronoDateTime<FixedOffset>,
+);
 
 impl Serialize for DateTime {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -51,6 +70,16 @@ impl<'de> Deserialize<'de> for DateTime {
     }
 }
 
+/// Serializes a chrono DateTime using the native ASON DateTime mapping.
+///
+/// Intended for `#[serde(with = "ason::date_time")]` or `serialize_with` on a
+/// field. The offset is retained in the emitted DateTime literal.
+///
+/// # Errors
+///
+/// Returns an error if the local year is outside `0000..=9999`, the value has
+/// fractional-second precision, the offset is not a whole number of minutes,
+/// or the serializer fails. An exactly represented leap second is accepted.
 pub fn serialize<S: Serializer>(
     value: &ChronoDateTime<FixedOffset>,
     serializer: S,
@@ -72,6 +101,16 @@ pub fn serialize<S: Serializer>(
     serializer.serialize_newtype_struct(MARKER, &value.to_rfc3339_opts(SecondsFormat::Secs, true))
 }
 
+/// Deserializes an ASON DateTime into a chrono DateTime with a fixed offset.
+///
+/// Intended for `#[serde(with = "ason::date_time")]` or `deserialize_with`
+/// on a field. In ASON, this requires a DateTime literal rather than an
+/// ordinary string.
+///
+/// # Errors
+///
+/// Returns an error if the input is not a valid DateTime or the underlying
+/// deserializer fails.
 pub fn deserialize<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<ChronoDateTime<FixedOffset>, D::Error> {

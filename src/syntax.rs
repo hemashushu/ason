@@ -13,38 +13,91 @@ use crate::{
     peekable_iterator::PeekableIterator, token::Token,
 };
 
+/// The lexical category of a span in an ASON source string.
+///
+/// Trivia is included, so whitespace, commas, and comments can be preserved
+/// alongside value and punctuation tokens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyntaxKind {
+    /// A space, tab, carriage return, or line feed.
     Whitespace,
+    /// A comma separator.
     Comma,
+    /// A `//` line comment.
     LineComment,
+    /// A `/* ... */` block comment, which may contain nested block comments.
     BlockComment,
+    /// A `:` separating a key from a value.
     Colon,
+    /// An opening `{`.
     BraceOpen,
+    /// A closing `}`.
     BraceClose,
+    /// An opening `[`.
     BracketOpen,
+    /// A closing `]`.
     BracketClose,
+    /// An opening `(`.
     ParenthesisOpen,
+    /// A closing `)`.
     ParenthesisClose,
+    /// A `+` or `-` sign token, including a leading numeric sign.
     Sign,
+    /// A numeric literal, excluding a separate leading sign token.
     Number,
+    /// A `true` or `false` literal.
     Boolean,
+    /// A character literal.
     Char,
+    /// A string literal, including raw or multiline forms.
     String,
+    /// A DateTime literal beginning with `d`.
     DateTime,
+    /// Hexadecimal byte data beginning with `h`.
     Bytes,
+    /// An identifier, such as an Object field name.
     Identifier,
+    /// An enumeration name and variant, or a supported shorthand.
     Enumeration,
 }
 
+/// A lexical category and its location in the original UTF-8 source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxToken {
+    /// The kind of source text covered by this token.
     pub kind: SyntaxKind,
+    /// A half-open UTF-8 byte range suitable for slicing the input string.
     pub span: Range<usize>,
 }
 
-/// Classifies a lexically valid input without discarding any source text.
-/// This does not validate document structure or value types.
+/// Classifies an ASON source string without discarding any of its text.
+///
+/// Returned spans are ordered, contiguous, and cover the entire input,
+/// including whitespace, commas, and comments. Each span uses half-open UTF-8
+/// byte offsets and can be used to slice `source`. An empty input produces an
+/// empty vector.
+///
+/// This performs lexical analysis only; it does not validate the document's
+/// structure, target types, or signed-number normalization.
+///
+/// # Errors
+///
+/// Returns an error for an invalid or incomplete lexical token.
+///
+/// # Examples
+///
+/// ```
+/// use ason::syntax::{SyntaxKind, tokenize};
+///
+/// let source = r#"{name: "Ada"}"#;
+/// let tokens = tokenize(source)?;
+/// assert_eq!(tokens[0].kind, SyntaxKind::BraceOpen);
+/// let reconstructed: String = tokens.iter()
+///     .map(|token| &source[token.span.clone()])
+///     .collect();
+/// assert_eq!(reconstructed, source);
+/// # Ok::<(), ason::AsonError>(())
+/// ```
 pub fn tokenize(source: &str) -> Result<Vec<SyntaxToken>, AsonError> {
     let boundaries: Vec<_> = source
         .char_indices()
