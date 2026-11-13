@@ -65,8 +65,9 @@ Here is an example ASON document:
     bytedata: h"68 65 6c 6c 6f 0a 00"
     list: [11, 13, 17, 19]
     map: [
-        "foo": "The quick brown fox jumps over the lazy dog"
-        "bar": "My very educated mother just served us nine pizzas"
+        "red": "#FF0000"
+        "green": "#00FF00"
+        "blue": "#0000FF"
     ]
     tuple: (1, "Hippo", true)
     object: {
@@ -75,7 +76,7 @@ Here is an example ASON document:
         version: "1.0.1"
     }
     variant_without_value: Option::None
-    variant_with_value: Option::Some(123)
+    variant_with_single_value: Option::Some(123)
     variant_with_tuple_like_value: Color::Rgb(255, 127, 63)
     variant_with_object_like_value: Shape::Rect{
         width: 200
@@ -122,7 +123,7 @@ or add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ason = "3.5.0"  # Use the latest version of the ASON crate
+ason = "4.0.0"  # Use the latest version of the ASON crate
 serde = { version = "1", features = ["derive"] }
 ```
 
