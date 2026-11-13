@@ -62,8 +62,16 @@ fn test_round_trip_nested_value_through_public_apis() {
             Value::List(vec![
                 Value::U8(255),
                 Value::String("two".into()),
-                Value::Option(None),
-                Value::Option(Some(Box::new(Value::Bool(true)))),
+                Value::Enumeration {
+                    name: "Option".into(),
+                    variant: "None".into(),
+                    payload: VariantValue::Unit,
+                },
+                Value::Enumeration {
+                    name: "Option".into(),
+                    variant: "Some".into(),
+                    payload: VariantValue::Newtype(Box::new(Value::Bool(true))),
+                },
             ]),
         ),
         (
@@ -151,7 +159,11 @@ fn test_serialize_value_to_string_and_writer() {
         ("score".into(), Value::I16(-12)),
         (
             "enabled".into(),
-            Value::Option(Some(Box::new(Value::Bool(true)))),
+            Value::Enumeration {
+                name: "Option".into(),
+                variant: "Some".into(),
+                payload: VariantValue::Newtype(Box::new(Value::Bool(true))),
+            },
         ),
     ]);
     let expected = "{\n    name: \"Ada\"\n    score: -12_i16\n    enabled: Some(true)\n}";

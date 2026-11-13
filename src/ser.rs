@@ -90,7 +90,13 @@ where
 /// # Examples
 ///
 /// ```
-/// let value = ason::Value::Option(Some(Box::new(ason::Value::I32(42))));
+/// use ason::{Value, VariantValue};
+///
+/// let value = Value::Enumeration {
+///     name: "Option".into(),
+///     variant: "Some".into(),
+///     payload: VariantValue::Newtype(Box::new(Value::I32(42))),
+/// };
 /// assert_eq!(ason::ser_value_to_string(&value)?, "Some(42)");
 /// # Ok::<(), ason::AsonError>(())
 /// ```
@@ -419,12 +425,6 @@ where
                         self.end_block("}")
                     }
                 }
-            }
-            Value::Option(None) => self.print_str("None"),
-            Value::Option(Some(value)) => {
-                self.print_str("Some(")?;
-                self.serialize_value(value)?;
-                self.print_str(")")
             }
         }
     }
@@ -1020,8 +1020,16 @@ mod tests {
             Value::Map(vec![(Value::String("key".into()), Value::I32(3))]),
             Value::Tuple(vec![Value::I32(1), Value::String("two".into())]),
             Value::Object(vec![("field".into(), Value::I32(4))]),
-            Value::Option(None),
-            Value::Option(Some(Box::new(Value::String("some".into())))),
+            Value::Enumeration {
+                name: "Option".into(),
+                variant: "None".into(),
+                payload: VariantValue::Unit,
+            },
+            Value::Enumeration {
+                name: "Option".into(),
+                variant: "Some".into(),
+                payload: VariantValue::Newtype(Box::new(Value::String("some".into()))),
+            },
             Value::Enumeration {
                 name: "Action".into(),
                 variant: "Quit".into(),

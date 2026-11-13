@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "ason"
-version = "3.6.1"
+version = "4.0.0"
 dependencies = [
  "chrono",
  "hexfloat2",

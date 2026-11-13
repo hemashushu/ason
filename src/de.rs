@@ -551,13 +551,6 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
         validate_predefined_enumeration(&name, &variant, payload.kind())
             .map_err(|message| AsonError::MessageWithRange(message, self.last_range))?;
 
-        if name == "Option" {
-            return Ok(Value::Option(match payload {
-                VariantValue::Newtype(value) => Some(value),
-                _ => None,
-            }));
-        }
-
         Ok(Value::Enumeration {
             name,
             variant,
@@ -1435,11 +1428,19 @@ mod tests {
         );
         assert_eq!(
             de_value_from_str("Option::None").unwrap(),
-            Value::Option(None)
+            Value::Enumeration {
+                name: "Option".into(),
+                variant: "None".into(),
+                payload: VariantValue::Unit,
+            }
         );
         assert_eq!(
             de_value_from_str("Option::Some(1)").unwrap(),
-            Value::Option(Some(Box::new(Value::I32(1))))
+            Value::Enumeration {
+                name: "Option".into(),
+                variant: "Some".into(),
+                payload: VariantValue::Newtype(Box::new(Value::I32(1))),
+            }
         );
         assert_eq!(
             de_value_from_str("Action::Take(\"item\" 42)").unwrap(),

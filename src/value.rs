@@ -18,8 +18,8 @@ use chrono::{DateTime, FixedOffset};
 /// entries retain their source order. Comments, whitespace, and original
 /// literal spelling are not retained.
 ///
-/// A parsed `Option` uses [`Value::Option`]; other enumerations, including
-/// `Result`, use [`Value::Enumeration`]. Because both an empty List and an
+/// All enumerations, including the predefined `Option` and `Result`, use
+/// [`Value::Enumeration`]. Because both an empty List and an
 /// empty Map are written as `[]`, parsing that text produces an empty List.
 /// Manually constructed values can contain shapes that the serializer rejects,
 /// such as an empty Tuple. Floating-point equality follows Rust's usual
@@ -73,6 +73,9 @@ pub enum Value {
     /// Parsing rejects duplicate field names.
     Object(Vec<(String, Value)>),
     /// An enumeration with its type name, variant name, and payload.
+    ///
+    /// The predefined enumerations are represented with their full names,
+    /// for example `Some(1)` is parsed with name `Option` and variant `Some`.
     Enumeration {
         /// The enumeration's type name, such as `Result`.
         name: String,
@@ -81,8 +84,6 @@ pub enum Value {
         /// The variant's unit, newtype, tuple, or struct payload.
         payload: VariantValue,
     },
-    /// An `Option::None` or an `Option::Some` containing an owned value.
-    Option(Option<Box<Value>>),
 }
 
 /// The payload carried by an ASON enumeration variant.
