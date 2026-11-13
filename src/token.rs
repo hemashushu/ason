@@ -50,12 +50,12 @@ pub enum Token {
     /// Identifiers start with an ASCII letter, underscore, or a Unicode scalar
     /// in `U+00A0..=U+D7FF` or `U+E000..=U+10FFFF`. Digits are also allowed
     /// after the first character.
+    ///
+    /// The variant shorthands `Some`, `None`, `Ok`, and `Err` are lexed as
+    /// identifiers; see [`shorthand_enumeration`].
     Identifier(String),
 
     /// An enumeration's type and variant names, such as `Option` and `None`.
-    ///
-    /// Predefined shorthands such as `Some` and `Err` are expanded to their
-    /// corresponding type and variant names.
     Enumeration(String, String),
 
     /// Decoded hexadecimal byte data.
@@ -110,5 +110,25 @@ impl TokenWithRange {
     /// Associates `token` with an inclusive source `range`.
     pub fn new(token: Token, range: Range) -> Self {
         Self { token, range }
+    }
+}
+
+/// Reports whether `name` is an identifier-shaped keyword: a Boolean literal or
+/// an unsigned special floating-point literal. Keywords cannot be Object keys,
+/// enumeration names, or variant names.
+pub fn is_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "true" | "false" | "NaN" | "NaN_f32" | "NaN_f64" | "Inf" | "Inf_f32" | "Inf_f64"
+    )
+}
+
+/// Returns the predefined enumeration type of a variant shorthand
+/// (`Some`, `None`, `Ok`, or `Err`), which only applies where a value is expected.
+pub fn shorthand_enumeration(name: &str) -> Option<&'static str> {
+    match name {
+        "Some" | "None" => Some("Option"),
+        "Ok" | "Err" => Some("Result"),
+        _ => None,
     }
 }

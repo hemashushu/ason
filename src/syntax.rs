@@ -10,7 +10,7 @@ use std::ops::Range;
 
 use crate::{
     AsonError, char_with_position::CharsWithPositionIterator, lexer::Lexer,
-    peekable_iterator::PeekableIterator, token::Token,
+    peekable_iterator::PeekableIterator, token::{Token, shorthand_enumeration},
 };
 
 /// The lexical category of a span in an ASON source string.
@@ -143,7 +143,47 @@ pub fn tokenize(source: &str) -> Result<Vec<SyntaxToken>, AsonError> {
                 ..boundaries[token.range.end_inclusive.index + 1],
         });
     }
+    classify_shorthands(source, &mut tokens);
     Ok(tokens)
+}
+
+/// Reclassifies the variant shorthands (`Some`, `None`, `Ok`, and `Err`) as
+/// enumerations, except where they are Object keys (an identifier directly
+/// inside `{ ... }` and followed by `:`).
+fn classify_shorthands(source: &str, tokens: &mut [SyntaxToken]) {
+    let is_trivia = |kind: SyntaxKind| {
+        matches!(
+            kind,
+            SyntaxKind::Whitespace
+                | SyntaxKind::Comma
+                | SyntaxKind::LineComment
+                | SyntaxKind::BlockComment
+        )
+    };
+    let mut open_delimiters = Vec::new();
+    for index in 0..tokens.len() {
+        match tokens[index].kind {
+            kind @ (SyntaxKind::BraceOpen
+            | SyntaxKind::BracketOpen
+            | SyntaxKind::ParenthesisOpen) => open_delimiters.push(kind),
+            SyntaxKind::BraceClose | SyntaxKind::BracketClose | SyntaxKind::ParenthesisClose => {
+                open_delimiters.pop();
+            }
+            SyntaxKind::Identifier
+                if shorthand_enumeration(&source[tokens[index].span.clone()]).is_some() =>
+            {
+                let is_object_key = open_delimiters.last() == Some(&SyntaxKind::BraceOpen)
+                    && tokens[index + 1..]
+                        .iter()
+                        .find(|token| !is_trivia(token.kind))
+                        .is_some_and(|token| token.kind == SyntaxKind::Colon);
+                if !is_object_key {
+                    tokens[index].kind = SyntaxKind::Enumeration;
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
@@ -185,5 +225,29 @@ mod tests {
         for source in ["/* unfinished", "\"unfinished", "r##\"unfinished\"#", "@"] {
             assert!(tokenize(source).is_err(), "{source:?}");
         }
+    }
+
+    #[test]
+    fn classifies_shorthands_by_position() {
+        let source = "{Some: Some(1), None /* c */ : [None: Ok(Err(2))]}";
+        let kinds: Vec<_> = tokenize(source)
+            .unwrap()
+            .into_iter()
+            .filter(|token| {
+                matches!(token.kind, SyntaxKind::Identifier | SyntaxKind::Enumeration)
+            })
+            .map(|token| (&source[token.span], token.kind))
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                ("Some", SyntaxKind::Identifier),
+                ("Some", SyntaxKind::Enumeration),
+                ("None", SyntaxKind::Identifier),
+                ("None", SyntaxKind::Enumeration),
+                ("Ok", SyntaxKind::Enumeration),
+                ("Err", SyntaxKind::Enumeration),
+            ]
+        );
     }
 }

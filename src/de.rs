@@ -14,7 +14,7 @@ use crate::{
     normalizer::NormalizeSignedNumberIter,
     peekable_iterator::PeekableIterator,
     range::Range,
-    token::{NumberToken, Token, TokenWithRange},
+    token::{NumberToken, Token, TokenWithRange, shorthand_enumeration},
     utf8_char_iterator::UTF8CharIterator,
     value::{Value, VariantValue, validate_predefined_enumeration},
 };
@@ -243,7 +243,7 @@ where
     R: Read,
 {
     let mut deserializer = Deserializer::from_char_iterator(UTF8CharIterator::new(reader));
-    let variant = match deserializer.next_token()? {
+    let variant = match deserializer.next_value_token()? {
         Some(Token::Enumeration(name, variant)) if name == "Result" => variant,
         other => {
             return Err(
@@ -404,7 +404,7 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
     }
 
     fn deserialize_value(&mut self) -> Result<Value, AsonError> {
-        match self.next_token()? {
+        match self.next_value_token()? {
             Some(Token::Number(number)) => Ok(match number {
                 NumberToken::I8(value) => Value::I8(value as i8),
                 NumberToken::I16(value) => Value::I16(value as i16),
@@ -569,6 +569,20 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
         }
     }
 
+    // Consume the next token where a value is expected. The variant shorthands
+    // (`Some`, `None`, `Ok`, and `Err`) are lexed as identifiers, so they are
+    // expanded into their predefined enumerations here. Elsewhere, such as in
+    // Object keys, they remain ordinary identifiers.
+    fn next_value_token(&mut self) -> Result<Option<Token>, AsonError> {
+        Ok(match self.next_token()? {
+            Some(Token::Identifier(name)) => match shorthand_enumeration(&name) {
+                Some(type_name) => Some(Token::Enumeration(type_name.to_owned(), name)),
+                None => Some(Token::Identifier(name)),
+            },
+            other => other,
+        })
+    }
+
     fn peek_token(&self, offset: usize) -> Result<Option<&Token>, AsonError> {
         match self.upstream.peek(offset) {
             Some(Ok(TokenWithRange { token, .. })) => Ok(Some(token)),
@@ -651,7 +665,7 @@ impl<CharIter: Iterator<Item = Result<char, AsonError>>> Deserializer<CharIter> 
     // Consume a complete value without interpreting it.
     // It is used to skip values that are not needed, such as unknown Object fields.
     fn skip_value(&mut self) -> Result<(), AsonError> {
-        match self.next_token()? {
+        match self.next_value_token()? {
             Some(Token::BracketOpen) => self.skip_bracket_contents(),
             Some(Token::ParenthesisOpen) => self.skip_sequence(Token::ParenthesisClose, true),
             Some(Token::BraceOpen) => self.skip_object_contents(),
@@ -966,7 +980,7 @@ impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> de::Deserializer<'
     where
         V: de::Visitor<'de>,
     {
-        match self.next_token()? {
+        match self.next_value_token()? {
             Some(Token::Enumeration(type_name, variant_name)) if type_name == "Option" => {
                 match variant_name.as_str() {
                     "None" if !self.peek_token_and_equals(0, &Token::ParenthesisOpen)? => {
@@ -1137,7 +1151,7 @@ impl<'de, CharIter: Iterator<Item = Result<char, AsonError>>> de::Deserializer<'
     where
         V: de::Visitor<'de>,
     {
-        match self.next_token()? {
+        match self.next_value_token()? {
             Some(Token::Enumeration(type_name, variant_name)) if type_name == name => {
                 if self.peek_token_and_equals(0, &Token::ParenthesisOpen)?
                     || self.peek_token_and_equals(0, &Token::BraceOpen)?
@@ -2177,13 +2191,97 @@ mod tests {
 
         for key in [
             "true", "false", "NaN", "NaN_f32", "NaN_f64", "Inf", "+Inf", "-Inf", "Inf_f32",
-            "+Inf_f32", "-Inf_f32", "Inf_f64", "+Inf_f64", "-Inf_f64", "Some", "None", "Ok", "Err",
+            "+Inf_f32", "-Inf_f32", "Inf_f64", "+Inf_f64", "-Inf_f64",
         ] {
             let document = format!("{{{key}: 1}}");
             assert!(
                 de_from_str::<EmptyObject>(&document).is_err(),
                 "accepted reserved Object key {key}"
             );
+            assert!(
+                de_value_from_str(&document).is_err(),
+                "accepted reserved Object key {key}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_variant_shorthand_names_as_identifiers() {
+        #[derive(Deserialize, Debug, PartialEq)]
+        struct Shorthands {
+            #[serde(rename = "Some")]
+            some: Option<i32>,
+            #[serde(rename = "None")]
+            none: Option<i32>,
+            #[serde(rename = "Ok")]
+            ok: Result<i32, String>,
+            #[serde(rename = "Err")]
+            err: Result<i32, String>,
+        }
+
+        let document = r#"{Some: Some(1), None: None, Ok: Ok(2), Err: Err("e")}"#;
+        assert_eq!(
+            de_from_str::<Shorthands>(document).unwrap(),
+            Shorthands {
+                some: Some(1),
+                none: None,
+                ok: Ok(2),
+                err: Err("e".to_owned()),
+            }
+        );
+
+        let value = de_value_from_str(document).unwrap();
+        let Value::Object(fields) = &value else {
+            panic!("expected an Object");
+        };
+        assert_eq!(
+            fields.iter().map(|(key, _)| key.as_str()).collect::<Vec<_>>(),
+            ["Some", "None", "Ok", "Err"]
+        );
+        assert_eq!(
+            fields[1].1,
+            de_value_from_str("Option::None").unwrap(),
+        );
+
+        // Unknown fields named after shorthands are skipped as keys.
+        #[derive(Deserialize, Debug, PartialEq)]
+        struct Other {
+            id: i32,
+        }
+        assert_eq!(
+            de_from_str::<Other>("{None: None, Some: {Ok: Err(1)}, id: 1}").unwrap(),
+            Other { id: 1 }
+        );
+
+        // Shorthand names can also be enumeration and variant names.
+        #[derive(Deserialize, Debug, PartialEq)]
+        #[serde(rename = "Some")]
+        enum Custom {
+            None,
+            Ok(i32),
+        }
+        assert_eq!(de_from_str::<Custom>("Some::None").unwrap(), Custom::None);
+        assert_eq!(de_from_str::<Custom>("Some::Ok(1)").unwrap(), Custom::Ok(1));
+        assert_eq!(
+            de_value_from_str("Err::Some").unwrap(),
+            Value::Enumeration {
+                name: "Err".into(),
+                variant: "Some".into(),
+                payload: VariantValue::Unit,
+            }
+        );
+
+        // In value position, the bare names are still shorthands.
+        assert_eq!(
+            de_from_str::<HashMap<Option<i32>, i32>>("[None: 1, Some(2): 3]").unwrap(),
+            HashMap::from([(None, 1), (Some(2), 3)])
+        );
+    }
+
+    #[test]
+    fn test_keywords_rejected_as_enumeration_names() {
+        for document in ["true::A", "NaN::A", "Color::false", "Color::Inf_f64(1)"] {
+            assert!(de_value_from_str(document).is_err(), "{document}");
         }
     }
 

@@ -15,7 +15,7 @@ use crate::{
     position::Position,
     range::Range,
     syntax::SyntaxKind,
-    token::{NumberToken, Token, TokenWithRange},
+    token::{NumberToken, Token, TokenWithRange, is_keyword},
 };
 
 /// Converts positioned characters into ASON tokens with inclusive source ranges.
@@ -466,13 +466,37 @@ where
                 ));
             }
 
+            if let Some((offset, keyword)) = [
+                (0, type_name),
+                (type_name.chars().count() + 2, variant_name),
+            ]
+            .into_iter()
+            .find(|(_, name)| is_keyword(name))
+            {
+                // An enumeration token never spans lines, so the keyword's
+                // range is a character offset from the token start.
+                let start = identifier_range.start;
+                return Err(AsonError::MessageWithRange(
+                    format!(
+                        "\"{}\" is a keyword and cannot be used as an enumeration or variant name.",
+                        keyword
+                    ),
+                    Range::from_detail(
+                        start.index + offset,
+                        start.line,
+                        start.column + offset,
+                        keyword.chars().count(),
+                    ),
+                ));
+            }
+
             Token::Enumeration(type_name.to_owned(), variant_name.to_owned())
         } else {
+            // The variant shorthands `Some`, `None`, `Ok`, and `Err` are ordinary
+            // identifiers here; the parser expands them where a value is expected.
             match identifier_buffer.as_str() {
                 "true" => Token::Boolean(true),
                 "false" => Token::Boolean(false),
-                "Some" | "None" => Token::Enumeration("Option".to_owned(), identifier_buffer),
-                "Ok" | "Err" => Token::Enumeration("Result".to_owned(), identifier_buffer),
                 // The default floating-point type is `f64`.
                 "NaN" | "NaN_f64" => Token::Number(NumberToken::F64(f64::NAN)),
                 "NaN_f32" => Token::Number(NumberToken::F32(f32::NAN)),
@@ -4897,20 +4921,13 @@ hello
 
     #[test]
     fn test_lex_enum_shorthand() {
-        for (short, full, type_name) in [
-            ("Some", "Option::Some", "Option"),
-            ("None", "Option::None", "Option"),
-            ("Ok", "Result::Ok", "Result"),
-            ("Err", "Result::Err", "Result"),
-        ] {
-            assert_eq!(
-                lex_from_str_without_location(short).unwrap(),
-                lex_from_str_without_location(full).unwrap()
-            );
+        // Shorthands are ordinary identifiers to the lexer; the parser expands
+        // them only where a value is expected.
+        for short in ["Some", "None", "Ok", "Err"] {
             assert_eq!(
                 lex_from_str(short).unwrap(),
                 vec![TokenWithRange::new(
-                    Token::new_enumeration(type_name, short),
+                    Token::new_identifier(short),
                     Range::from_position_and_length(&Position::new(0, 0, 0), short.len())
                 )]
             );
@@ -4947,6 +4964,46 @@ hello
                 vec![Token::new_enumeration("Custom", variant)]
             );
         }
+
+        assert_eq!(
+            lex_from_str_without_location("Some::None").unwrap(),
+            vec![Token::new_enumeration("Some", "None")]
+        );
+    }
+
+    #[test]
+    fn test_lex_keyword_enumeration_names() {
+        for input in [
+            "true::A",
+            "false::A",
+            "NaN::A",
+            "Inf_f32::A",
+            "Color::true",
+            "Color::NaN",
+            "Color::NaN_f64",
+            "Color::Inf",
+        ] {
+            assert!(
+                matches!(
+                    lex_from_str(input),
+                    Err(AsonError::MessageWithRange(message, _)) if message.contains("keyword")
+                ),
+                "{input}"
+            );
+        }
+
+        // Only exact spellings are keywords.
+        assert_eq!(
+            lex_from_str_without_location("True::nan").unwrap(),
+            vec![Token::new_enumeration("True", "nan")]
+        );
+
+        // The error range covers only the keyword.
+        assert!(matches!(
+            lex_from_str(" Color::NaN_f32"),
+            Err(AsonError::MessageWithRange(_, range))
+                if range == Range::from_detail(8, 0, 8, 7)
+        ));
     }
 
     #[test]

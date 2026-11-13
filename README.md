@@ -847,6 +847,8 @@ An Object must contain at least one key-value pair. The empty-brace form (`{}`) 
 
 Keys are identifiers, which look like strings without quotation marks (`"`). An identifier must start with a letter (`a`-`z`, `A`-`Z`), an underscore (`_`), or a Unicode character allowed by ASON's identifier rules, followed by any combination of these characters and digits (`0`-`9`). For example, `name`, `version`, `_edition`, and `foo_bar123` are all valid identifiers. See [Objects in the ASON Specification](docs/specification.md#44-objects) for the precise rules.
 
+The boolean keywords `true` and `false` and the special floating-point literals `NaN`, `NaN_f32`, `NaN_f64`, `Inf`, `Inf_f32`, and `Inf_f64` are reserved tokens rather than identifiers and cannot be used as Object keys. The Enumeration shorthand names `Some`, `None`, `Ok`, and `Err` are not reserved, so they can be used as Object keys (for example, `{Some: 1}`).
+
 Key-value pairs in an Object can be separated by commas, whitespace (including line breaks), or both. The following Objects are all equivalent:
 
 ```json5
@@ -940,6 +942,8 @@ Shape::Dot
 Shape::Line(11)
 ```
 
+The type name and the variant name are identifiers. The boolean keywords `true` and `false` and the special floating-point literals `NaN`, `NaN_f32`, `NaN_f64`, `Inf`, `Inf_f32`, and `Inf_f64` cannot be used as type names or variant names, so `true::A` and `Color::NaN` are invalid.
+
 In text ASON documents, there are two predefined Enumeration types, `Option` and `Result`:
 
 ```rust
@@ -965,7 +969,7 @@ Furthermore, the variants of `Option` and `Result` also accept shorthand forms:
 | `Result::Ok(value)`   | `Ok(value)`   |
 | `Result::Err(error)`  | `Err(error)`  |
 
-Like ordinary Enumeration names, these shorthands are case-sensitive: `some`, `NONE`, `ok`, and `ERR` are not shorthands. The exact bare names `Some`, `None`, `Ok`, and `Err` are reserved and cannot be used as Object keys. Other Enumerations still require their type name, such as `Color::Rgb(...)`. Serialization emits the shorthand forms for these four variants, while deserialization accepts both full and shorthand forms.
+Like ordinary Enumeration names, these shorthands are case-sensitive: `some`, `NONE`, `ok`, and `ERR` are not shorthands. The bare names `Some`, `None`, `Ok`, and `Err` are shorthands only where a value is expected; they are not reserved, so they can also be used as Object keys, Enumeration type names, and variant names (for example, `{None: None}`, `Some::A`, and `Custom::Ok(1)`). Other Enumerations still require their type name, such as `Color::Rgb(...)`. Serialization emits the shorthand forms for these four variants, while deserialization accepts both full and shorthand forms.
 
 Shorthands can be nested and mixed with full forms:
 

@@ -670,7 +670,7 @@ Keys are identifiers (unquoted). They must **not** be enclosed in double quotes 
 
 Each key must be unique within an Object; repeating a key is invalid.
 
-The boolean keywords `true` and `false`, the special floating-point literals defined in section 3.1.11, and the Enumeration shorthand names `Some`, `None`, `Ok`, and `Err` are reserved tokens rather than identifiers and cannot be used as Object keys.
+The boolean keywords `true` and `false` and the special floating-point literals `NaN`, `NaN_f32`, `NaN_f64`, `Inf`, `Inf_f32`, and `Inf_f64` are reserved tokens rather than identifiers and cannot be used as Object keys. The special floating-point literals are recognized as numeric tokens (see section 3.1.11). The Enumeration shorthand names `Some`, `None`, `Ok`, and `Err` are ordinary identifiers and can be used as Object keys (see section 4.5.2).
 
 An identifier follows these rules:
 
@@ -707,7 +707,7 @@ variant_body = "(" value { [","] value } [","] ")"      // single-value or tuple
              | "{" { key_value_pair [","] } "}"         // object-like
 ```
 
-Both the type name and the variant name follow the rules for identifiers. No whitespace is allowed around `::`.
+Both the type name and the variant name follow the rules for identifiers. No whitespace is allowed around `::`. The boolean keywords `true` and `false` and the special floating-point literals `NaN`, `NaN_f32`, `NaN_f64`, `Inf`, `Inf_f32`, and `Inf_f64` cannot be used as type names or variant names; for example, `true::A` and `Color::NaN` are invalid.
 
 There are four forms of Enumeration values:
 
@@ -768,7 +768,7 @@ The variants of `Option` and `Result` also have shorthand forms:
 | `Result::Ok(value)`   | `Ok(value)`   |
 | `Result::Err(error)`  | `Err(error)`  |
 
-Like ordinary Enumeration names, these shorthand names are case-sensitive. Only the exact spellings shown above are valid (`some`, `NONE`, `ok`, and `ERR` are not shorthands), and the bare names `Some`, `None`, `Ok`, and `Err` are reserved and cannot be used as Object keys. Other Enumeration variants require their type name. Shorthands can be nested and combined with fully qualified Enumeration values; for example, `Some(Ok([11, 13, 17]))` and `Result::Ok(Some(11))`. Serialization emits these shorthand forms, while deserialization accepts both shorthand and fully qualified forms.
+Like ordinary Enumeration names, these shorthand names are case-sensitive. Only the exact spellings shown above are valid (`some`, `NONE`, `ok`, and `ERR` are not shorthands). The bare names `Some`, `None`, `Ok`, and `Err` are interpreted as shorthands only where a value is expected (including Map keys, such as `[None: 1]`). They are not reserved: they can be used as Object keys, Enumeration type names, and variant names; for example, `{Some: Some(1), None: None}`, `Some::A`, and `Custom::Err(1)` are valid. Other Enumeration variants require their type name. Shorthands can be nested and combined with fully qualified Enumeration values; for example, `Some(Ok([11, 13, 17]))` and `Result::Ok(Some(11))`. Serialization emits these shorthand forms, while deserialization accepts both shorthand and fully qualified forms.
 
 ### 4.6 Types of Compound Values
 
@@ -964,6 +964,9 @@ enumeration_shorthand = "None"
                       | ("Some" | "Ok" | "Err") "(" value ")" ;
 
 (* Identifiers *)
+(* The keywords "true", "false", "NaN", "NaN_f32", "NaN_f64", "Inf", "Inf_f32",
+   and "Inf_f64" are not identifiers. "Some", "None", "Ok", and "Err" are
+   identifiers; they form enumeration shorthands only in value position. *)
 identifier          = identifier_start { identifier_continue } ;
 identifier_start    = "a"..."z" | "A"..."Z" | "_"
                     | U+00A0...U+D7FF | U+E000...U+10FFFF ;
@@ -1006,8 +1009,8 @@ The character stream is converted into a token stream. During this stage:
 - Whitespace, commas, and comments are consumed and discarded.
 - Numeric literals are parsed (but the signs `+` and `-` are emitted as separate tokens).
 - String literals (including raw strings and auto-trimmed strings) are fully processed.
-- Identifiers are recognized, and keywords (`true`, `false`, `NaN`, `Inf`) are converted to their corresponding token types.
-- An identifier containing `::` produces an `Enumeration` token that contains both the type name and the variant name.
+- Identifiers are recognized, and keywords (`true`, `false`, `NaN`, `Inf`, and their suffixed forms) are converted to their corresponding token types. The shorthand names `Some`, `None`, `Ok`, and `Err` remain identifiers; the parser treats them as `Option` or `Result` variants where a value is expected.
+- An identifier containing `::` produces an `Enumeration` token that contains both the type name and the variant name. A keyword used as the type name or variant name is reported as an error.
 
 **Stage 3: Normalization**
 
