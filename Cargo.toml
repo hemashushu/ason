@@ -1,12 +1,12 @@
 [package]
 name = "ason"
-version = "4.1.0"
+version = "4.1.1"
 edition = "2024"
 
 license-file = "LICENSE.additional"
-description = "ASON is a data serialization format that evolved from JSON, featuring strong numeric typing and native support for enumeration types."
+description = "ASON is a strongly typed, JSON-like data format for AI agents, tools, and people, with explicit numeric types and native enumerations."
 repository = "https://github.com/hemashushu/ason"
-keywords = ["ason", "serde"]
+keywords = ["ason", "serde", "serialization", "data-format", "ai-agent"]
 categories = ["encoding", "parsing"]
 
 [dependencies]

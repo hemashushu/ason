@@ -1,6 +1,17 @@
 # ASON
 
-_ASON_ is a data serialization format that evolved from JSON, featuring strong numeric typing and native support for enumeration types. With excellent readability and maintainability, ASON is well-suited for configuration files, data transfer, and data storage.
+_ASON_ is a strongly typed data format built as a common language for AI agents, tools, and people. It looks and feels like JSON, but adds explicit numeric types, native enumerations, and other precise data types, so data keeps its exact meaning as it moves between programs, agents, and humans.
+
+Together with its binary counterpart [ASONB](https://github.com/hemashushu/asonb), ASON offers one data model for configuration, data exchange, transmission, and storage: readable text when people or agents need to read and edit the data, and compact binary when machines need speed. This makes ASON the data foundation for a whole ecosystem of agent-oriented software, from agent runtimes and command-line tools to development environments and system software.
+
+ASON is more than a specification. A growing set of tools helps you write, check, convert, and query ASON data:
+
+- [ASON Extension for VSCode](https://marketplace.visualstudio.com/items?itemName=Hemashushu.ason-vscode): Syntax highlighting, formatting, and live validation for ASON files in VS Code.
+- [ASON Formatter (asonfmt)](https://github.com/hemashushu/ason-formatter): Formats, validates, and syntax-highlights ASON documents from the command line, Rust, or WebAssembly.
+- [ASON Converters (ason2b, ason2j)](https://github.com/hemashushu/ason-converter): Converts between ASON, ASONB, JSON, and JSONC.
+- [ASON Query (aq)](https://github.com/hemashushu/ason-query): Queries and extracts data from ASON documents on the command line.
+
+---
 
 <!-- @import "[TOC]" {cmd="toc" depthFrom=2 depthTo=4 orderedList=false} -->
 
@@ -39,9 +50,8 @@ _ASON_ is a data serialization format that evolved from JSON, featuring strong n
   - [6.8 DateTime](#68-datetime)
   - [6.9 Default Values](#69-default-values)
   - [6.10 Unsupported Data Types](#610-unsupported-data-types)
-- [7 Utilities](#7-utilities)
-- [8 More information](#8-more-information)
-- [9 License](#9-license)
+- [7 More information](#7-more-information)
+- [8 License](#8-license)
 
 <!-- /code_chunk_output -->
 
@@ -1485,20 +1495,13 @@ The following Rust data types are not supported:
 - Newtype structs, such as `struct Width(u32);`
 - Tuple structs, such as `struct RGB(u8, u8, u8);`
 
-## 7 Utilities
-
-- [ASON Extension for VSCode](https://marketplace.visualstudio.com/items?itemName=Hemashushu.ason-vscode)
-- [ASON Formatter (asonfmt)](https://github.com/hemashushu/ason-formatter)
-- [ASON Converters (ason2b, ason2j)](https://github.com/hemashushu/ason-converter)
-- [ASON Query (aq)](https://github.com/hemashushu/ason-query)
-
-## 8 More information
+## 7 More information
 
 - [ASON Specification](docs/specification.md)
 - [ASONB Specification](https://github.com/hemashushu/asonb/blob/main/README.md)
 - [ASON Rust library](https://github.com/hemashushu/ason)
 - [ASONB Rust library](https://github.com/hemashushu/asonb)
 
-## 9 License
+## 8 License
 
 This project is licensed under the Mozilla Public License 2.0 (MPL-2.0) with additional terms. See [LICENSE](./LICENSE) and [LICENSE.additional](./LICENSE.additional) for details.

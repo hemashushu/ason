@@ -1,6 +1,6 @@
 # ASON Specification
 
-ASON is a UTF-8 text format for data serialization, with explicitly typed numbers, Unicode text, and native enumeration support. This document defines its syntax and value types for developers implementing parsers, serializers, formatters, and validation tools.
+ASON is a UTF-8 text format for data serialization, with explicitly typed numbers, Unicode text, and native enumeration support. It is designed as a common data format for AI agents, tools, and people, and shares its data model with the binary format ASONB. This document defines its syntax and value types for developers implementing parsers, serializers, formatters, and validation tools.
 
 The specification covers document structure, lexical elements, primitive and compound values, and error reporting. It is independent of any programming language or serialization framework; language-specific APIs and type mappings are outside its scope. The processing pipeline in section 7 describes a typical implementation strategy, not a required internal architecture.
 
