@@ -1091,15 +1091,15 @@ The following two are invalid:
 
 ```json5
 // There are two values at the root level.
-(11, "Alice", true)
-"Hello World!"
+"Alice"
+"Bob"
 ```
 
 and
 
 ```json5
-// There are three values at the root level.
-11, "Alice", true
+// The root value is followed by another value.
+[11 13 17 19] 23
 ```
 
 ## 6 Mapping between Rust Data Types and ASON Types
